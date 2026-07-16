@@ -178,7 +178,29 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
 
 @media (max-width: 800px) {
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .container { padding: 16px; }
+  .container { padding: 14px; }
+
+  /* 상단 네비 — 가로 스크롤, 글자 안 쪼개지게 */
+  .topnav-inner { padding: 0 12px; gap: 2px; height: 52px; overflow-x: auto; }
+  .topnav-inner::-webkit-scrollbar { display: none; }
+  .logo { font-size: 15px; margin-right: 10px; flex-shrink: 0; }
+  .nav-link { white-space: nowrap; padding: 6px 9px; flex-shrink: 0; }
+  .nav-right { gap: 6px; flex-shrink: 0; }
+  .freshness { display: none; }  /* 모바일에선 신선도 배지 숨김 */
+
+  /* 표 — 가로 스크롤 */
+  .card table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+
+  /* 필터바 — 세로로 */
+  .filterbar { flex-direction: column; align-items: stretch; }
+  .filterbar form.form-row { margin-left: 0 !important; }
+
+  /* 캘린더 — 셀 높이 축소 */
+  .cal-table td { height: 64px; padding: 3px; }
+  .cal-event { font-size: 9px; padding: 1px 3px; }
+
+  .page-title { font-size: 19px; }
+  .stat-value { font-size: 17px; }
 }
 </style>
 {% block head %}{% endblock %}
