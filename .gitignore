@@ -10,6 +10,7 @@ db.sqlite3-journal
 
 # ── 수집 데이터 (개인정보/용량) ──
 downloads/
+uploads/
 *.xlsx
 *.xls
 

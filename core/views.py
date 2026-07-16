@@ -282,3 +282,45 @@ def redemption_calendar(request):
         "event_count": sum(len(v) for v in events.values()),
         "active_nav": "calendar",
     })
+
+
+# ── 엑셀 업로드 ──────────────────────────────────
+@login_required
+def upload_excel(request):
+    """ELS_Curator가 만든 청약중인상품_*.xlsx를 웹에서 업로드해 임포트."""
+    import io
+    import os as _os
+
+    from django.conf import settings as _settings
+    from django.core.management import call_command
+
+    result = None
+    if request.method == "POST":
+        f = request.FILES.get("excel")
+        if not f:
+            messages.error(request, "파일을 선택해주세요.")
+        elif not f.name.lower().endswith((".xlsx", ".xlsm")):
+            messages.error(request, "엑셀 파일(.xlsx)만 업로드할 수 있습니다.")
+        elif f.size > 20 * 1024 * 1024:
+            messages.error(request, "20MB 이하 파일만 가능합니다.")
+        else:
+            _os.makedirs(_settings.UPLOAD_DIR, exist_ok=True)
+            save_path = _os.path.join(_settings.UPLOAD_DIR, f.name)
+            with open(save_path, "wb") as dest:
+                for chunk in f.chunks():
+                    dest.write(chunk)
+
+            out = io.StringIO()
+            try:
+                call_command("import_els", file=save_path, stdout=out)
+                result = out.getvalue().strip() or "처리 완료"
+                messages.success(request, f"'{f.name}' 임포트 완료")
+            except Exception as e:  # noqa: BLE001
+                messages.error(request, f"임포트 오류: {e}")
+
+    recent = ImportLog.objects.order_by("-imported_at")[:10]
+    return render(request, "core/upload.html", {
+        "result": result,
+        "recent": recent,
+        "active_nav": "upload",
+    })

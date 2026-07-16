@@ -161,3 +161,9 @@ ELS_DOWNLOADS_DIR = os.environ.get(
 # 텔레그램 (BASE_DIR/.env 또는 환경변수에서 로드 — _load_dotenv가 이미 채움)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# 알림 메시지에 넣을 사이트 주소 (배포 시 실제 도메인으로)
+SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
+
+# 업로드 엑셀 임시 저장 폴더
+UPLOAD_DIR = BASE_DIR / "uploads"

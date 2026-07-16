@@ -214,6 +214,7 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
     <a href="{% url 'watchlist' %}" class="nav-link {% if active_nav == 'watchlist' %}active{% endif %}">관심</a>
     <a href="{% url 'portfolio' %}" class="nav-link {% if active_nav == 'portfolio' %}active{% endif %}">포트폴리오</a>
     <a href="{% url 'calendar' %}" class="nav-link {% if active_nav == 'calendar' %}active{% endif %}">상환 캘린더</a>
+    <a href="{% url 'upload' %}" class="nav-link {% if active_nav == 'upload' %}active{% endif %}">업로드</a>
     <div class="nav-right">
       {% block nav_right %}{% endblock %}
       {% if user.is_authenticated %}

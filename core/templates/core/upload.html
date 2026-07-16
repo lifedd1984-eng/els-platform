@@ -1,0 +1,79 @@
+{% extends "core/base.html" %}
+{% block title %}엑셀 업로드 — ELS 플랫폼{% endblock %}
+
+{% block content %}
+<h1 class="page-title">엑셀 업로드</h1>
+<p class="page-sub">ELS_Curator가 생성한 <b>청약중인상품_*.xlsx</b>를 업로드하면 자동으로 파싱·등록됩니다</p>
+
+<div class="card">
+  <form method="post" enctype="multipart/form-data" id="upform">
+    {% csrf_token %}
+    <div id="dropzone" style="border:2px dashed var(--border); border-radius:var(--radius);
+         padding:40px 20px; text-align:center; cursor:pointer; transition:border-color .15s, background .15s;">
+      <i class="fa-solid fa-file-excel" style="font-size:36px; color:var(--green); margin-bottom:12px;"></i>
+      <div style="font-weight:700; margin-bottom:4px;">엑셀 파일을 선택하거나 여기로 끌어다 놓으세요</div>
+      <div style="font-size:12px; color:var(--text-3);">.xlsx / 최대 20MB</div>
+      <div id="fname" style="margin-top:10px; font-size:13px; color:var(--blue); font-weight:600;"></div>
+      <input type="file" name="excel" id="excel" accept=".xlsx,.xlsm" style="display:none;">
+    </div>
+    <button type="submit" class="btn btn-primary" style="width:100%; margin-top:14px;" id="upbtn" disabled>
+      <i class="fa-solid fa-upload"></i> 업로드 및 임포트
+    </button>
+  </form>
+</div>
+
+{% if result %}
+<div class="card">
+  <div class="card-title"><i class="fa-solid fa-circle-check" style="color:var(--green);"></i> 처리 결과</div>
+  <pre style="font-size:13px; color:var(--text-2); white-space:pre-wrap;">{{ result }}</pre>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">최근 임포트 이력</div>
+  {% if recent %}
+  <table>
+    <thead><tr><th>파일명</th><th>행</th><th>신규</th><th>일시</th></tr></thead>
+    <tbody>
+      {% for log in recent %}
+      <tr>
+        <td>{{ log.filename }}</td>
+        <td>{{ log.row_count }}</td>
+        <td>{% if log.new_count %}<b style="color:var(--blue);">+{{ log.new_count }}</b>{% else %}0{% endif %}</td>
+        <td style="color:var(--text-3); font-size:12px;">{{ log.imported_at|date:"m/d H:i" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="color:var(--text-3); font-size:13px;">아직 임포트 이력이 없습니다.</p>
+  {% endif %}
+</div>
+
+<script>
+const dz = document.getElementById('dropzone');
+const input = document.getElementById('excel');
+const fname = document.getElementById('fname');
+const btn = document.getElementById('upbtn');
+
+dz.addEventListener('click', () => input.click());
+input.addEventListener('change', () => {
+  if (input.files.length) { fname.textContent = input.files[0].name; btn.disabled = false; }
+});
+['dragover','dragenter'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.style.borderColor = 'var(--blue)'; dz.style.background = 'var(--blue-bg)';
+}));
+['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e => {
+  e.preventDefault(); dz.style.borderColor = 'var(--border)'; dz.style.background = '';
+}));
+dz.addEventListener('drop', e => {
+  if (e.dataTransfer.files.length) {
+    input.files = e.dataTransfer.files;
+    fname.textContent = input.files[0].name; btn.disabled = false;
+  }
+});
+document.getElementById('upform').addEventListener('submit', () => {
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 처리 중...';
+});
+</script>
+{% endblock %}

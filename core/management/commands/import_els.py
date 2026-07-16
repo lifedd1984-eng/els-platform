@@ -88,7 +88,7 @@ class Command(BaseCommand):
             telegram.send_message(
                 f"[ELS 플랫폼] 임포트 완료\n"
                 f"파일 {len(new_files)}개 / 신규 상품 {total_new_products}건\n"
-                f"대시보드: http://localhost:8000"
+                f"대시보드: {settings.SITE_URL}"
             )
 
     # ── 파일 임포트 ─────────────────────────────
@@ -176,7 +176,7 @@ class Command(BaseCommand):
                 )
             if len(new_matches) > 10:
                 lines.append(f"... 외 {len(new_matches)-10}건")
-            lines.append("대시보드: http://localhost:8000")
+            lines.append(f"대시보드: {settings.SITE_URL}")
             if telegram.send_message("\n".join(lines)):
                 NotifiedMatch.objects.bulk_create(
                     [NotifiedMatch(preset=preset, product=p) for p in new_matches],
