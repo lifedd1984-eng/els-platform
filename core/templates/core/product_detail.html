@@ -1,0 +1,99 @@
+{% extends "core/base.html" %}
+{% load humanize %}
+{% block title %}{{ product.issuer }} {{ product.product_no }} — ELS 플랫폼{% endblock %}
+
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+  <a href="{% url 'weekly' %}" class="btn btn-icon"><i class="fa-solid fa-arrow-left"></i></a>
+  <div class="page-title" style="margin:0">{{ product.issuer }} {{ product.product_no }}</div>
+  {% if product.is_no_ki %}<span class="badge badge-green">NoKI</span>
+  {% elif product.ki %}<span class="badge badge-gray">KI {{ product.ki }}</span>{% endif %}
+  {% if product.asset_type %}<span class="badge {% if product.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ product.asset_type }}</span>{% endif %}
+  {% if product.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}
+</div>
+<div class="page-sub">{{ product.assets_raw }}</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">연수익률</div>
+    <div class="stat-value" style="color:var(--blue-dark)">{{ product.yield_rate|default:"-" }}<small>%</small></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">청약 마감</div>
+    <div class="stat-value">
+      {{ product.sub_end|date:"n.j" }}
+      {% if product.d_day is not None and product.d_day >= 0 %}
+        <small class="{% if product.d_day <= 1 %}dday-soon{% endif %}">D-{{ product.d_day }}</small>
+      {% endif %}
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">상환 주기</div>
+    <div class="stat-value">{{ product.period_months|default:"-" }}<small>개월</small></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">만기</div>
+    <div class="stat-value">{{ product.expiry_date|date:"Y.n.j"|default:"-" }}</div>
+  </div>
+</div>
+
+{% if svg %}
+<div class="card">
+  <div class="card-title">조기상환 배리어 구조</div>
+  <svg viewBox="0 0 {{ svg.w }} {{ svg.h }}" style="width:100%;max-width:720px;display:block">
+    {% if svg.ki_y %}
+    <line x1="30" y1="{{ svg.ki_y }}" x2="{{ svg.w }}" y2="{{ svg.ki_y }}"
+          stroke="#E5503C" stroke-width="1.5" stroke-dasharray="6 4"/>
+    <text x="{{ svg.w|add:'-4' }}" y="{{ svg.ki_y|add:'-6' }}" text-anchor="end"
+          font-size="11" fill="#E5503C" font-weight="700">KI {{ product.ki }}</text>
+    {% endif %}
+    {% for s in svg.steps %}
+    <line x1="{{ s.x }}" y1="{{ s.y }}" x2="{{ s.x2 }}" y2="{{ s.y }}"
+          stroke="#3182F6" stroke-width="3"/>
+    <text x="{{ s.cx }}" y="{{ s.y|add:'-8' }}" text-anchor="middle"
+          font-size="11" fill="#4E5968" font-weight="600">{{ s.v }}</text>
+    <text x="{{ s.cx }}" y="{{ svg.h|add:'-6' }}" text-anchor="middle"
+          font-size="10" fill="#8B95A1">{{ s.n }}차</text>
+    {% endfor %}
+  </svg>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">상품 정보</div>
+  <table>
+    <tr><td style="width:140px;color:var(--text-3);font-weight:600">발행사</td><td>{{ product.issuer }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">상품유형</td><td>{{ product.product_type }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">기초자산</td><td>{{ product.assets_raw }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">발행일</td><td>{{ product.issue_date|date:"Y-m-d"|default:"-" }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">만기일</td><td>{{ product.expiry_date|date:"Y-m-d"|default:"-" }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">청약기간</td><td>{{ product.sub_start|date:"Y-m-d"|default:"?" }} ~ {{ product.sub_end|date:"Y-m-d"|default:"?" }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">최대손실률</td><td>{{ product.max_loss|default:"-" }}%</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">배리어 전체</td><td>
+      {% if product.barriers_raw %}{% for b in product.barriers_raw %}{{ b }}{% if not forloop.last %} - {% endif %}{% endfor %}{% else %}-{% endif %}
+    </td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <div class="card-title">상품설명 원문</div>
+  <div style="font-size:13px;color:var(--text-2);line-height:1.7;word-break:break-all">{{ product.description }}</div>
+</div>
+
+<div style="display:flex;gap:8px">
+  <form method="post" action="{% url 'watchlist' %}">{% csrf_token %}
+    <input type="hidden" name="product_id" value="{{ product.id }}">
+    <input type="hidden" name="next" value="{{ request.path }}">
+    {% if is_watched %}
+    <input type="hidden" name="action" value="remove">
+    <button class="btn"><i class="fa-solid fa-star" style="color:var(--orange)"></i> 관심 해제</button>
+    {% else %}
+    <input type="hidden" name="action" value="add">
+    <button class="btn"><i class="fa-regular fa-star"></i> 관심 등록</button>
+    {% endif %}
+  </form>
+  <a href="{% url 'portfolio' %}?product={{ product.id }}" class="btn btn-primary">
+    <i class="fa-solid fa-plus"></i> 투자 등록
+  </a>
+</div>
+{% endblock %}

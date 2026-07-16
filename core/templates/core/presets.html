@@ -1,0 +1,96 @@
+{% extends "core/base.html" %}
+{% block title %}프리셋 관리 — ELS 플랫폼{% endblock %}
+
+{% block content %}
+<div class="page-title">프리셋 관리</div>
+<div class="page-sub">조건에 맞는 상품이 새로 수집되면 텔레그램으로 알려드립니다</div>
+
+{% for item in preset_list %}
+<div class="card">
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="id" value="{{ item.obj.id }}">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <input type="text" name="name" value="{{ item.obj.name }}" style="font-weight:800;font-size:15px;width:200px">
+      {% if item.obj.is_default %}<span class="badge badge-blue">기본</span>{% endif %}
+      <span class="badge badge-gray">현재 매칭 {{ item.match_count }}건</span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button type="submit" name="action" value="save" class="btn btn-primary btn-sm"><i class="fa-solid fa-check"></i> 저장</button>
+        <button type="submit" name="action" value="delete" class="btn btn-danger btn-sm"
+                onclick="return confirm('프리셋을 삭제할까요?')"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-field">
+        <label>자산유형</label>
+        <select name="asset_type">
+          {% for v, _ in item.obj.ASSET_CHOICES %}
+          <option value="{{ v }}" {% if item.obj.asset_type == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label>KI 최소</label>
+        <input type="number" name="ki_min" value="{{ item.obj.ki_min|default_if_none:'' }}" style="width:80px" placeholder="없음">
+      </div>
+      <div class="form-field">
+        <label>KI 최대</label>
+        <input type="number" name="ki_max" value="{{ item.obj.ki_max|default_if_none:'' }}" style="width:80px" placeholder="없음">
+      </div>
+      <div class="form-field">
+        <label>최소 수익률(%)</label>
+        <input type="number" name="yield_min" value="{{ item.obj.yield_min|default_if_none:'' }}" style="width:100px" step="0.1" placeholder="없음">
+      </div>
+      <div class="form-field">
+        <label>최대 주기(개월)</label>
+        <input type="number" name="period_max" value="{{ item.obj.period_max|default_if_none:'' }}" style="width:100px" placeholder="없음">
+      </div>
+      <div class="form-field">
+        <label>통화</label>
+        <select name="currency">
+          {% for v, _ in item.obj.CURRENCY_CHOICES %}
+          <option value="{{ v }}" {% if item.obj.currency == v %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px">
+        <input type="checkbox" name="include_no_ki" {% if item.obj.include_no_ki %}checked{% endif %}> NoKI 포함
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px">
+        <input type="checkbox" name="notify" {% if item.obj.notify %}checked{% endif %}> 텔레그램 알림
+      </label>
+    </div>
+  </form>
+</div>
+{% endfor %}
+
+<div class="card" style="border-style:dashed">
+  <div class="card-title"><i class="fa-solid fa-plus" style="color:var(--blue)"></i> 새 프리셋 추가</div>
+  <form method="post">{% csrf_token %}
+    <div class="form-row">
+      <div class="form-field">
+        <label>이름</label>
+        <input type="text" name="name" placeholder="프리셋 이름" required style="width:160px">
+      </div>
+      <div class="form-field">
+        <label>자산유형</label>
+        <select name="asset_type"><option>전체</option><option>지수형</option><option>종목형</option></select>
+      </div>
+      <div class="form-field">
+        <label>KI 최대</label>
+        <input type="number" name="ki_max" style="width:80px" placeholder="없음">
+      </div>
+      <div class="form-field">
+        <label>최소 수익률(%)</label>
+        <input type="number" name="yield_min" style="width:100px" step="0.1" placeholder="없음">
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px">
+        <input type="checkbox" name="include_no_ki" checked> NoKI 포함
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px">
+        <input type="checkbox" name="notify" checked> 텔레그램 알림
+      </label>
+      <button type="submit" name="action" value="create" class="btn btn-primary">추가</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

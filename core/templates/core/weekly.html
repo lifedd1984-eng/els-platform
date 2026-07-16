@@ -1,0 +1,116 @@
+{% extends "core/base.html" %}
+{% block title %}주간 청약 — ELS 플랫폼{% endblock %}
+
+{% block nav_right %}
+{% if freshness_days is not None %}
+<span class="freshness {% if freshness_days > 7 %}warn{% endif %}">
+  <i class="fa-solid fa-database"></i>
+  {% if freshness_days == 0 %}오늘 업데이트{% else %}{{ freshness_days }}일 전 데이터{% endif %}
+</span>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="page-title">주간 청약</div>
+<div class="page-sub">이번 주 청약 마감 상품 {{ total }}건</div>
+
+<div class="week-nav">
+  <a href="?w={{ offset|add:'-1' }}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>
+  <span class="week-label">{{ monday|date:"n.j" }} ~ {{ sunday|date:"n.j" }}</span>
+  <a href="?w={{ offset|add:'1' }}" class="btn"><i class="fa-solid fa-chevron-right"></i></a>
+  {% if offset != 0 %}<a href="?" class="btn btn-sm">이번 주로</a>{% endif %}
+</div>
+
+<div class="filterbar">
+  <span style="font-size:12px;font-weight:700;color:var(--text-3)">프리셋</span>
+  <a href="?w={{ offset }}" class="preset-chip {% if not filters.preset %}active{% endif %}">전체</a>
+  {% for p in presets %}
+  <a href="?w={{ offset }}&preset={{ p.id }}" class="preset-chip {% if filters.preset == p.id|stringformat:'s' %}active{% endif %}">{{ p.name }}</a>
+  {% endfor %}
+  <form method="get" class="form-row" style="margin-left:auto">
+    <input type="hidden" name="w" value="{{ offset }}">
+    <select name="asset">
+      <option value="">자산유형</option>
+      <option value="지수형" {% if filters.asset == '지수형' %}selected{% endif %}>지수형</option>
+      <option value="종목형" {% if filters.asset == '종목형' %}selected{% endif %}>종목형</option>
+    </select>
+    <input type="number" name="ki_max" placeholder="KI 이하" value="{{ filters.ki_max }}" style="width:80px">
+    <input type="number" name="yield_min" placeholder="수익률 이상" value="{{ filters.yield_min }}" style="width:95px" step="0.1">
+    <select name="currency">
+      <option value="">통화</option>
+      <option value="KRW" {% if filters.currency == 'KRW' %}selected{% endif %}>KRW</option>
+      <option value="USD" {% if filters.currency == 'USD' %}selected{% endif %}>USD</option>
+    </select>
+    <button class="btn btn-primary btn-sm" type="submit"><i class="fa-solid fa-filter"></i> 적용</button>
+  </form>
+</div>
+
+{% if day_groups %}
+  {% for g in day_groups %}
+  <div class="day-header">
+    {{ g.date|date:"n월 j일" }} ({{ g.weekday }}) 마감
+    <span class="count">{{ g.products|length }}건</span>
+  </div>
+  <div class="card" style="padding:8px 16px">
+    <table>
+      <thead>
+        <tr>
+          <th>발행사</th><th>상품번호</th><th>기초자산</th>
+          <th class="num">수익률</th><th class="num">KI</th>
+          <th class="num">1차</th><th class="num">막차</th><th class="num">주기</th>
+          <th>유형</th><th class="num">마감</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in g.products %}
+        <tr class="clickable" onclick="location.href='{% url 'product_detail' p.id %}'">
+          <td style="font-weight:700">{{ p.issuer }}</td>
+          <td>{{ p.product_no }}</td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.assets_raw }}</td>
+          <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ p.yield_rate|default:"-" }}%</td>
+          <td class="num">
+            {% if p.is_no_ki %}<span class="badge badge-green">NoKI</span>
+            {% elif p.ki %}<span class="badge badge-gray">{{ p.ki }}</span>
+            {% else %}-{% endif %}
+          </td>
+          <td class="num">{{ p.barrier_first|default:"-" }}</td>
+          <td class="num">{{ p.barrier_last|default:"-" }}</td>
+          <td class="num">{{ p.period_months|default:"-" }}{% if p.period_months %}개월{% endif %}</td>
+          <td>
+            {% if p.asset_type %}<span class="badge {% if p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ p.asset_type }}</span>{% endif %}
+            {% if p.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}
+          </td>
+          <td class="num">
+            {% if p.d_day is not None %}
+              {% if p.d_day < 0 %}<span class="badge badge-gray">마감</span>
+              {% elif p.d_day == 0 %}<span class="dday-soon">오늘 마감</span>
+              {% elif p.d_day <= 1 %}<span class="dday-soon">D-{{ p.d_day }}</span>
+              {% else %}<span class="dday-normal">D-{{ p.d_day }}</span>{% endif %}
+            {% endif %}
+          </td>
+          <td onclick="event.stopPropagation()">
+            <form method="post" action="{% url 'watchlist' %}">{% csrf_token %}
+              <input type="hidden" name="product_id" value="{{ p.id }}">
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              {% if p.id in watched_ids %}
+              <input type="hidden" name="action" value="remove">
+              <button class="btn btn-icon" title="관심 해제"><i class="fa-solid fa-star" style="color:var(--orange)"></i></button>
+              {% else %}
+              <input type="hidden" name="action" value="add">
+              <button class="btn btn-icon" title="관심 등록"><i class="fa-regular fa-star"></i></button>
+              {% endif %}
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card empty">
+  <i class="fa-regular fa-folder-open"></i>
+  이번 주 청약 마감 상품이 없습니다
+</div>
+{% endif %}
+{% endblock %}

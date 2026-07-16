@@ -1,0 +1,36 @@
+# ── 시크릿 (절대 커밋 금지) ──
+.env
+*.env
+!.env.example
+
+# ── 데이터베이스 ──
+db.sqlite3
+db.sqlite3-journal
+*.sqlite3
+
+# ── 수집 데이터 (개인정보/용량) ──
+downloads/
+*.xlsx
+*.xls
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── IDE / OS ──
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── 로그 ──
+*.log
+
+# ── PyInstaller / 빌드 산출물 ──
+build/
+dist/
+*.exe

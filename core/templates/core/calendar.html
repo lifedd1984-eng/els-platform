@@ -1,0 +1,78 @@
+{% extends "core/base.html" %}
+{% load humanize %}
+{% block title %}상환 캘린더 — ELS 플랫폼{% endblock %}
+
+{% block content %}
+<div class="page-title">상환 캘린더</div>
+<div class="page-sub">이 달 조기상환 평가 {{ event_count }}건</div>
+
+<div class="week-nav">
+  <a href="?y={{ prev_y }}&m={{ prev_m }}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>
+  <span class="week-label">{{ year }}년 {{ month }}월</span>
+  <a href="?y={{ next_y }}&m={{ next_m }}" class="btn"><i class="fa-solid fa-chevron-right"></i></a>
+  <a href="{% url 'calendar' %}" class="btn btn-sm">이번 달로</a>
+</div>
+
+<div class="card" style="padding:8px">
+  <table class="cal-table">
+    <thead>
+      <tr>
+        <th>월</th><th>화</th><th>수</th><th>목</th>
+        <th style="color:var(--blue)">금</th>
+        <th style="color:var(--red)">토</th><th style="color:var(--red)">일</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for week in weeks %}
+      <tr>
+        {% for cell in week %}
+        <td>
+          {% if cell.day %}
+          <div class="cal-day {% if cell.is_today %}today{% endif %}">{{ cell.day }}</div>
+          {% for ev in cell.events %}
+          <div class="cal-event" title="{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} {{ ev.n }}회차 / 배리어 {{ ev.barrier|default:'-' }}% / 예상 {{ ev.expected|intcomma|default:'-' }}원">
+            {{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} · {{ ev.n }}차
+            {% if ev.barrier %}({{ ev.barrier }}%){% endif %}
+          </div>
+          {% endfor %}
+          {% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if event_count %}
+<div class="card">
+  <div class="card-title">이 달 평가 상세</div>
+  <table>
+    <thead>
+      <tr><th>날짜</th><th>상품</th><th class="num">회차</th><th class="num">배리어</th><th class="num">예상상환금</th></tr>
+    </thead>
+    <tbody>
+      {% for week in weeks %}{% for cell in week %}{% for ev in cell.events %}
+      <tr>
+        <td style="font-weight:700">{{ month }}.{{ cell.day }}</td>
+        <td>
+          <a href="{% url 'product_detail' ev.inv.product.id %}" style="color:var(--blue-dark);font-weight:600">
+            {{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }}
+          </a>
+        </td>
+        <td class="num"><span class="badge badge-blue">{{ ev.n }}회차</span></td>
+        <td class="num">{{ ev.barrier|default:"-" }}%</td>
+        <td class="num" style="font-weight:700;color:var(--green)">{{ ev.expected|intcomma|default:"-" }}원</td>
+      </tr>
+      {% endfor %}{% endfor %}{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card empty">
+  <i class="fa-regular fa-calendar"></i>
+  이 달에는 평가 예정이 없습니다<br>
+  <span style="font-size:12px">포트폴리오에 투자를 등록하면 평가일이 표시됩니다</span>
+</div>
+{% endif %}
+{% endblock %}

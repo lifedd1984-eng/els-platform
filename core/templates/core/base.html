@@ -1,0 +1,214 @@
+{% load humanize %}<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}ELS 플랫폼{% endblock %}</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233182F6'/%3E%3Cpath d='M6 21L13 14L18 18L26 9' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='26' cy='9' r='2.4' fill='white'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root {
+  --text: #191F28; --text-2: #4E5968; --text-3: #8B95A1;
+  --blue: #3182F6; --blue-dark: #1B64DA; --blue-bg: #E8F3FF;
+  --red: #E5503C; --red-bg: #FDEDEB;
+  --green: #12B76A; --green-bg: #E8F8F0;
+  --orange: #F79009; --orange-bg: #FEF4E6;
+  --bg: #F2F4F6; --card: #FFFFFF; --border: #E5E8EB;
+  --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: Pretendard, 'Malgun Gothic', sans-serif;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; line-height: 1.5;
+}
+a { color: inherit; text-decoration: none; }
+
+/* ── 상단 네비 ── */
+.topnav {
+  background: var(--card); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+}
+.topnav-inner {
+  max-width: 1200px; margin: 0 auto; padding: 0 24px;
+  display: flex; align-items: center; height: 56px; gap: 8px;
+}
+.logo { font-size: 17px; font-weight: 800; margin-right: 24px; letter-spacing: -0.3px; }
+.logo i { color: var(--blue); margin-right: 6px; }
+.nav-link {
+  padding: 6px 12px; border-radius: 6px; color: var(--text-2);
+  font-weight: 600; font-size: 14px;
+}
+.nav-link:hover { background: var(--bg); }
+.nav-link.active { color: var(--blue); background: var(--blue-bg); }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.freshness { font-size: 12px; color: var(--text-3); }
+.freshness.warn { color: var(--orange); font-weight: 600; }
+
+/* ── 레이아웃 ── */
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.page-title { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 4px; }
+.page-sub { color: var(--text-3); font-size: 13px; margin-bottom: 20px; }
+
+/* ── 카드 ── */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 16px;
+}
+.card-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
+
+/* ── 테이블 ── */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left; font-size: 12px; color: var(--text-3); font-weight: 600;
+  padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+td { padding: 10px; border-bottom: 1px solid #F2F4F6; vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr.clickable:hover { background: #F8FAFB; cursor: pointer; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── 배지 ── */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 5px;
+  font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.badge-blue { background: var(--blue-bg); color: var(--blue-dark); }
+.badge-red { background: var(--red-bg); color: var(--red); }
+.badge-green { background: var(--green-bg); color: var(--green); }
+.badge-orange { background: var(--orange-bg); color: var(--orange); }
+.badge-gray { background: var(--bg); color: var(--text-2); }
+
+/* ── 버튼 ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 6px; border: none;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  font-family: inherit; background: var(--bg); color: var(--text-2);
+}
+.btn:hover { filter: brightness(0.96); }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-primary:hover { background: var(--blue-dark); filter: none; }
+.btn-danger { background: var(--red-bg); color: var(--red); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-icon { padding: 6px 8px; background: transparent; }
+.btn-icon:hover { background: var(--bg); }
+
+/* ── 폼 ── */
+input, select {
+  font-family: inherit; font-size: 13px; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px 10px; background: #fff; outline: none;
+}
+input:focus, select:focus { border-color: var(--blue); }
+label { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.form-row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.form-field { display: flex; flex-direction: column; gap: 4px; }
+
+/* ── 메시지 ── */
+.messages { margin-bottom: 16px; }
+.message {
+  padding: 10px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+  background: var(--green-bg); color: var(--green); margin-bottom: 6px;
+}
+
+/* ── 요약 카드 그리드 ── */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 18px;
+}
+.stat-label { font-size: 12px; color: var(--text-3); font-weight: 600; margin-bottom: 6px; }
+.stat-value { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; }
+.stat-value small { font-size: 13px; color: var(--text-3); font-weight: 600; }
+
+/* ── 주 네비 ── */
+.week-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.week-nav .btn { min-width: 36px; justify-content: center; }
+.week-label { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+
+/* ── 필터바 ── */
+.filterbar {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px;
+}
+.preset-chip {
+  padding: 5px 12px; border-radius: 15px; font-size: 12px; font-weight: 700;
+  background: var(--bg); color: var(--text-2); border: 1px solid transparent;
+}
+.preset-chip:hover { border-color: var(--blue); color: var(--blue); }
+.preset-chip.active { background: var(--blue); color: #fff; }
+
+/* ── 날짜 그룹 헤더 ── */
+.day-header {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 800; margin: 20px 0 8px;
+}
+.day-header .count { color: var(--text-3); font-weight: 600; font-size: 12px; }
+
+.dday-soon { color: var(--red); font-weight: 800; }
+.dday-normal { color: var(--text-2); font-weight: 600; }
+
+.empty {
+  text-align: center; padding: 48px 0; color: var(--text-3);
+}
+.empty i { font-size: 32px; margin-bottom: 12px; display: block; opacity: .4; }
+
+/* ── 캘린더 ── */
+.cal-table { table-layout: fixed; }
+.cal-table th { text-align: center; padding: 10px 0; }
+.cal-table td {
+  height: 96px; vertical-align: top; padding: 6px;
+  border: 1px solid #F2F4F6;
+}
+.cal-day { font-size: 12px; font-weight: 700; color: var(--text-2); margin-bottom: 4px; }
+.cal-day.today {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--blue); color: #fff;
+}
+.cal-event {
+  font-size: 11px; background: var(--blue-bg); color: var(--blue-dark);
+  border-radius: 4px; padding: 2px 6px; margin-bottom: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600;
+}
+
+@media (max-width: 800px) {
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .container { padding: 16px; }
+}
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="{% url 'weekly' %}" class="logo"><i class="fa-solid fa-chart-line"></i>ELS 플랫폼</a>
+    <a href="{% url 'weekly' %}" class="nav-link {% if active_nav == 'weekly' %}active{% endif %}">주간 청약</a>
+    <a href="{% url 'presets' %}" class="nav-link {% if active_nav == 'presets' %}active{% endif %}">프리셋</a>
+    <a href="{% url 'watchlist' %}" class="nav-link {% if active_nav == 'watchlist' %}active{% endif %}">관심</a>
+    <a href="{% url 'portfolio' %}" class="nav-link {% if active_nav == 'portfolio' %}active{% endif %}">포트폴리오</a>
+    <a href="{% url 'calendar' %}" class="nav-link {% if active_nav == 'calendar' %}active{% endif %}">상환 캘린더</a>
+    <div class="nav-right">
+      {% block nav_right %}{% endblock %}
+      {% if user.is_authenticated %}
+      <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}
+        <button class="btn-icon btn" title="로그아웃"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+<div class="container">
+  {% if messages %}
+  <div class="messages">
+    {% for m in messages %}<div class="message"><i class="fa-solid fa-circle-check"></i> {{ m }}</div>{% endfor %}
+  </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>
