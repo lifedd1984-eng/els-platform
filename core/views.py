@@ -274,7 +274,8 @@ def portfolio(request):
             messages.success(request, "투자 기록을 삭제했습니다.")
         return redirect("portfolio")
 
-    invs = Investment.objects.filter(user=request.user).select_related("product")
+    invs = (Investment.objects.filter(user=request.user)
+            .select_related("product").prefetch_related("ki_status"))
     holding = [i for i in invs if i.status == "보유중"]
     done = [i for i in invs if i.status != "보유중"]
 
@@ -300,6 +301,14 @@ def portfolio(request):
     # ── 리스크 분석 ──────────────────────────────
     risk = _analyze_risk(holding, total_invested)
 
+    # ── 낙인 모니터링 갱신 시각 ──
+    ki_updated = None
+    for inv in holding:
+        for s in inv.ki_status.all():
+            if s.updated_at and (ki_updated is None or s.updated_at > ki_updated):
+                ki_updated = s.updated_at
+    has_ki_data = ki_updated is not None
+
     # 투자 등록 폼용 상품 후보 (최근 청약 상품)
     candidates = Product.objects.filter(
         sub_end__gte=today - timedelta(days=30)
@@ -314,6 +323,8 @@ def portfolio(request):
         "total_expected_after_tax": total_expected_after_tax,
         "expected_profit_after_tax": expected_profit_after_tax,
         "risk": risk,
+        "ki_updated": ki_updated,
+        "has_ki_data": has_ki_data,
         "candidates": candidates,
         "today": today,
         "active_nav": "portfolio",

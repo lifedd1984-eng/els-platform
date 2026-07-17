@@ -238,6 +238,57 @@ class Investment(models.Model):
         sched = self.schedule
         return sched[-1]["expected_after_tax"] if sched else None
 
+    @property
+    def worst_ki_status(self):
+        """워스트오브: 레벨이 가장 낮은(위험한) 기초자산 상태."""
+        statuses = [s for s in self.ki_status.all() if s.level_pct is not None]
+        if not statuses:
+            return None
+        return min(statuses, key=lambda s: s.level_pct)
+
+    @property
+    def ki_buffer(self):
+        """워스트오브 기준 KI까지 남은 여유(%p). None이면 계산 불가."""
+        worst = self.worst_ki_status
+        return worst.buffer_to_ki if worst else None
+
+
+class KnockInStatus(models.Model):
+    """보유 투자별 기초자산 낙인 거리 (update_prices 배치가 갱신)."""
+    investment = models.ForeignKey(Investment, on_delete=models.CASCADE, related_name="ki_status")
+    asset_name = models.CharField(max_length=50)
+    ticker = models.CharField(max_length=20, blank=True)
+    ref_price = models.FloatField("발행일 기준가", null=True, blank=True)
+    current_price = models.FloatField("현재가", null=True, blank=True)
+    level_pct = models.FloatField("현재 레벨(%)", null=True, blank=True)  # 현재가/기준가×100
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["investment", "asset_name"], name="uniq_ki_status")
+        ]
+        ordering = ["level_pct"]
+
+    @property
+    def buffer_to_ki(self):
+        """KI 배리어까지 남은 여유(%p). 낮을수록 위험. None이면 계산 불가."""
+        ki = self.investment.product.ki
+        if self.level_pct is None or ki is None:
+            return None
+        return round(self.level_pct - ki, 1)
+
+
+class KnockInAlert(models.Model):
+    """낙인 경보 발송 이력 — 같은 위험구간 중복 발송 방지."""
+    investment = models.ForeignKey(Investment, on_delete=models.CASCADE)
+    level_band = models.CharField(max_length=10)  # 위험구간 라벨 (예: '위험', '경고')
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["investment", "level_band"], name="uniq_ki_alert")
+        ]
+
 
 class ImportLog(models.Model):
     """엑셀 임포트 처리 이력 — 동일 파일 재처리 방지."""

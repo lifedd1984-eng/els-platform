@@ -88,6 +88,61 @@
 </div>
 {% endif %}
 
+{% if holding %}
+<div class="card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <span><i class="fa-solid fa-gauge-high" style="color:var(--blue)"></i> 낙인 모니터링</span>
+    {% if ki_updated %}
+    <span style="font-weight:400;font-size:11px;color:var(--text-3)">{{ ki_updated|date:"m/d H:i" }} 기준</span>
+    {% endif %}
+  </div>
+  {% if has_ki_data %}
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>상품</th><th>워스트 기초자산</th><th class="num">기준가</th><th class="num">현재가</th>
+        <th class="num">현재 레벨</th><th class="num">KI배리어</th><th class="num">낙인까지</th>
+      </tr></thead>
+      <tbody>
+        {% for inv in holding %}
+        {% with worst=inv.worst_ki_status buf=inv.ki_buffer %}
+        {% if worst %}
+        <tr>
+          <td style="font-weight:700">{{ inv.product.issuer }} {{ inv.product.product_no }}</td>
+          <td>{{ worst.asset_name }}</td>
+          <td class="num" style="color:var(--text-3)">{{ worst.ref_price|floatformat:0 }}</td>
+          <td class="num">{{ worst.current_price|floatformat:0 }}</td>
+          <td class="num" style="font-weight:700">{{ worst.level_pct }}%</td>
+          <td class="num">{% if inv.product.is_no_ki %}NoKI{% else %}{{ inv.product.ki }}%{% endif %}</td>
+          <td class="num" style="font-weight:800;
+              color:{% if buf == None %}var(--text-3){% elif buf <= 5 %}var(--red){% elif buf <= 15 %}var(--orange){% else %}var(--green){% endif %}">
+            {% if buf != None %}
+              {{ buf }}%p
+              {% if buf <= 5 %}<span class="badge badge-red">위험</span>
+              {% elif buf <= 15 %}<span class="badge" style="background:var(--orange-bg);color:var(--orange)">경고</span>
+              {% else %}<span class="badge badge-green">안전</span>{% endif %}
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% endif %}
+        {% endwith %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:11px;color:var(--text-3);margin-top:10px">
+    현재 레벨 = 현재가 ÷ 발행일 기준가 × 100. 워스트오브(가장 하락한 자산) 기준. 시세: Yahoo Finance.
+  </p>
+  {% else %}
+  <div style="text-align:center;padding:20px 0;color:var(--text-3)">
+    <div style="font-size:13px;margin-bottom:8px">아직 시세 데이터가 없습니다.</div>
+    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px">python manage.py update_prices</code>
+    <div style="font-size:12px;margin-top:6px">실행 시 기초자산 시세를 조회해 낙인 거리를 계산합니다.</div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-title"><i class="fa-solid fa-plus" style="color:var(--blue)"></i> 투자 등록</div>
   <form method="post">{% csrf_token %}
