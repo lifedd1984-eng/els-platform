@@ -321,7 +321,11 @@ def portfolio(request):
         elif action == "delete":
             Investment.objects.filter(pk=request.POST.get("id"), user=request.user).delete()
             messages.success(request, "투자 기록을 삭제했습니다.")
-        return redirect("portfolio")
+        elif action == "bulk_delete":
+            ids = request.POST.getlist("ids")
+            n, _ = Investment.objects.filter(pk__in=ids, user=request.user).delete()
+            messages.success(request, f"{n}건의 투자 기록을 삭제했습니다.")
+        return redirect(request.POST.get("next") or "portfolio")
 
     invs = (Investment.objects.filter(user=request.user)
             .select_related("product").prefetch_related("ki_status"))
@@ -363,10 +367,52 @@ def portfolio(request):
         sub_end__gte=today - timedelta(days=30)
     ).order_by("-sub_end", "issuer")[:200]
 
+    # ── 보유 리스트 정렬 ──
+    H_SORT = {
+        "issuer": lambda i: (i.product.issuer or ""),
+        "assets": lambda i: (i.product.assets_raw or ""),
+        "amount": lambda i: i.amount or 0,
+        "yield": lambda i: i.product.yield_rate if i.product.yield_rate is not None else -1,
+        "next": lambda i: (i.next_evaluation["date"] if i.next_evaluation else date.max),
+        "aftertax": lambda i: (i.first_eval_after_tax or 0),
+    }
+    h_sort = request.GET.get("hsort", "next")
+    if h_sort not in H_SORT:
+        h_sort = "next"
+    h_dir = request.GET.get("hdir", "asc")
+    holding.sort(key=H_SORT[h_sort], reverse=(h_dir == "desc"))
+
+    def _hsort_url(key):
+        d = "desc" if (h_sort == key and h_dir == "asc") else "asc"
+        return f"?hsort={key}&hdir={d}&psize={page_size}"
+
+    # ── 페이지네이션 ──
+    from django.core.paginator import Paginator
+    try:
+        page_size = int(request.GET.get("psize", 20))
+    except (ValueError, TypeError):
+        page_size = 20
+    if page_size not in (20, 50, 100):
+        page_size = 20
+
+    h_page = Paginator(holding, page_size).get_page(request.GET.get("hpage"))
+    d_page = Paginator(done, page_size).get_page(request.GET.get("dpage"))
+
+    h_cols = [
+        {"key": k, "label": lbl, "num": num, "url": _hsort_url(k),
+         "active": h_sort == k, "dir": h_dir}
+        for k, lbl, num in [
+            ("issuer", "상품", False), ("assets", "기초자산", False),
+            ("amount", "투자금액", True), ("yield", "수익률", True),
+            ("next", "다음 평가일", False), ("aftertax", "세후 실수령", True),
+        ]
+    ]
+
     return render(request, "core/portfolio.html", {
-        "holding": holding, "done": done,
+        "h_page": h_page, "d_page": d_page,
+        "holding_count": len(holding), "done_count": len(done),
+        "h_cols": h_cols, "page_size": page_size,
         "total_invested": total_invested,
-        "holding_count": len(holding),
         "this_month_evals": this_month_evals,
         "total_redeemed_profit": total_redeemed_profit,
         "total_expected_after_tax": total_expected_after_tax,

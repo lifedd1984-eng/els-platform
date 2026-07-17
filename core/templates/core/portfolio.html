@@ -88,7 +88,7 @@
 </div>
 {% endif %}
 
-{% if holding %}
+{% if holding_count %}
 <div class="card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
     <span><i class="fa-solid fa-gauge-high" style="color:var(--blue)"></i> 낙인 모니터링</span>
@@ -104,7 +104,7 @@
         <th class="num">현재 레벨</th><th class="num">KI배리어</th><th class="num">낙인까지</th>
       </tr></thead>
       <tbody>
-        {% for inv in holding %}
+        {% for inv in h_page %}
         {% with worst=inv.worst_ki_status buf=inv.ki_buffer %}
         {% if worst %}
         <tr>
@@ -199,114 +199,170 @@
   </div>
 </div>
 
+<!-- 일괄삭제용 숨김 폼 (테이블 밖 — 중첩폼 방지) -->
+<form method="post" id="bulk-del-form" style="display:none">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="bulk_delete">
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <div id="bulk-del-ids"></div>
+</form>
+
 <div class="card" style="padding:8px 16px">
-  <div class="card-title" style="padding:12px 0 4px">보유 중 {{ holding|length }}건</div>
-  {% if holding %}
-  <table>
-    <thead>
-      <tr>
-        <th>상품</th><th>기초자산</th><th class="num">투자금액</th>
-        <th class="num">수익률</th><th>다음 평가일</th><th class="num">배리어</th>
-        <th class="num">예상상환금<br><small style="color:var(--text-3);font-weight:400">세전</small></th>
-        <th class="num">세후 실수령<br><small style="color:var(--text-3);font-weight:400">15.4% 반영</small></th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for inv in holding %}
-      <tr>
-        <td style="font-weight:700">
-          <a href="{% url 'product_detail' inv.product.id %}" style="color:var(--blue-dark)">
-            {{ inv.product.issuer }} {{ inv.product.product_no }}
-          </a>
-          {% if inv.broker_account %}<div style="font-size:11px;color:var(--text-3)">{{ inv.broker_account }}</div>{% endif %}
-        </td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw }}</td>
-        <td class="num" style="font-weight:700">{{ inv.amount|intcomma }}</td>
-        <td class="num" style="color:var(--blue-dark);font-weight:700">{{ inv.product.yield_rate|default:"-" }}%</td>
-        <td>
-          {% with nxt=inv.next_evaluation %}
-          {% if nxt %}
-            {{ nxt.date|date:"Y.n.j" }}
-            <span class="badge badge-blue">{{ nxt.n }}회차</span>
-          {% else %}-{% endif %}
-        </td>
-        <td class="num">{% if nxt and nxt.barrier %}{{ nxt.barrier }}%{% else %}-{% endif %}</td>
-        <td class="num" style="font-weight:700;color:var(--text-2)">
-          {% if nxt and nxt.expected %}{{ nxt.expected|intcomma }}{% else %}-{% endif %}
-        </td>
-        <td class="num" style="font-weight:800;color:var(--green)">
-          {% if nxt and nxt.expected_after_tax %}{{ nxt.expected_after_tax|intcomma }}{% else %}-{% endif %}
-          {% endwith %}
-        </td>
-        <td>
-          <details style="position:relative">
-            <summary class="btn btn-sm" style="list-style:none;cursor:pointer">상환 처리</summary>
-            <form method="post" style="position:absolute;right:0;top:32px;z-index:10;background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.08)">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="redeem">
-              <input type="hidden" name="id" value="{{ inv.id }}">
-              <div class="form-field" style="margin-bottom:8px">
-                <label>상태</label>
-                <select name="status">
-                  <option>조기상환</option><option>만기상환</option><option>낙인후상환</option>
-                </select>
-              </div>
-              <div class="form-field" style="margin-bottom:8px">
-                <label>상환일</label>
-                <input type="date" name="redeemed_at" value="{{ today|date:'Y-m-d' }}">
-              </div>
-              <div class="form-field" style="margin-bottom:10px">
-                <label>상환금액(원)</label>
-                <input type="text" name="redeemed_amount" placeholder="11,000,000"
-                       oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')">
-              </div>
-              <button type="submit" class="btn btn-primary btn-sm" style="width:100%">확인</button>
-            </form>
-          </details>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="card-title" style="padding:12px 4px 4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <span>보유 중 {{ holding_count }}건</span>
+    <span style="display:flex;gap:8px;align-items:center">
+      <button type="button" class="btn btn-danger btn-sm" id="bulk-del-btn" onclick="els_bulk_delete()" disabled>
+        <i class="fa-solid fa-trash"></i> 선택 삭제 (<span id="chk-count">0</span>)
+      </button>
+      {% include "core/_psize.html" %}
+    </span>
+  </div>
+  {% if h_page.object_list %}
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28px"><input type="checkbox" onclick="els_chk_all(this)"></th>
+          {% for c in h_cols %}
+          <th class="{% if c.num %}num{% endif %}" style="white-space:nowrap">
+            <a href="{{ c.url }}" style="color:inherit;text-decoration:none;{% if c.active %}color:var(--blue-dark);font-weight:700{% endif %}">
+              {{ c.label }}
+              {% if c.active %}<i class="fa-solid fa-caret-{% if c.dir == 'asc' %}up{% else %}down{% endif %}"></i>
+              {% else %}<i class="fa-solid fa-sort" style="color:var(--border)"></i>{% endif %}
+            </a>
+          </th>
+          {% endfor %}
+          <th class="num">배리어</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in h_page %}
+        <tr>
+          <td><input type="checkbox" class="row-chk" value="{{ inv.id }}" onclick="els_chk_update()"></td>
+          <td style="font-weight:700">
+            <a href="{% url 'product_detail' inv.product.id %}" style="color:var(--blue-dark)">
+              {{ inv.product.issuer }} {{ inv.product.product_no }}
+            </a>
+            {% if inv.broker_account %}<div style="font-size:11px;color:var(--text-3)">{{ inv.broker_account }}</div>{% endif %}
+          </td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw }}</td>
+          <td class="num" style="font-weight:700">{{ inv.amount|intcomma }}</td>
+          <td class="num" style="color:var(--blue-dark);font-weight:700">{{ inv.product.yield_rate|default:"-" }}%</td>
+          <td>
+            {% with nxt=inv.next_evaluation %}
+            {% if nxt %}
+              {{ nxt.date|date:"Y.n.j" }}
+              <span class="badge badge-blue">{{ nxt.n }}회차</span>
+            {% else %}-{% endif %}
+          </td>
+          <td class="num" style="font-weight:800;color:var(--green)">
+            {% if nxt and nxt.expected_after_tax %}{{ nxt.expected_after_tax|intcomma }}{% else %}-{% endif %}
+          </td>
+          <td class="num">{% if nxt and nxt.barrier %}{{ nxt.barrier }}%{% else %}-{% endif %}
+            {% endwith %}
+          </td>
+          <td>
+            <details style="position:relative">
+              <summary class="btn btn-sm" style="list-style:none;cursor:pointer">상환 처리</summary>
+              <form method="post" style="position:absolute;right:0;top:32px;z-index:10;background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.08)">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="redeem">
+                <input type="hidden" name="id" value="{{ inv.id }}">
+                <div class="form-field" style="margin-bottom:8px">
+                  <label>상태</label>
+                  <select name="status">
+                    <option>조기상환</option><option>만기상환</option><option>낙인후상환</option>
+                  </select>
+                </div>
+                <div class="form-field" style="margin-bottom:8px">
+                  <label>상환일</label>
+                  <input type="date" name="redeemed_at" value="{{ today|date:'Y-m-d' }}">
+                </div>
+                <div class="form-field" style="margin-bottom:10px">
+                  <label>상환금액(원)</label>
+                  <input type="text" name="redeemed_amount" placeholder="11,000,000"
+                         oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')">
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm" style="width:100%">확인</button>
+              </form>
+            </details>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "core/_pagination.html" with page=h_page param="hpage" %}
   {% else %}
   <div class="empty" style="padding:24px 0">보유 중인 투자가 없습니다</div>
   {% endif %}
 </div>
 
-{% if done %}
+{% if done_count %}
 <div class="card" style="padding:8px 16px">
-  <div class="card-title" style="padding:12px 0 4px">상환 완료 {{ done|length }}건</div>
-  <table>
-    <thead>
-      <tr>
-        <th>상품</th><th>상태</th><th class="num">투자금액</th>
-        <th class="num">상환금액</th><th class="num">실현수익률</th><th>상환일</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for inv in done %}
-      <tr>
-        <td style="font-weight:700">{{ inv.product.issuer }} {{ inv.product.product_no }}</td>
-        <td>
-          <span class="badge {% if inv.status == '낙인후상환' %}badge-red{% else %}badge-green{% endif %}">{{ inv.status }}</span>
-        </td>
-        <td class="num">{{ inv.amount|intcomma }}</td>
-        <td class="num">{{ inv.redeemed_amount|intcomma|default:"-" }}</td>
-        <td class="num" style="font-weight:800;color:{% if inv.realized_return_pct >= 0 %}var(--green){% else %}var(--red){% endif %}">
-          {% if inv.realized_return_pct is not None %}{{ inv.realized_return_pct }}%{% else %}-{% endif %}
-        </td>
-        <td>{{ inv.redeemed_at|date:"Y.n.j"|default:"-" }}</td>
-        <td>
-          <form method="post" onsubmit="return confirm('기록을 삭제할까요?')">{% csrf_token %}
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="id" value="{{ inv.id }}">
-            <button class="btn btn-icon"><i class="fa-solid fa-trash" style="color:var(--text-3)"></i></button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="card-title" style="padding:12px 4px 4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <span>상환 완료 {{ done_count }}건</span>
+    {% include "core/_psize.html" %}
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>상품</th><th>상태</th><th class="num">투자금액</th>
+          <th class="num">상환금액</th><th class="num">실현수익률</th><th>상환일</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for inv in d_page %}
+        <tr>
+          <td style="font-weight:700">{{ inv.product.issuer }} {{ inv.product.product_no }}</td>
+          <td>
+            <span class="badge {% if inv.status == '낙인후상환' %}badge-red{% else %}badge-green{% endif %}">{{ inv.status }}</span>
+          </td>
+          <td class="num">{{ inv.amount|intcomma }}</td>
+          <td class="num">{{ inv.redeemed_amount|intcomma|default:"-" }}</td>
+          <td class="num" style="font-weight:800;color:{% if inv.realized_return_pct >= 0 %}var(--green){% else %}var(--red){% endif %}">
+            {% if inv.realized_return_pct is not None %}{{ inv.realized_return_pct }}%{% else %}-{% endif %}
+          </td>
+          <td>{{ inv.redeemed_at|date:"Y.n.j"|default:"-" }}</td>
+          <td>
+            <form method="post" onsubmit="return confirm('기록을 삭제할까요?')">{% csrf_token %}
+              <input type="hidden" name="action" value="delete">
+              <input type="hidden" name="id" value="{{ inv.id }}">
+              <button class="btn btn-icon"><i class="fa-solid fa-trash" style="color:var(--text-3)"></i></button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include "core/_pagination.html" with page=d_page param="dpage" %}
 </div>
 {% endif %}
+
+<script>
+function els_chk_all(master) {
+  document.querySelectorAll('.row-chk').forEach(c => c.checked = master.checked);
+  els_chk_update();
+}
+function els_chk_update() {
+  const n = document.querySelectorAll('.row-chk:checked').length;
+  document.getElementById('chk-count').textContent = n;
+  document.getElementById('bulk-del-btn').disabled = (n === 0);
+}
+function els_bulk_delete() {
+  const checked = [...document.querySelectorAll('.row-chk:checked')];
+  if (!checked.length) return;
+  if (!confirm(checked.length + '건의 투자 기록을 삭제할까요?')) return;
+  const box = document.getElementById('bulk-del-ids');
+  box.innerHTML = '';
+  checked.forEach(c => {
+    const inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'ids'; inp.value = c.value;
+    box.appendChild(inp);
+  });
+  document.getElementById('bulk-del-form').submit();
+}
+</script>
 {% endblock %}
