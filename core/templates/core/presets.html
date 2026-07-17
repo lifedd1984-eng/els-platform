@@ -22,15 +22,23 @@
     <div class="form-row">
       <div class="form-field">
         <label>발행사</label>
-        <select name="issuer">
-          <option value="">전체</option>
-          {% for iss in issuers %}
-          <option value="{{ iss }}" {% if item.obj.issuer == iss %}selected{% endif %}>{{ iss }}</option>
-          {% endfor %}
-          {% if item.obj.issuer and item.obj.issuer not in issuers %}
-          <option value="{{ item.obj.issuer }}" selected>{{ item.obj.issuer }}</option>
-          {% endif %}
-        </select>
+        <details class="chk-dropdown">
+          <summary>{% if item.obj.issuers %}발행사 {{ item.obj.issuers|length }}곳{% else %}전체{% endif %}</summary>
+          <div class="chk-panel">
+            <div class="chk-actions">
+              <button type="button" class="btn btn-sm" onclick="els_chk(this,true)">전체선택</button>
+              <button type="button" class="btn btn-sm" onclick="els_chk(this,false)">해제</button>
+            </div>
+            <div class="chk-grid">
+              {% for iss in issuers %}
+              <label class="chk-item">
+                <input type="checkbox" name="issuers" value="{{ iss }}" {% if iss in item.obj.issuers %}checked{% endif %}>
+                {{ iss }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
       </div>
       <div class="form-field">
         <label>자산유형</label>
@@ -85,10 +93,20 @@
       </div>
       <div class="form-field">
         <label>발행사</label>
-        <select name="issuer">
-          <option value="">전체</option>
-          {% for iss in issuers %}<option value="{{ iss }}">{{ iss }}</option>{% endfor %}
-        </select>
+        <details class="chk-dropdown">
+          <summary>전체</summary>
+          <div class="chk-panel">
+            <div class="chk-actions">
+              <button type="button" class="btn btn-sm" onclick="els_chk(this,true)">전체선택</button>
+              <button type="button" class="btn btn-sm" onclick="els_chk(this,false)">해제</button>
+            </div>
+            <div class="chk-grid">
+              {% for iss in issuers %}
+              <label class="chk-item"><input type="checkbox" name="issuers" value="{{ iss }}"> {{ iss }}</label>
+              {% endfor %}
+            </div>
+          </div>
+        </details>
       </div>
       <div class="form-field">
         <label>자산유형</label>

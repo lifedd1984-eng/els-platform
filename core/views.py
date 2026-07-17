@@ -29,7 +29,7 @@ def weekly(request):
     f_yield_min = request.GET.get("yield_min", "")
     f_currency = request.GET.get("currency", "")
     f_no_ki = request.GET.get("no_ki", "")
-    f_issuer = request.GET.get("issuer", "")
+    f_issuers = request.GET.getlist("issuer")  # 다중 선택
     preset_id = request.GET.get("preset", "")
 
     if preset_id:
@@ -39,8 +39,8 @@ def weekly(request):
         except Preset.DoesNotExist:
             pass
     else:
-        if f_issuer:
-            qs = qs.filter(issuer=f_issuer)
+        if f_issuers:
+            qs = qs.filter(issuer__in=f_issuers)
         if f_asset:
             qs = qs.filter(asset_type=f_asset)
         if f_currency:
@@ -87,7 +87,7 @@ def weekly(request):
         "filters": {
             "asset": f_asset, "ki_max": f_ki_max, "yield_min": f_yield_min,
             "currency": f_currency, "no_ki": f_no_ki, "preset": preset_id,
-            "issuer": f_issuer,
+            "issuers": f_issuers,
         },
         "active_nav": "weekly",
     })
@@ -141,7 +141,7 @@ def presets(request):
             pid = request.POST.get("id")
             data = dict(
                 name=request.POST.get("name", "").strip() or "이름없음",
-                issuer=request.POST.get("issuer", "").strip(),
+                issuers=request.POST.getlist("issuers"),
                 ki_min=request.POST.get("ki_min") or None,
                 ki_max=request.POST.get("ki_max") or None,
                 include_no_ki=request.POST.get("include_no_ki") == "on",

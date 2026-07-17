@@ -97,7 +97,7 @@ class Preset(models.Model):
     name = models.CharField("프리셋명", max_length=50)
     is_default = models.BooleanField("기본 프리셋", default=False)
 
-    issuer = models.CharField("발행사", max_length=50, blank=True)  # 빈값=전체
+    issuers = models.JSONField("발행사 목록", default=list, blank=True)  # 빈 리스트=전체
     ki_min = models.IntegerField("KI 최소", null=True, blank=True)
     ki_max = models.IntegerField("KI 최대", null=True, blank=True)
     include_no_ki = models.BooleanField("NoKI 포함", default=True)
@@ -119,8 +119,8 @@ class Preset(models.Model):
         """이 프리셋 조건에 맞는 Product queryset."""
         if qs is None:
             qs = Product.objects.all()
-        if self.issuer:
-            qs = qs.filter(issuer=self.issuer)
+        if self.issuers:
+            qs = qs.filter(issuer__in=self.issuers)
         if self.asset_type != "전체":
             qs = qs.filter(asset_type=self.asset_type)
         if self.currency != "전체":

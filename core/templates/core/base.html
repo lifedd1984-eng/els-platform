@@ -58,6 +58,34 @@ a { color: inherit; text-decoration: none; }
 }
 .card-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
 
+/* ── 발행사 체크박스 드롭다운 ── */
+.chk-dropdown { position: relative; display: inline-block; }
+.chk-dropdown > summary {
+  list-style: none; cursor: pointer; user-select: none;
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 12px; font-size: 13px; background: #fff; color: var(--text-2);
+  white-space: nowrap;
+}
+.chk-dropdown > summary::-webkit-details-marker { display: none; }
+.chk-dropdown > summary::after { content: " \25BE"; color: var(--text-3); }
+.chk-dropdown[open] > summary { border-color: var(--blue); color: var(--blue-dark); }
+.chk-panel {
+  position: absolute; z-index: 30; top: 38px; left: 0;
+  background: #fff; border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.10); padding: 10px;
+  width: 280px; max-height: 300px; overflow-y: auto;
+}
+.chk-panel .chk-actions {
+  display: flex; gap: 8px; margin-bottom: 8px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.chk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; }
+.chk-item {
+  display: flex; align-items: center; gap: 6px; font-size: 13px;
+  padding: 4px 2px; cursor: pointer; white-space: nowrap;
+}
+.chk-item input { cursor: pointer; }
+
 /* ── 테이블 ── */
 table { width: 100%; border-collapse: collapse; }
 th {
@@ -234,5 +262,18 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   {% endif %}
   {% block content %}{% endblock %}
 </div>
+<script>
+// 체크박스 드롭다운: 전체선택 / 해제
+function els_chk(btn, checked) {
+  const panel = btn.closest('.chk-panel');
+  panel.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = checked);
+}
+// 바깥 클릭 시 열린 드롭다운 닫기
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('details.chk-dropdown[open]').forEach(d => {
+    if (!d.contains(e.target)) d.removeAttribute('open');
+  });
+});
+</script>
 </body>
 </html>

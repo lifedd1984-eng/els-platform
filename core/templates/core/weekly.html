@@ -29,12 +29,23 @@
   {% endfor %}
   <form method="get" class="form-row" style="margin-left:auto">
     <input type="hidden" name="w" value="{{ offset }}">
-    <select name="issuer">
-      <option value="">발행사 전체</option>
-      {% for iss in issuers %}
-      <option value="{{ iss }}" {% if filters.issuer == iss %}selected{% endif %}>{{ iss }}</option>
-      {% endfor %}
-    </select>
+    <details class="chk-dropdown">
+      <summary>{% if filters.issuers %}발행사 {{ filters.issuers|length }}곳{% else %}발행사 전체{% endif %}</summary>
+      <div class="chk-panel">
+        <div class="chk-actions">
+          <button type="button" class="btn btn-sm" onclick="els_chk(this,true)">전체선택</button>
+          <button type="button" class="btn btn-sm" onclick="els_chk(this,false)">해제</button>
+        </div>
+        <div class="chk-grid">
+          {% for iss in issuers %}
+          <label class="chk-item">
+            <input type="checkbox" name="issuer" value="{{ iss }}" {% if iss in filters.issuers %}checked{% endif %}>
+            {{ iss }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+    </details>
     <select name="asset">
       <option value="">자산유형</option>
       <option value="지수형" {% if filters.asset == '지수형' %}selected{% endif %}>지수형</option>
