@@ -1,0 +1,86 @@
+{% extends "core/base.html" %}
+{% block title %}시장 트렌드 — ELS 플랫폼{% endblock %}
+
+{% block content %}
+<h1 class="page-title">시장 트렌드</h1>
+<p class="page-sub">최근 12주간 청약 상품의 평균 조건 추이입니다</p>
+
+{% if trend %}
+<div class="stat-grid" style="margin-bottom:16px">
+  <div class="stat-card">
+    <div class="stat-label">평균 수익률 변화 <small style="color:var(--text-3)">(12주)</small></div>
+    <div class="stat-value" style="color:{% if trend.yield_up %}var(--green){% else %}var(--red){% endif %}">
+      {% if trend.yield_up %}+{% endif %}{{ trend.yield_diff }}<small>%p</small>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">평균 KI 변화 <small style="color:var(--text-3)">(낮을수록 안전)</small></div>
+    <div class="stat-value" style="color:{% if trend.ki_diff <= 0 %}var(--green){% else %}var(--red){% endif %}">
+      {% if trend.ki_diff > 0 %}+{% endif %}{{ trend.ki_diff }}<small>%p</small>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-title">
+    평균 연수익률 추이
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">
+      &nbsp;<i class="fa-solid fa-circle" style="color:var(--blue);font-size:8px"></i> 수익률(%)
+    </span>
+  </div>
+  <div style="overflow-x:auto">
+    <svg viewBox="0 0 {{ W }} {{ H }}" style="width:100%;min-width:520px;height:auto">
+      <!-- 수익률 라인 -->
+      <polyline points="{{ yield_poly }}" fill="none" stroke="var(--blue)" stroke-width="2.5"
+                stroke-linejoin="round" stroke-linecap="round"/>
+      {% for p in yield_pts %}
+      <circle cx="{{ p.x }}" cy="{{ p.y }}" r="3.5" fill="var(--blue)"/>
+      <text x="{{ p.x }}" y="{{ p.y|add:-10 }}" text-anchor="middle"
+            font-size="11" font-weight="700" fill="var(--blue-dark)">{{ p.v }}</text>
+      <text x="{{ p.x }}" y="{{ H|add:-14 }}" text-anchor="middle"
+            font-size="10" fill="var(--text-3)">{{ p.week|date:"n/j" }}</text>
+      {% endfor %}
+    </svg>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">
+    평균 KI 배리어 추이
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">
+      &nbsp;<i class="fa-solid fa-circle" style="color:var(--orange);font-size:8px"></i> KI(%) — 낮을수록 안전
+    </span>
+  </div>
+  <div style="overflow-x:auto">
+    <svg viewBox="0 0 {{ W }} {{ H }}" style="width:100%;min-width:520px;height:auto">
+      <polyline points="{{ ki_poly }}" fill="none" stroke="var(--orange)" stroke-width="2.5"
+                stroke-linejoin="round" stroke-linecap="round"/>
+      {% for p in ki_pts %}
+      <circle cx="{{ p.x }}" cy="{{ p.y }}" r="3.5" fill="var(--orange)"/>
+      <text x="{{ p.x }}" y="{{ p.y|add:-10 }}" text-anchor="middle"
+            font-size="11" font-weight="700" fill="var(--orange)">{{ p.v }}</text>
+      <text x="{{ p.x }}" y="{{ H|add:-14 }}" text-anchor="middle"
+            font-size="10" fill="var(--text-3)">{{ p.week|date:"n/j" }}</text>
+      {% endfor %}
+    </svg>
+  </div>
+</div>
+
+<div class="card" style="padding:8px 16px">
+  <div class="card-title" style="padding:12px 0 4px">주차별 상세</div>
+  <table>
+    <thead><tr><th>주차 (청약마감 기준)</th><th class="num">상품 수</th><th class="num">평균 수익률</th><th class="num">평균 KI</th></tr></thead>
+    <tbody>
+      {% for r in rows reversed %}
+      <tr>
+        <td>{{ r.week|date:"Y.n.j" }} 주</td>
+        <td class="num">{{ r.count }}</td>
+        <td class="num" style="font-weight:700;color:var(--blue-dark)">{{ r.avg_yield|default:"-" }}%</td>
+        <td class="num">{{ r.avg_ki|default:"-" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

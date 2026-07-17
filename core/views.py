@@ -320,6 +320,82 @@ def portfolio(request):
     })
 
 
+# ── 시장 트렌드 ───────────────────────────────────
+@login_required
+def market_trend(request):
+    """주차별 평균 수익률·KI 추이 (sub_end 기준, 최근 12주)."""
+    from collections import defaultdict
+
+    weeks_n = 12
+    qs = Product.objects.filter(sub_end__isnull=False)
+    buckets = defaultdict(list)
+    for p in qs:
+        monday = p.sub_end - timedelta(days=p.sub_end.weekday())
+        buckets[monday].append(p)
+
+    ordered = sorted(buckets)[-weeks_n:]
+    rows = []
+    for wk in ordered:
+        ps = buckets[wk]
+        ys = [p.yield_rate for p in ps if p.yield_rate is not None]
+        kis = [p.ki for p in ps if p.ki is not None and not p.is_no_ki]
+        rows.append({
+            "week": wk,
+            "count": len(ps),
+            "avg_yield": round(sum(ys) / len(ys), 1) if ys else None,
+            "avg_ki": round(sum(kis) / len(kis), 1) if kis else None,
+        })
+
+    # ── SVG 좌표 계산 ──
+    W, H = 720, 240
+    PAD_L, PAD_R, PAD_T, PAD_B = 44, 44, 20, 40
+    plot_w = W - PAD_L - PAD_R
+    plot_h = H - PAD_T - PAD_B
+
+    def _line(key, vmin, vmax):
+        vals = [r[key] for r in rows if r[key] is not None]
+        if not vals:
+            return [], vmin, vmax
+        lo = vmin if vmin is not None else min(vals)
+        hi = vmax if vmax is not None else max(vals)
+        span = (hi - lo) or 1
+        pts = []
+        n = len(rows)
+        for i, r in enumerate(rows):
+            if r[key] is None:
+                continue
+            x = PAD_L + (plot_w * i / max(n - 1, 1))
+            y = PAD_T + plot_h * (1 - (r[key] - lo) / span)
+            pts.append({"x": round(x, 1), "y": round(y, 1), "v": r[key],
+                        "week": r["week"], "count": r["count"]})
+        return pts, lo, hi
+
+    yield_pts, y_lo, y_hi = _line("avg_yield", None, None)
+    ki_pts, k_lo, k_hi = _line("avg_ki", None, None)
+
+    def _polyline(pts):
+        return " ".join(f"{p['x']},{p['y']}" for p in pts)
+
+    # 추세 요약 (첫→마지막)
+    trend = None
+    if len(yield_pts) >= 2:
+        diff = yield_pts[-1]["v"] - yield_pts[0]["v"]
+        trend = {
+            "yield_diff": round(diff, 1),
+            "yield_up": diff >= 0,
+            "ki_diff": round(ki_pts[-1]["v"] - ki_pts[0]["v"], 1) if len(ki_pts) >= 2 else None,
+        }
+
+    return render(request, "core/trend.html", {
+        "rows": rows,
+        "yield_pts": yield_pts, "yield_poly": _polyline(yield_pts),
+        "ki_pts": ki_pts, "ki_poly": _polyline(ki_pts),
+        "y_lo": y_lo, "y_hi": y_hi, "k_lo": k_lo, "k_hi": k_hi,
+        "W": W, "H": H, "trend": trend,
+        "active_nav": "trend",
+    })
+
+
 # ── 상환 캘린더 ───────────────────────────────────
 @login_required
 def redemption_calendar(request):
