@@ -225,6 +225,12 @@ def portfolio(request):
         (i.redeemed_amount - i.amount) for i in done if i.redeemed_amount
     )
 
+    # 세후 예상 수익 (보유분이 1차 평가에 전부 조기상환된다고 가정)
+    total_expected_after_tax = sum(
+        (i.first_eval_after_tax or i.amount) for i in holding
+    )
+    expected_profit_after_tax = total_expected_after_tax - total_invested
+
     # 투자 등록 폼용 상품 후보 (최근 청약 상품)
     candidates = Product.objects.filter(
         sub_end__gte=today - timedelta(days=30)
@@ -236,6 +242,8 @@ def portfolio(request):
         "holding_count": len(holding),
         "this_month_evals": this_month_evals,
         "total_redeemed_profit": total_redeemed_profit,
+        "total_expected_after_tax": total_expected_after_tax,
+        "expected_profit_after_tax": expected_profit_after_tax,
         "candidates": candidates,
         "today": today,
         "active_nav": "portfolio",

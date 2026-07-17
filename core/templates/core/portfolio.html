@@ -20,12 +20,22 @@
     <div class="stat-value">{{ this_month_evals }}<small>건</small></div>
   </div>
   <div class="stat-card">
+    <div class="stat-label">예상 세후수익 <small style="color:var(--text-3)">(1차 상환 가정)</small></div>
+    <div class="stat-value" style="color:var(--green)">
+      +{{ expected_profit_after_tax|intcomma }}<small>원</small>
+    </div>
+  </div>
+  <div class="stat-card">
     <div class="stat-label">누적 상환수익</div>
     <div class="stat-value" style="color:{% if total_redeemed_profit >= 0 %}var(--green){% else %}var(--red){% endif %}">
       {{ total_redeemed_profit|intcomma }}<small>원</small>
     </div>
   </div>
 </div>
+<p class="page-sub" style="margin-top:-8px;margin-bottom:16px">
+  <i class="fa-solid fa-circle-info" style="color:var(--text-3)"></i>
+  ELS 수익은 배당소득세 15.4%가 원금 제외 수익분에 부과됩니다. 세후 금액은 조기상환 가정 추정치입니다.
+</p>
 
 <div class="card">
   <div class="card-title"><i class="fa-solid fa-plus" style="color:var(--blue)"></i> 투자 등록</div>
@@ -69,7 +79,8 @@
       <tr>
         <th>상품</th><th>기초자산</th><th class="num">투자금액</th>
         <th class="num">수익률</th><th>다음 평가일</th><th class="num">배리어</th>
-        <th class="num">예상상환금</th><th></th>
+        <th class="num">예상상환금<br><small style="color:var(--text-3);font-weight:400">세전</small></th>
+        <th class="num">세후 실수령<br><small style="color:var(--text-3);font-weight:400">15.4% 반영</small></th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -92,8 +103,11 @@
           {% else %}-{% endif %}
         </td>
         <td class="num">{% if nxt and nxt.barrier %}{{ nxt.barrier }}%{% else %}-{% endif %}</td>
-        <td class="num" style="font-weight:700;color:var(--green)">
+        <td class="num" style="font-weight:700;color:var(--text-2)">
           {% if nxt and nxt.expected %}{{ nxt.expected|intcomma }}{% else %}-{% endif %}
+        </td>
+        <td class="num" style="font-weight:800;color:var(--green)">
+          {% if nxt and nxt.expected_after_tax %}{{ nxt.expected_after_tax|intcomma }}{% else %}-{% endif %}
           {% endwith %}
         </td>
         <td>

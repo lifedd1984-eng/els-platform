@@ -3,6 +3,23 @@ from datetime import date, timedelta
 from django.conf import settings
 from django.db import models
 
+# ELS/ELB 수익은 배당소득으로 과세: 소득세 14% + 지방소득세 1.4% = 15.4%
+# (원금 제외, 수익분에만 부과)
+DIVIDEND_TAX_RATE = 0.154
+
+# 금융소득 종합과세 기준 (연 2천만원 초과 시 다른 소득과 합산)
+FINANCIAL_INCOME_THRESHOLD = 20_000_000
+
+
+def after_tax_amount(principal: int, gross_redeem: int) -> int:
+    """세전 상환금 → 세후 상환금 (수익분에만 15.4% 과세)."""
+    if gross_redeem is None or principal is None:
+        return None
+    profit = gross_redeem - principal
+    if profit <= 0:
+        return gross_redeem  # 손실이면 과세 없음
+    return round(principal + profit * (1 - DIVIDEND_TAX_RATE))
+
 
 def _add_months(d: date, months: int) -> date:
     """d에 months개월을 더한 날짜 (말일 보정)."""
@@ -179,11 +196,15 @@ class Investment(models.Model):
             if p.expiry_date and eval_date > p.expiry_date:
                 break
             barrier = barriers[n - 1] if n <= len(barriers) else None
-            expected = None
+            expected = expected_after_tax = None
             if p.yield_rate is not None:
                 months = p.period_months * n
                 expected = round(self.amount * (1 + p.yield_rate / 100 * months / 12))
-            rows.append({"n": n, "date": eval_date, "barrier": barrier, "expected": expected})
+                expected_after_tax = after_tax_amount(self.amount, expected)
+            rows.append({
+                "n": n, "date": eval_date, "barrier": barrier,
+                "expected": expected, "expected_after_tax": expected_after_tax,
+            })
             n += 1
             if n > 40:  # 안전장치
                 break
@@ -204,6 +225,18 @@ class Investment(models.Model):
         if self.redeemed_amount is None or not self.amount:
             return None
         return round((self.redeemed_amount - self.amount) / self.amount * 100, 2)
+
+    @property
+    def first_eval_after_tax(self):
+        """1차 평가 시 세후 실수령액 (조기상환 가정)."""
+        sched = self.schedule
+        return sched[0]["expected_after_tax"] if sched else None
+
+    @property
+    def maturity_after_tax(self):
+        """만기(최종 회차)까지 보유 시 세후 실수령액."""
+        sched = self.schedule
+        return sched[-1]["expected_after_tax"] if sched else None
 
 
 class ImportLog(models.Model):
