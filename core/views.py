@@ -16,8 +16,26 @@ def _week_range(offset: int = 0):
 
 
 # ── 주간 청약 (메인) ──────────────────────────────
+WEEKLY_FILTER_PARAMS = ["asset", "ki_max", "yield_min", "currency",
+                        "no_ki", "issuer", "preset", "sort", "dir"]
+
+
 @login_required
 def weekly(request):
+    # ── 필터 세션 저장/복원 ──
+    if "reset" in request.GET:
+        request.session.pop("weekly_filters", None)
+        return redirect("weekly")
+
+    # 빈 URL(메뉴 클릭)로 오면 저장된 필터 복원
+    if not request.GET and request.session.get("weekly_filters"):
+        return redirect("/?" + request.session["weekly_filters"])
+
+    # 그 외에는 현재 필터 상태를 저장 (주 이동 파라미터 w 제외)
+    _saved = request.GET.copy()
+    _saved.pop("w", None)
+    request.session["weekly_filters"] = _saved.urlencode()
+
     offset = int(request.GET.get("w", 0))
     monday, sunday = _week_range(offset)
 
@@ -120,6 +138,7 @@ def weekly(request):
             "currency": f_currency, "no_ki": f_no_ki, "preset": preset_id,
             "issuers": f_issuers,
         },
+        "has_saved_filters": bool(request.session.get("weekly_filters")),
         "active_nav": "weekly",
     })
 

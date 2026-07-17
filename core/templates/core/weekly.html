@@ -11,14 +11,15 @@
 {% endblock %}
 
 {% block content %}
+{% load els_extras %}
 <div class="page-title">주간 청약</div>
 <div class="page-sub">이번 주 청약 마감 상품 {{ total }}건</div>
 
 <div class="week-nav">
-  <a href="?w={{ offset|add:'-1' }}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>
+  <a href="?{% qs_replace w=offset|add:'-1' %}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>
   <span class="week-label">{{ monday|date:"n.j" }} ~ {{ sunday|date:"n.j" }}</span>
-  <a href="?w={{ offset|add:'1' }}" class="btn"><i class="fa-solid fa-chevron-right"></i></a>
-  {% if offset != 0 %}<a href="?" class="btn btn-sm">이번 주로</a>{% endif %}
+  <a href="?{% qs_replace w=offset|add:'1' %}" class="btn"><i class="fa-solid fa-chevron-right"></i></a>
+  {% if offset != 0 %}<a href="?{% qs_replace w=0 %}" class="btn btn-sm">이번 주로</a>{% endif %}
 </div>
 
 <div class="filterbar">
@@ -59,6 +60,11 @@
       <option value="USD" {% if filters.currency == 'USD' %}selected{% endif %}>USD</option>
     </select>
     <button class="btn btn-primary btn-sm" type="submit"><i class="fa-solid fa-filter"></i> 적용</button>
+    {% if has_saved_filters %}
+    <a href="?reset=1" class="btn btn-sm" title="필터 초기화" style="color:var(--text-2)">
+      <i class="fa-solid fa-rotate-left"></i> 초기화
+    </a>
+    {% endif %}
   </form>
 </div>
 
