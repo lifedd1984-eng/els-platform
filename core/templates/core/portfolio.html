@@ -37,6 +37,57 @@
   ELS 수익은 배당소득세 15.4%가 원금 제외 수익분에 부과됩니다. 세후 금액은 조기상환 가정 추정치입니다.
 </p>
 
+{% if risk %}
+<div class="card">
+  <div class="card-title"><i class="fa-solid fa-shield-halved" style="color:var(--blue)"></i> 리스크 분석</div>
+
+  {% if risk.warnings %}
+  <div style="background:var(--orange-bg);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+    {% for w in risk.warnings %}
+    <div style="color:var(--orange);font-weight:600;font-size:13px;{% if not forloop.last %}margin-bottom:6px{% endif %}">
+      <i class="fa-solid fa-triangle-exclamation"></i> {{ w }}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="color:var(--green);font-weight:600;font-size:13px;margin-bottom:16px">
+    <i class="fa-solid fa-circle-check"></i> 특별한 집중 위험이 감지되지 않았습니다.
+  </div>
+  {% endif %}
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">기초자산 집중도 <small style="color:var(--text-3);font-weight:400">(워스트오브 노출)</small></div>
+      {% for a in risk.assets %}
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+          <span>{{ a.name }} <small style="color:var(--text-3)">{{ a.count }}건</small></span>
+          <b>{{ a.pct }}%</b>
+        </div>
+        <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:{{ a.pct }}%;background:{% if a.pct > 50 %}var(--orange){% else %}var(--blue){% endif %};border-radius:3px"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">발행사 분산</div>
+      {% for s in risk.issuers %}
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+          <span>{{ s.name }} <small style="color:var(--text-3)">{{ s.count }}건</small></span>
+          <b>{{ s.pct }}%</b>
+        </div>
+        <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:{{ s.pct }}%;background:var(--text-3);border-radius:3px"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-title"><i class="fa-solid fa-plus" style="color:var(--blue)"></i> 투자 등록</div>
   <form method="post">{% csrf_token %}

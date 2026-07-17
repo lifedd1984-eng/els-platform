@@ -178,6 +178,72 @@ def watchlist(request):
     })
 
 
+def _split_assets(assets_raw: str):
+    """'KOSPI200 , SK하이닉스' → ['KOSPI200', 'SK하이닉스']."""
+    import re
+    return [a.strip() for a in re.split(r"[,/]+", assets_raw or "") if a.strip()]
+
+
+def _analyze_risk(holding, total_invested):
+    """보유 포트폴리오의 집중도/분산 리스크 분석.
+
+    ELS는 워스트오브 구조 → 각 기초자산에 투자금 전액이 노출된다.
+    같은 자산에 여러 건 몰리면 그 자산 하나로 전체가 위험해진다.
+    """
+    if not holding or not total_invested:
+        return None
+
+    from collections import defaultdict
+    asset_exposure = defaultdict(lambda: {"amount": 0, "count": 0})
+    issuer_exposure = defaultdict(lambda: {"amount": 0, "count": 0})
+    maturity_buckets = defaultdict(int)  # 'YYYY-MM' → 건수
+
+    for inv in holding:
+        p = inv.product
+        for asset in _split_assets(p.assets_raw):
+            asset_exposure[asset]["amount"] += inv.amount
+            asset_exposure[asset]["count"] += 1
+        issuer_exposure[p.issuer]["amount"] += inv.amount
+        issuer_exposure[p.issuer]["count"] += 1
+        nxt = inv.next_evaluation
+        if nxt:
+            maturity_buckets[nxt["date"].strftime("%Y-%m")] += 1
+
+    def _top(exposure):
+        rows = [
+            {"name": k, "amount": v["amount"], "count": v["count"],
+             "pct": round(v["amount"] / total_invested * 100)}
+            for k, v in exposure.items()
+        ]
+        return sorted(rows, key=lambda r: -r["amount"])
+
+    assets = _top(asset_exposure)
+    issuers = _top(issuer_exposure)
+
+    # 경고: 단일 자산/발행사 노출이 전체의 50% 초과
+    warnings = []
+    if assets and assets[0]["pct"] > 50:
+        warnings.append(
+            f"기초자산 '{assets[0]['name']}'에 전체의 {assets[0]['pct']}%가 집중되어 있습니다."
+        )
+    if issuers and issuers[0]["pct"] > 60:
+        warnings.append(
+            f"발행사 '{issuers[0]['name']}'에 전체의 {issuers[0]['pct']}%가 집중되어 있습니다."
+        )
+    # 만기 집중: 한 달에 60% 초과 평가 몰림
+    if maturity_buckets:
+        top_month, top_cnt = max(maturity_buckets.items(), key=lambda x: x[1])
+        if top_cnt / len(holding) > 0.6 and len(holding) >= 3:
+            warnings.append(f"{top_month} 평가일에 상환이 몰려 있습니다 ({top_cnt}건).")
+
+    return {
+        "assets": assets[:6],
+        "issuers": issuers[:5],
+        "maturity": sorted(maturity_buckets.items()),
+        "warnings": warnings,
+    }
+
+
 # ── 포트폴리오 ────────────────────────────────────
 @login_required
 def portfolio(request):
@@ -231,6 +297,9 @@ def portfolio(request):
     )
     expected_profit_after_tax = total_expected_after_tax - total_invested
 
+    # ── 리스크 분석 ──────────────────────────────
+    risk = _analyze_risk(holding, total_invested)
+
     # 투자 등록 폼용 상품 후보 (최근 청약 상품)
     candidates = Product.objects.filter(
         sub_end__gte=today - timedelta(days=30)
@@ -244,6 +313,7 @@ def portfolio(request):
         "total_redeemed_profit": total_redeemed_profit,
         "total_expected_after_tax": total_expected_after_tax,
         "expected_profit_after_tax": expected_profit_after_tax,
+        "risk": risk,
         "candidates": candidates,
         "today": today,
         "active_nav": "portfolio",
