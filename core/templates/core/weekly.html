@@ -29,6 +29,12 @@
   {% endfor %}
   <form method="get" class="form-row" style="margin-left:auto">
     <input type="hidden" name="w" value="{{ offset }}">
+    <select name="issuer">
+      <option value="">발행사 전체</option>
+      {% for iss in issuers %}
+      <option value="{{ iss }}" {% if filters.issuer == iss %}selected{% endif %}>{{ iss }}</option>
+      {% endfor %}
+    </select>
     <select name="asset">
       <option value="">자산유형</option>
       <option value="지수형" {% if filters.asset == '지수형' %}selected{% endif %}>지수형</option>

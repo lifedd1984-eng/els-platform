@@ -29,6 +29,7 @@ def weekly(request):
     f_yield_min = request.GET.get("yield_min", "")
     f_currency = request.GET.get("currency", "")
     f_no_ki = request.GET.get("no_ki", "")
+    f_issuer = request.GET.get("issuer", "")
     preset_id = request.GET.get("preset", "")
 
     if preset_id:
@@ -38,6 +39,8 @@ def weekly(request):
         except Preset.DoesNotExist:
             pass
     else:
+        if f_issuer:
+            qs = qs.filter(issuer=f_issuer)
         if f_asset:
             qs = qs.filter(asset_type=f_asset)
         if f_currency:
@@ -67,16 +70,24 @@ def weekly(request):
     if last_import:
         freshness_days = (date.today() - last_import.imported_at.date()).days
 
+    # 발행사 필터 후보 (이번 주 상품에 존재하는 발행사)
+    issuers = sorted(set(
+        Product.objects.filter(sub_end__gte=monday, sub_end__lte=sunday)
+        .values_list("issuer", flat=True)
+    ))
+
     return render(request, "core/weekly.html", {
         "day_groups": day_groups,
         "monday": monday, "sunday": sunday, "offset": offset,
         "total": len(products),
         "presets": Preset.objects.all(),
+        "issuers": issuers,
         "watched_ids": watched_ids,
         "freshness_days": freshness_days,
         "filters": {
             "asset": f_asset, "ki_max": f_ki_max, "yield_min": f_yield_min,
             "currency": f_currency, "no_ki": f_no_ki, "preset": preset_id,
+            "issuer": f_issuer,
         },
         "active_nav": "weekly",
     })
@@ -130,6 +141,7 @@ def presets(request):
             pid = request.POST.get("id")
             data = dict(
                 name=request.POST.get("name", "").strip() or "이름없음",
+                issuer=request.POST.get("issuer", "").strip(),
                 ki_min=request.POST.get("ki_min") or None,
                 ki_max=request.POST.get("ki_max") or None,
                 include_no_ki=request.POST.get("include_no_ki") == "on",
@@ -153,8 +165,14 @@ def presets(request):
     for p in Preset.objects.all():
         preset_list.append({"obj": p, "match_count": p.match_queryset(active_products).count()})
 
+    # 발행사 후보 (전체 상품 기준 — 최근 60일)
+    issuers = sorted(set(
+        Product.objects.filter(sub_end__gte=today - timedelta(days=60))
+        .values_list("issuer", flat=True)
+    ))
+
     return render(request, "core/presets.html", {
-        "preset_list": preset_list, "active_nav": "presets",
+        "preset_list": preset_list, "issuers": issuers, "active_nav": "presets",
     })
 
 

@@ -21,6 +21,18 @@
     </div>
     <div class="form-row">
       <div class="form-field">
+        <label>발행사</label>
+        <select name="issuer">
+          <option value="">전체</option>
+          {% for iss in issuers %}
+          <option value="{{ iss }}" {% if item.obj.issuer == iss %}selected{% endif %}>{{ iss }}</option>
+          {% endfor %}
+          {% if item.obj.issuer and item.obj.issuer not in issuers %}
+          <option value="{{ item.obj.issuer }}" selected>{{ item.obj.issuer }}</option>
+          {% endif %}
+        </select>
+      </div>
+      <div class="form-field">
         <label>자산유형</label>
         <select name="asset_type">
           {% for v, _ in item.obj.ASSET_CHOICES %}
@@ -70,6 +82,13 @@
       <div class="form-field">
         <label>이름</label>
         <input type="text" name="name" placeholder="프리셋 이름" required style="width:160px">
+      </div>
+      <div class="form-field">
+        <label>발행사</label>
+        <select name="issuer">
+          <option value="">전체</option>
+          {% for iss in issuers %}<option value="{{ iss }}">{{ iss }}</option>{% endfor %}
+        </select>
       </div>
       <div class="form-field">
         <label>자산유형</label>
