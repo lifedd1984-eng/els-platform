@@ -54,14 +54,44 @@ def weekly(request):
                 cond |= Q(is_no_ki=True)
             qs = qs.filter(cond)
 
-    # 마감일별 그룹핑
-    products = list(qs.order_by("sub_end", "-yield_rate"))
-    groups = {}
-    for p in products:
-        groups.setdefault(p.sub_end, []).append(p)
-    day_groups = [
-        {"date": d, "weekday": "월화수목금토일"[d.weekday()], "products": plist}
-        for d, plist in sorted(groups.items())
+    # ── 정렬 ──────────────────────────────────────
+    from django.db.models import F
+    SORT_FIELDS = {
+        "issuer": "issuer", "product_no": "product_no", "assets": "assets_raw",
+        "yield": "yield_rate", "ki": "ki", "first": "barrier_first",
+        "last": "barrier_last", "period": "period_months", "type": "asset_type",
+        "sub_end": "sub_end",
+    }
+    sort_key = request.GET.get("sort", "sub_end")
+    if sort_key not in SORT_FIELDS:
+        sort_key = "sub_end"
+    sort_dir = request.GET.get("dir", "asc")
+    field = SORT_FIELDS[sort_key]
+    ordering = (F(field).desc(nulls_last=True) if sort_dir == "desc"
+                else F(field).asc(nulls_last=True))
+    products = list(qs.order_by(ordering, "-yield_rate"))
+
+    # 정렬 헤더용 컬럼 메타 (URL은 현재 필터 유지 + 정렬 토글)
+    base_params = request.GET.copy()
+    base_params.pop("sort", None)
+    base_params.pop("dir", None)
+
+    def _sort_url(key):
+        p = base_params.copy()
+        p["sort"] = key
+        p["dir"] = "desc" if (sort_key == key and sort_dir == "asc") else "asc"
+        return "?" + p.urlencode()
+
+    col_defs = [
+        ("issuer", "발행사", False), ("product_no", "상품번호", False),
+        ("assets", "기초자산", False), ("yield", "수익률", True),
+        ("ki", "KI", True), ("first", "1차", True), ("last", "막차", True),
+        ("period", "주기", True), ("type", "유형", False), ("sub_end", "마감", True),
+    ]
+    columns = [
+        {"key": k, "label": lbl, "num": num, "url": _sort_url(k),
+         "active": sort_key == k, "dir": sort_dir}
+        for k, lbl, num in col_defs
     ]
 
     watched_ids = set(WatchItem.objects.values_list("product_id", flat=True))
@@ -77,7 +107,8 @@ def weekly(request):
     ))
 
     return render(request, "core/weekly.html", {
-        "day_groups": day_groups,
+        "products": products,
+        "columns": columns,
         "monday": monday, "sunday": sunday, "offset": offset,
         "total": len(products),
         "presets": Preset.objects.all(),
