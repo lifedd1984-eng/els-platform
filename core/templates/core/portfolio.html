@@ -175,6 +175,28 @@
       <button type="submit" class="btn btn-primary">등록</button>
     </div>
   </form>
+
+  <div style="border-top:1px solid var(--border);margin-top:16px;padding-top:14px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:700;color:var(--text-2)">
+        <i class="fa-solid fa-file-arrow-up" style="color:var(--blue)"></i> 엑셀로 한번에 등록
+      </span>
+      <a href="{% url 'portfolio_template' %}" class="btn btn-sm">
+        <i class="fa-solid fa-download"></i> 양식 다운로드
+      </a>
+      <form method="post" action="{% url 'portfolio_upload' %}" enctype="multipart/form-data"
+            style="display:inline-flex;align-items:center;gap:8px" id="pf-upload-form">
+        {% csrf_token %}
+        <input type="file" name="excel" accept=".xlsx,.xlsm" id="pf-excel"
+               style="display:none" onchange="document.getElementById('pf-upload-form').submit()">
+        <button type="button" class="btn btn-primary btn-sm"
+                onclick="document.getElementById('pf-excel').click()">
+          <i class="fa-solid fa-upload"></i> 엑셀 업로드
+        </button>
+      </form>
+      <span style="font-size:12px;color:var(--text-3)">양식 다운로드 → 작성 → 업로드</span>
+    </div>
+  </div>
 </div>
 
 <div class="card" style="padding:8px 16px">

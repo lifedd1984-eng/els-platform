@@ -380,6 +380,149 @@ def portfolio(request):
     })
 
 
+# ── 포트폴리오 엑셀 양식 다운로드 ─────────────────
+PORTFOLIO_COLS = ["발행사", "상품번호", "투자금액(원)", "청약일(YYYY-MM-DD)", "증권사/계좌", "메모"]
+
+
+@login_required
+def portfolio_template(request):
+    """투자내역 일괄등록 엑셀 양식 다운로드."""
+    import io
+    import openpyxl
+    from django.http import HttpResponse
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "투자내역"
+    ws.append(PORTFOLIO_COLS)
+    # 예시 행 (안내용, 업로드 시 발행사가 실제 매칭 안되면 자동 무시됨)
+    ws.append(["키움증권", "1965", 10000000, "2026-07-16", "키움 CMA", "예시 행 — 삭제 후 작성"])
+    widths = [14, 10, 14, 18, 14, 22]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    guide = wb.create_sheet("작성안내")
+    for row in [
+        ["ELS 플랫폼 — 투자내역 일괄등록 양식"],
+        [""],
+        ["1. '투자내역' 시트에 한 행씩 입력하세요."],
+        ["2. 발행사 + 상품번호로 수집된 상품과 자동 매칭합니다."],
+        ["   (주간청약/상품 목록에 있는 발행사·상품번호와 동일하게 입력)"],
+        ["3. 투자금액은 숫자만 (원 단위). 예: 10000000"],
+        ["4. 청약일은 YYYY-MM-DD. 비우면 오늘 날짜로 등록됩니다."],
+        ["5. 증권사/계좌·메모는 선택입니다."],
+        ["6. 예시 행은 삭제하고 업로드하세요."],
+        [""],
+        ["※ 매칭 실패한 행은 등록되지 않고 결과에 표시됩니다."],
+    ]:
+        guide.append(row)
+    guide.column_dimensions["A"].width = 60
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = 'attachment; filename="ELS_투자내역_양식.xlsx"'
+    return resp
+
+
+def _match_product_for_investment(issuer, product_no):
+    """발행사+상품번호로 Product 매칭 (여러 개면 최근 sub_end)."""
+    qs = Product.objects.filter(
+        issuer=str(issuer).strip(), product_no=str(product_no).strip()
+    )
+    return qs.order_by("-sub_end").first()
+
+
+@login_required
+def portfolio_upload(request):
+    """엑셀로 투자내역 일괄 등록."""
+    if request.method != "POST":
+        return redirect("portfolio")
+
+    import openpyxl
+
+    f = request.FILES.get("excel")
+    if not f or not f.name.lower().endswith((".xlsx", ".xlsm")):
+        messages.error(request, "엑셀 파일(.xlsx)을 선택해주세요.")
+        return redirect("portfolio")
+
+    try:
+        wb = openpyxl.load_workbook(f, data_only=True)
+    except Exception as e:  # noqa: BLE001
+        messages.error(request, f"파일을 읽을 수 없습니다: {e}")
+        return redirect("portfolio")
+
+    ws = wb["투자내역"] if "투자내역" in wb.sheetnames else wb.worksheets[0]
+
+    created = 0
+    errors = []
+    for i, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or all(c is None for c in row):
+            continue
+        issuer = row[0]
+        product_no = row[1] if len(row) > 1 else None
+        amount = row[2] if len(row) > 2 else None
+        invested = row[3] if len(row) > 3 else None
+        broker = row[4] if len(row) > 4 else ""
+        memo = row[5] if len(row) > 5 else ""
+
+        if not issuer or product_no is None or amount in (None, ""):
+            errors.append(f"{i}행: 발행사·상품번호·투자금액은 필수입니다.")
+            continue
+
+        product = _match_product_for_investment(issuer, product_no)
+        if not product:
+            errors.append(f"{i}행: '{issuer} {product_no}' 상품을 찾을 수 없습니다.")
+            continue
+
+        try:
+            amount_int = int(str(amount).replace(",", "").replace("원", "").strip())
+        except (ValueError, TypeError):
+            errors.append(f"{i}행: 투자금액 '{amount}'을 숫자로 읽을 수 없습니다.")
+            continue
+
+        inv_date = _parse_invest_date(invested) or date.today()
+
+        Investment.objects.create(
+            user=request.user, product=product, amount=amount_int,
+            invested_at=inv_date, broker_account=str(broker or "")[:100],
+            memo=str(memo or "")[:200],
+        )
+        WatchItem.objects.filter(product=product).delete()
+        created += 1
+
+    if created:
+        messages.success(request, f"{created}건의 투자를 등록했습니다.")
+    if errors:
+        messages.error(request, "일부 행을 건너뛰었습니다: " + " / ".join(errors[:8])
+                        + (f" 외 {len(errors)-8}건" if len(errors) > 8 else ""))
+    if not created and not errors:
+        messages.error(request, "등록할 데이터가 없습니다.")
+    return redirect("portfolio")
+
+
+def _parse_invest_date(val):
+    """엑셀 셀값 → date. datetime/문자열/None 처리."""
+    from datetime import datetime as _dt
+    if val is None or val == "":
+        return None
+    if hasattr(val, "date"):  # datetime
+        return val.date()
+    if isinstance(val, date):
+        return val
+    s = str(val).strip().replace(".", "-").replace("/", "-")
+    for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return _dt.strptime(s[:10], "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return None
+
+
 # ── 시장 트렌드 ───────────────────────────────────
 @login_required
 def market_trend(request):
