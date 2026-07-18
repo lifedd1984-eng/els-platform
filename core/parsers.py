@@ -50,9 +50,11 @@ def extract_ki(text):
         r'/\s*(\d+)\s*KI\b',         # /30 KI
         r'(\d+)\s*KI\b',             # 30KI
         r',(\d+)%-\([0-9,]+\)%',     # KOFIA형: ,30%-(85,85,80,...)%  ("KI" 텍스트 없이 %로만 표기)
+        r'knock\s*in\s*(\d+)',       # KB증권형: "knock in 35" (영문 표기)
+        r'/(\d+)\(종가\)\]',          # 한국투자증권형: "...50/35(종가)]" ("KI" 텍스트 없이 종가 표기)
     ]
     for pat in patterns:
-        m = re.search(pat, text)
+        m = re.search(pat, text, re.IGNORECASE)
         if m:
             return m.group(1)
     return None
@@ -64,6 +66,14 @@ def extract_barriers(text):
     text = str(text)
 
     m = re.search(r'(?:Lizard|Safezone)?StepDown형\[([^\]]+)/\d+KI\]', text)
+    if m:
+        raw = re.sub(r'\([^)]*\)', '', m.group(1))
+        vals = re.findall(r'\d+', raw)
+        if vals:
+            return vals
+
+    # 한국투자증권형: StepDown형[80-80-...-50/35(종가)] ("KI" 텍스트 없이 종가 표기)
+    m = re.search(r'(?:Lizard|Safezone)?StepDown형\[([^\]]+)/\d+\(종가\)\]', text)
     if m:
         raw = re.sub(r'\([^)]*\)', '', m.group(1))
         vals = re.findall(r'\d+', raw)
@@ -194,6 +204,17 @@ def extract_barriers(text):
     m = re.search(r',\d+%-\(([0-9,]+)\)%', text)
     if m:
         vals = [v.strip() for v in m.group(1).split(',') if v.strip()]
+        if vals:
+            return vals
+
+    # 배리어 숫자열 바로 뒤에 NoKI/no ki (콤마 또는 슬래시로 연결, 대소문자 무관)
+    m = re.search(
+        r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*[,/]\s*no\s*ki',
+        text, re.IGNORECASE,
+    )
+    if m:
+        raw = re.sub(r'\(L\d+\)', '', m.group(1))
+        vals = [v for v in raw.split('-') if re.match(r'^\d+$', v.strip())]
         if vals:
             return vals
 
