@@ -40,7 +40,10 @@ def extract_ki(text):
     # NoKI 판별 (한/영, 대소문자 무관 + 원금지급형 + Digital형 + 하이파이브형)
     if re.search(r'no\s*KI|KI\s*없음|노\s*KI', text, re.IGNORECASE):
         return 'NoKI'
-    if re.search(r'하이파이브|Hi-Five|원금지급형|원금추가지급형|Digital형|원금보장', text):
+    if re.search(r'하이파이브|Hi-Five|원금지급형|원금추가지급형|원금지급추구형|Digital형|원금보장', text):
+        return 'NoKI'
+    # 상승참여형: 낙인 배리어 없이 만기 시 상승/하락 참여율만으로 정산하는 구조
+    if re.search(r'상승참여율', text):
         return 'NoKI'
     # 실물상환형: 손실 시 현금이 아닌 주식 실물로 상환 — 낙인(KI) 개념 자체가 없음
     if re.search(r'실물상환|실물인수|실물결제|실물주식인도', text):
@@ -207,8 +210,8 @@ def extract_barriers(text):
             return vals
 
     # 범용 폴백: 접두 문맥과 무관하게 "숫자-숫자-...(선택적 (Lxx))" 가
-    # 바로 KI숫자 앞에 오는 모든 경우 (KOFIA 원문 다양한 표기 대응)
-    m = re.search(r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*/?\s*KI\s*\d+', text)
+    # 바로 KI숫자 앞에 오는 모든 경우 (KOFIA 원문 다양한 표기 대응, "KI_30" 언더스코어 포함)
+    m = re.search(r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*/?\s*KI[_\s]*\d+', text)
     if m:
         raw = re.sub(r'\(L\d+\)', '', m.group(1))
         vals = [v for v in raw.split('-') if re.match(r'^\d+$', v.strip())]
@@ -222,9 +225,9 @@ def extract_barriers(text):
         if vals:
             return vals
 
-    # 배리어 숫자열 바로 뒤에 NoKI/no ki (콤마 또는 슬래시로 연결, 대소문자 무관)
+    # 배리어 숫자열 바로 뒤에 NoKI/no ki (콤마·슬래시·공백으로 연결, 대소문자 무관)
     m = re.search(
-        r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*[,/]\s*no\s*ki',
+        r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*[,/\s]\s*no\s*ki',
         text, re.IGNORECASE,
     )
     if m:
@@ -243,6 +246,50 @@ def extract_barriers(text):
 
     # 하나증권 노낙인형: "3y/6m 90-85-85-80-75-65 ..." — KI 텍스트 없이 배리어만
     m = re.search(r'\d+y/\d+m,?\s+([\d\-]+)', text)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # KB증권형: Step-Down형85/85/80/80/75/70--knock in 40 (슬래시 구분, "knock in" 앞)
+    # Lizard형은 90(L75)/90(L70)/... 처럼 (Lxx) 리자드 마커가 끼어들 수 있음
+    m = re.search(r'Step-Down형([\d/()L]+)--\s*knock\s*in\s*\d+', text, re.IGNORECASE)
+    if m:
+        raw = re.sub(r'\(L\d+\)', '', m.group(1))
+        vals = [v for v in raw.split('/') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # KB증권 NoKI형: 베리어 85-85-85-85-85-85--no knock in
+    m = re.search(r'베리어\s*([\d\-]+)--\s*no\s*knock\s*in', text, re.IGNORECASE)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # 대괄호 배리어: [70-70-...-70] (Hi-Five형 등)
+    m = re.search(r'\[([\d\-]+)\]', text)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # 삼성증권 Ultra형: (100,100,100,100,100,100)%
+    m = re.search(r'\(([\d,]+)\)%', text)
+    if m:
+        vals = [v.strip() for v in m.group(1).split(',') if v.strip()]
+        if vals:
+            return vals
+
+    # 메리츠증권 원금지급추구형: 70-70-...-70/월쿠폰배리어 65 (배리어 미달 시 쿠폰 미지급, 낙인 아님)
+    m = re.search(r'([\d\-]+)/\s*월쿠폰배리어', text)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # 교보증권형: 100-100-100-만기 no ki (배리어 사이에 "만기" 토큰이 끼는 경우)
+    m = re.search(r'([\d\-]+)-?만기\s*no\s*ki', text, re.IGNORECASE)
     if m:
         vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
         if vals:
