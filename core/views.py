@@ -450,6 +450,7 @@ def portfolio(request):
         "assets": lambda i: (i.product.assets_raw or ""),
         "amount": lambda i: i.amount or 0,
         "yield": lambda i: i.product.yield_rate if i.product.yield_rate is not None else -1,
+        "issue": lambda i: (i.product.issue_date or date.max),
         "next": lambda i: (i.next_evaluation["date"] if i.next_evaluation else date.max),
         "pretax": _pretax,
         "loss": lambda i: (i.product.loss_prob if i.product.loss_prob is not None else -1),
@@ -482,6 +483,7 @@ def portfolio(request):
         for k, lbl, num in [
             ("issuer", "상품", False), ("assets", "기초자산", False),
             ("amount", "투자금액", True), ("yield", "수익률", True),
+            ("issue", "발행일", False),
             ("next", "다음 평가일", False), ("pretax", "예상상환금", True),
             ("loss", "손실확률", True),
         ]
@@ -654,10 +656,10 @@ def _parse_invest_date(val):
 # ── 시장 트렌드 ───────────────────────────────────
 @login_required
 def market_trend(request):
-    """주차별 평균 수익률·KI 추이 (sub_end 기준, 최근 12주)."""
+    """주차별 평균 수익률·KI 추이 (sub_end 기준, 최근 20주)."""
     from collections import defaultdict
 
-    weeks_n = 12
+    weeks_n = 20
     qs = Product.objects.filter(sub_end__isnull=False)
     buckets = defaultdict(list)
     for p in qs:

@@ -3,12 +3,12 @@
 
 {% block content %}
 <h1 class="page-title">시장 트렌드</h1>
-<p class="page-sub">최근 12주간 청약 상품의 평균 조건 추이입니다</p>
+<p class="page-sub">최근 20주간 청약 상품의 평균 조건 추이입니다</p>
 
 {% if trend %}
 <div class="stat-grid" style="margin-bottom:16px">
   <div class="stat-card">
-    <div class="stat-label">평균 수익률 변화 <small style="color:var(--text-3)">(12주)</small></div>
+    <div class="stat-label">평균 수익률 변화 <small style="color:var(--text-3)">(20주)</small></div>
     <div class="stat-value" style="color:{% if trend.yield_up %}var(--green){% else %}var(--red){% endif %}">
       {% if trend.yield_up %}+{% endif %}{{ trend.yield_diff }}<small>%p</small>
     </div>
