@@ -97,6 +97,27 @@ class Product(models.Model):
             return None
         return (self.sub_end - date.today()).days
 
+    @property
+    def term_months(self):
+        """상품기간(발행일→만기일) 총 개월수. 둘 중 하나라도 없으면 None."""
+        if not self.issue_date or not self.expiry_date:
+            return None
+        return ((self.expiry_date.year - self.issue_date.year) * 12
+                + (self.expiry_date.month - self.issue_date.month))
+
+    @property
+    def term_display(self):
+        """상품기간 표시: 12개월 미만→'9개월', 12배수→'3년', 그 외→'2년6개월'. 없으면 '-'."""
+        m = self.term_months
+        if m is None:
+            return "-"
+        if m < 12:
+            return f"{m}개월"
+        years, months = divmod(m, 12)
+        if months == 0:
+            return f"{years}년"
+        return f"{years}년{months}개월"
+
 
 class Preset(models.Model):
     """조건 프리셋 — 기본 3종 시드, 전부 수정/삭제 가능."""

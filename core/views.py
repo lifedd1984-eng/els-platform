@@ -81,13 +81,24 @@ def weekly(request):
         "sub_end": "sub_end", "loss": "loss_prob",
     }
     sort_key = request.GET.get("sort", "sub_end")
-    if sort_key not in SORT_FIELDS:
+    if sort_key != "term" and sort_key not in SORT_FIELDS:
         sort_key = "sub_end"
     sort_dir = request.GET.get("dir", "asc")
-    field = SORT_FIELDS[sort_key]
-    ordering = (F(field).desc(nulls_last=True) if sort_dir == "desc"
-                else F(field).asc(nulls_last=True))
-    products = list(qs.order_by(ordering, "-yield_rate"))
+    if sort_key == "term":
+        # term_months는 계산 property(DB 컬럼 아님) → Python 정렬. None은 항상 뒤로.
+        # 정렬 방향과 무관하게 None이 끝에 오도록 sentinel 사용.
+        desc = sort_dir == "desc"
+        sentinel = float("-inf") if desc else float("inf")
+        products = list(qs.order_by("-yield_rate"))
+        products.sort(
+            key=lambda p: p.term_months if p.term_months is not None else sentinel,
+            reverse=desc,
+        )
+    else:
+        field = SORT_FIELDS[sort_key]
+        ordering = (F(field).desc(nulls_last=True) if sort_dir == "desc"
+                    else F(field).asc(nulls_last=True))
+        products = list(qs.order_by(ordering, "-yield_rate"))
 
     # 정렬 헤더용 컬럼 메타 (URL은 현재 필터 유지 + 정렬 토글)
     base_params = request.GET.copy()
@@ -104,7 +115,7 @@ def weekly(request):
         ("issuer", "발행사", False), ("product_no", "상품번호", False),
         ("assets", "기초자산", False), ("yield", "수익률", True),
         ("ki", "KI", True), ("first", "1차", True), ("last", "막차", True),
-        ("period", "주기", True), ("loss", "손실확률", True),
+        ("term", "기간", True), ("period", "주기", True), ("loss", "손실확률", True),
         ("type", "유형", False), ("sub_end", "마감", True),
     ]
     columns = [

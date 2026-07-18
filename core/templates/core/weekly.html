@@ -99,6 +99,7 @@
           </td>
           <td class="num">{{ p.barrier_first|default:"-" }}</td>
           <td class="num">{{ p.barrier_last|default:"-" }}</td>
+          <td class="num">{{ p.term_display }}</td>
           <td class="num">{{ p.period_months|default:"-" }}{% if p.period_months %}개월{% endif %}</td>
           <td class="num">
             {% if p.loss_prob is not None %}
