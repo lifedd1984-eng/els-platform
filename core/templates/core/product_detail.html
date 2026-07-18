@@ -76,6 +76,99 @@
 </div>
 
 <div class="card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+    <span><i class="fa-solid fa-flask" style="color:var(--blue)"></i> 수익률 모의실험</span>
+    {% if sim_updated %}<span style="font-weight:400;font-size:11px;color:var(--text-3)">{{ sim_updated|date:"m/d" }} 기준 · Yahoo Finance</span>{% endif %}
+  </div>
+
+  {% if sim and sim.available %}
+  <div class="stat-grid" style="margin-bottom:16px">
+    <div class="stat-card">
+      <div class="stat-label">조기상환 확률</div>
+      <div class="stat-value" style="color:var(--green)">{{ sim.early_redemp_pct }}<small>%</small></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">만기 손실확률 <small style="color:var(--text-3)">(핵심)</small></div>
+      <div class="stat-value" style="color:{% if sim.loss_prob_pct > 5 %}var(--red){% elif sim.loss_prob_pct > 0 %}var(--orange){% else %}var(--green){% endif %}">
+        {{ sim.loss_prob_pct }}<small>%</small>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">평균 손실률 <small style="color:var(--text-3)">(손실 시)</small></div>
+      <div class="stat-value" style="color:var(--red)">{% if sim.avg_loss_pct %}{{ sim.avg_loss_pct }}<small>%</small>{% else %}-{% endif %}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">표본 수</div>
+      <div class="stat-value">{{ sim.samples }}<small>개</small></div>
+    </div>
+  </div>
+
+  <p class="page-sub" style="margin-top:-6px;margin-bottom:14px">
+    <i class="fa-solid fa-circle-info" style="color:var(--text-3)"></i>
+    표본기간 {{ sim.period_start }} ~ {{ sim.period_end }}. 과거 기초자산 종가로 매 영업일을 발행일로 가정한 워스트오브 백테스트.
+    {% if sim.low_confidence %}<b style="color:var(--orange)"> ※ 표본이 적어 참고용.</b>{% endif %}
+    과거 성과가 미래를 보장하지 않습니다.
+  </p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="sim-grid">
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px">회차별 조기상환</div>
+      <table>
+        <thead><tr><th>상환구분</th><th class="num">수익률</th><th class="num">횟수</th><th class="num">빈도</th></tr></thead>
+        <tbody>
+          {% for r in sim.rounds %}
+          <tr>
+            <td>{{ r.round }}차{% if forloop.last %} <small style="color:var(--text-3)">(만기)</small>{% endif %}</td>
+            <td class="num" style="color:var(--blue-dark);font-weight:600">+{{ r.return_pct }}%</td>
+            <td class="num">{{ r.count }}</td>
+            <td class="num">{{ r.freq_pct }}%</td>
+          </tr>
+          {% endfor %}
+          <tr style="border-top:2px solid var(--border)">
+            <td>만기 무손실</td><td class="num">최대쿠폰</td>
+            <td class="num">{{ sim.maturity_noki_count }}</td><td class="num">{{ sim.maturity_noki_pct }}%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:8px">만기 손실 분포</div>
+      {% if sim.loss_buckets %}
+      <table>
+        <thead><tr><th>손실 구간</th><th class="num">횟수</th><th class="num">빈도</th></tr></thead>
+        <tbody>
+          {% for b in sim.loss_buckets %}
+          <tr>
+            <td style="color:var(--red)">{{ b.label }}</td>
+            <td class="num">{{ b.count }}</td><td class="num">{{ b.freq_pct }}%</td>
+          </tr>
+          {% endfor %}
+          <tr style="border-top:2px solid var(--border);font-weight:700">
+            <td>손실 합계</td><td class="num">{{ sim.loss_count }}</td><td class="num" style="color:var(--red)">{{ sim.loss_prob_pct }}%</td>
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:24px 0;color:var(--green);font-weight:600">
+        <i class="fa-solid fa-shield-halved"></i> 과거 표본에서 만기 손실 사례 없음
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% elif sim %}
+  <div style="text-align:center;padding:20px 0;color:var(--text-3)">
+    <i class="fa-solid fa-ban" style="font-size:22px;margin-bottom:6px"></i>
+    <div style="font-size:13px">모의실험 불가 — {{ sim.reason }}</div>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:20px 0;color:var(--text-3)">
+    <div style="font-size:13px;margin-bottom:8px">아직 시뮬레이션 데이터가 없습니다.</div>
+    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px">python manage.py simulate_products</code>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
   <div class="card-title">상품설명 원문</div>
   <div style="font-size:13px;color:var(--text-2);line-height:1.7;word-break:break-all">{{ product.description }}</div>
 </div>

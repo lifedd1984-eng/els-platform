@@ -68,6 +68,12 @@ class Product(models.Model):
     description = models.TextField("상품설명 원문", blank=True)
     collected_at = models.DateTimeField("수집일시", auto_now_add=True)
 
+    # 수익률 모의실험(백테스트) 캐시 — simulate_products 배치가 채움
+    loss_prob = models.FloatField("만기손실확률(%)", null=True, blank=True)
+    sim_samples = models.IntegerField("시뮬 표본수", null=True, blank=True)
+    sim_result = models.JSONField("시뮬 상세결과", null=True, blank=True)
+    sim_updated = models.DateTimeField("시뮬 갱신일시", null=True, blank=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(

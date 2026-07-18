@@ -100,6 +100,11 @@
           <td class="num">{{ p.barrier_first|default:"-" }}</td>
           <td class="num">{{ p.barrier_last|default:"-" }}</td>
           <td class="num">{{ p.period_months|default:"-" }}{% if p.period_months %}개월{% endif %}</td>
+          <td class="num">
+            {% if p.loss_prob is not None %}
+              <span style="font-weight:700;color:{% if p.loss_prob > 5 %}var(--red){% elif p.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ p.loss_prob }}%</span>
+            {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
+          </td>
           <td>
             {% if p.asset_type %}<span class="badge {% if p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ p.asset_type }}</span>{% endif %}
             {% if p.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}

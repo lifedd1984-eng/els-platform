@@ -78,7 +78,7 @@ def weekly(request):
         "issuer": "issuer", "product_no": "product_no", "assets": "assets_raw",
         "yield": "yield_rate", "ki": "ki", "first": "barrier_first",
         "last": "barrier_last", "period": "period_months", "type": "asset_type",
-        "sub_end": "sub_end",
+        "sub_end": "sub_end", "loss": "loss_prob",
     }
     sort_key = request.GET.get("sort", "sub_end")
     if sort_key not in SORT_FIELDS:
@@ -104,7 +104,8 @@ def weekly(request):
         ("issuer", "발행사", False), ("product_no", "상품번호", False),
         ("assets", "기초자산", False), ("yield", "수익률", True),
         ("ki", "KI", True), ("first", "1차", True), ("last", "막차", True),
-        ("period", "주기", True), ("type", "유형", False), ("sub_end", "마감", True),
+        ("period", "주기", True), ("loss", "손실확률", True),
+        ("type", "유형", False), ("sub_end", "마감", True),
     ]
     columns = [
         {"key": k, "label": lbl, "num": num, "url": _sort_url(k),
@@ -173,8 +174,12 @@ def product_detail(request, pk):
             ki_y = min(ki_y, h - 8)
         svg = {"w": w, "h": h, "steps": steps, "ki_y": ki_y}
 
+    # 수익률 모의실험 결과 (배치가 저장한 캐시)
+    sim = product.sim_result or None
+
     return render(request, "core/product_detail.html", {
         "product": product, "is_watched": is_watched, "svg": svg,
+        "sim": sim, "sim_updated": product.sim_updated,
         "active_nav": "weekly",
     })
 
