@@ -37,19 +37,25 @@ def extract_ki(text):
     if not text:
         return None
     text = str(text)
-    # NoKI 판별 (한/영 + 원금지급형 + Digital형 + 하이파이브형)
-    if re.search(r'[Nn]o\s*KI|KI\s*없음|노\s*KI|NoKI', text):
+    # NoKI 판별 (한/영, 대소문자 무관 + 원금지급형 + Digital형 + 하이파이브형)
+    if re.search(r'no\s*KI|KI\s*없음|노\s*KI', text, re.IGNORECASE):
         return 'NoKI'
     if re.search(r'하이파이브|Hi-Five|원금지급형|원금추가지급형|Digital형|원금보장', text):
         return 'NoKI'
     # 실물상환형: 손실 시 현금이 아닌 주식 실물로 상환 — 낙인(KI) 개념 자체가 없음
-    if re.search(r'실물상환|실물인수|실물결제', text):
+    if re.search(r'실물상환|실물인수|실물결제|실물주식인도', text):
+        return 'NoKI'
+    # Digital Call형: 배리어 도달 여부만으로 이분법 지급 — 스텝다운형 낙인(KI) 구조 자체가 없음
+    if re.search(r'Digital\s*Call|디지털\s*콜', text, re.IGNORECASE):
+        return 'NoKI'
+    # 채권/금리 연계 DLS: 스텝다운 ELS 구조가 아니라 낙인 개념이 적용되지 않음
+    if re.search(r'국고채|KTB|금리\s*연계', text):
         return 'NoKI'
     patterns = [
         r'/(\d+)KI[\]\)]',           # /25KI]  /40KI)
         r',\s*(\d+)KI\s*\(',         # ,30KI(
         r'[/\-]{1,2}\s*KI\s*(\d+)',  # /KI 30  --KI 45
-        r'KI\s*(\d+)',               # KI 30  KI30  (범용 catch-all)
+        r'KI[_\s]*(\d+)',            # KI 30  KI30  KI_30  (범용 catch-all)
         r'/\s*(\d+)\s*KI\b',         # /30 KI
         r'(\d+)\s*KI\b',             # 30KI
         r',(\d+)%-\([0-9,]+\)%',     # KOFIA형: ,30%-(85,85,80,...)%  ("KI" 텍스트 없이 %로만 표기)
