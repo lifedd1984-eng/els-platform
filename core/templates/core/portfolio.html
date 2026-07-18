@@ -20,9 +20,15 @@
     <div class="stat-value">{{ this_month_evals }}<small>건</small></div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">예상 세후수익 <small style="color:var(--text-3)">(1차 상환 가정)</small></div>
+    <div class="stat-label">예상 세전수익 <small style="color:var(--text-3)">(1차 상환 가정)</small></div>
     <div class="stat-value" style="color:var(--green)">
-      +{{ expected_profit_after_tax|intcomma }}<small>원</small>
+      +{{ expected_profit_pretax|intcomma }}<small>원</small>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">예상 손실율 <small style="color:var(--text-3)">(금액가중)</small></div>
+    <div class="stat-value" style="color:{% if port_loss_rate > 5 %}var(--red){% elif port_loss_rate > 0 %}var(--orange){% else %}var(--green){% endif %}">
+      {% if port_loss_rate != None %}{{ port_loss_rate }}<small>%</small>{% else %}<small>-</small>{% endif %}
     </div>
   </div>
   <div class="stat-card">
@@ -34,7 +40,9 @@
 </div>
 <p class="page-sub" style="margin-top:-8px;margin-bottom:16px">
   <i class="fa-solid fa-circle-info" style="color:var(--text-3)"></i>
-  ELS 수익은 배당소득세 15.4%가 원금 제외 수익분에 부과됩니다. 세후 금액은 조기상환 가정 추정치입니다.
+  예상 세전수익은 1차 조기상환 가정 추정치입니다.
+  예상 손실율 = Σ(투자금액 × 상품별 손실확률) ÷ 총투자금 (모의실험 기반).
+  {% if loss_coverage_pct < 100 %}<span style="color:var(--orange)">손실확률 산출 상품이 투자금의 {{ loss_coverage_pct }}%.</span>{% endif %}
 </p>
 
 {% if risk %}
@@ -57,12 +65,12 @@
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">기초자산 집중도 <small style="color:var(--text-3);font-weight:400">(워스트오브 노출)</small></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">기초자산 집중도 <small style="color:var(--text-3);font-weight:400">(금액기준 · 워스트오브 노출)</small></div>
       {% for a in risk.assets %}
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
-          <span>{{ a.name }} <small style="color:var(--text-3)">{{ a.count }}건</small></span>
-          <b>{{ a.pct }}%</b>
+          <span>{{ a.name }} <small style="color:var(--text-3)">({{ a.count }}건)</small></span>
+          <span><small style="color:var(--text-3)">{{ a.amount|intcomma }}원</small> <b>{{ a.pct }}%</b></span>
         </div>
         <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
           <div style="height:100%;width:{{ a.pct }}%;background:{% if a.pct > 50 %}var(--orange){% else %}var(--blue){% endif %};border-radius:3px"></div>
@@ -71,12 +79,12 @@
       {% endfor %}
     </div>
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">발행사 분산</div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">발행사 분산 <small style="color:var(--text-3);font-weight:400">(금액기준)</small></div>
       {% for s in risk.issuers %}
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
-          <span>{{ s.name }} <small style="color:var(--text-3)">{{ s.count }}건</small></span>
-          <b>{{ s.pct }}%</b>
+          <span>{{ s.name }} <small style="color:var(--text-3)">({{ s.count }}건)</small></span>
+          <span><small style="color:var(--text-3)">{{ s.amount|intcomma }}원</small> <b>{{ s.pct }}%</b></span>
         </div>
         <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
           <div style="height:100%;width:{{ s.pct }}%;background:var(--text-3);border-radius:3px"></div>
@@ -91,53 +99,51 @@
 {% if holding_count %}
 <div class="card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
-    <span><i class="fa-solid fa-gauge-high" style="color:var(--blue)"></i> 낙인 모니터링</span>
+    <span><i class="fa-solid fa-gauge-high" style="color:var(--blue)"></i> 낙인 경보
+      <small style="font-weight:400;color:var(--text-3)">(낙인까지 15%p 이내)</small></span>
     {% if ki_updated %}
     <span style="font-weight:400;font-size:11px;color:var(--text-3)">{{ ki_updated|date:"m/d H:i" }} 기준</span>
     {% endif %}
   </div>
-  {% if has_ki_data %}
+  {% if not has_ki_data %}
+  <div style="text-align:center;padding:20px 0;color:var(--text-3)">
+    <div style="font-size:13px;margin-bottom:8px">아직 시세 데이터가 없습니다.</div>
+    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px">python manage.py update_prices</code>
+  </div>
+  {% elif ki_alerts %}
   <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th>상품</th><th>워스트 기초자산</th><th class="num">기준가</th><th class="num">현재가</th>
-        <th class="num">현재 레벨</th><th class="num">KI배리어</th><th class="num">낙인까지</th>
+        <th>상품</th><th>워스트 기초자산</th><th class="num">현재 레벨</th>
+        <th class="num">KI배리어</th><th class="num">낙인까지</th><th></th>
       </tr></thead>
       <tbody>
-        {% for inv in h_page %}
-        {% with worst=inv.worst_ki_status buf=inv.ki_buffer %}
-        {% if worst %}
+        {% for a in ki_alerts %}
         <tr>
-          <td style="font-weight:700">{{ inv.product.issuer }} {{ inv.product.product_no }}</td>
-          <td>{{ worst.asset_name }}</td>
-          <td class="num" style="color:var(--text-3)">{{ worst.ref_price|floatformat:0 }}</td>
-          <td class="num">{{ worst.current_price|floatformat:0 }}</td>
-          <td class="num" style="font-weight:700">{{ worst.level_pct }}%</td>
-          <td class="num">{% if inv.product.is_no_ki %}NoKI{% else %}{{ inv.product.ki }}%{% endif %}</td>
-          <td class="num" style="font-weight:800;
-              color:{% if buf == None %}var(--text-3){% elif buf <= 5 %}var(--red){% elif buf <= 15 %}var(--orange){% else %}var(--green){% endif %}">
-            {% if buf != None %}
-              {{ buf }}%p
-              {% if buf <= 5 %}<span class="badge badge-red">위험</span>
-              {% elif buf <= 15 %}<span class="badge" style="background:var(--orange-bg);color:var(--orange)">경고</span>
-              {% else %}<span class="badge badge-green">안전</span>{% endif %}
-            {% else %}-{% endif %}
+          <td style="font-weight:700">
+            <a href="{% url 'product_detail' a.inv.product.id %}" style="color:var(--blue-dark)">
+              {{ a.inv.product.issuer }} {{ a.inv.product.product_no }}</a>
+          </td>
+          <td>{{ a.worst.asset_name }} <small style="color:var(--text-3)">{{ a.worst.level_pct }}% ({{ a.worst.current_price|floatformat:0 }})</small></td>
+          <td class="num" style="font-weight:700">{{ a.worst.level_pct }}%</td>
+          <td class="num">{{ a.inv.product.ki }}%</td>
+          <td class="num" style="font-weight:800;color:{% if a.buffer <= 5 %}var(--red){% else %}var(--orange){% endif %}">{{ a.buffer }}%p</td>
+          <td class="num">
+            {% if a.buffer <= 5 %}<span class="badge badge-red">위험</span>
+            {% else %}<span class="badge" style="background:var(--orange-bg);color:var(--orange)">경고</span>{% endif %}
           </td>
         </tr>
-        {% endif %}
-        {% endwith %}
         {% endfor %}
       </tbody>
     </table>
   </div>
   <p style="font-size:11px;color:var(--text-3);margin-top:10px">
-    현재 레벨 = 현재가 ÷ 발행일 기준가 × 100. 워스트오브(가장 하락한 자산) 기준. 시세: Yahoo Finance.
+    낙인까지 = 현재 워스트오브 레벨 − KI배리어. 위험 ≤ 5%p / 경고 ≤ 15%p. 상품 클릭 시 상세 낙인 현황.
   </p>
   {% else %}
-  <div style="text-align:center;padding:20px 0;color:var(--text-3)">
-    <div style="font-size:13px;margin-bottom:8px">아직 시세 데이터가 없습니다.</div>
-    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px">python manage.py update_prices</code>
-    <div style="font-size:12px;margin-top:6px">실행 시 기초자산 시세를 조회해 낙인 거리를 계산합니다.</div>
+  <div style="text-align:center;padding:18px 0;color:var(--green);font-weight:600;font-size:14px">
+    <i class="fa-solid fa-circle-check"></i> 현재 위험(낙인 임박) 상품 없음
+    <div style="font-size:12px;color:var(--text-3);font-weight:400;margin-top:4px">보유 상품 모두 낙인까지 15%p 넘게 여유가 있습니다.</div>
   </div>
   {% endif %}
 </div>
@@ -256,7 +262,12 @@
             {% else %}-{% endif %}
           </td>
           <td class="num" style="font-weight:800;color:var(--green)">
-            {% if nxt and nxt.expected_after_tax %}{{ nxt.expected_after_tax|intcomma }}{% else %}-{% endif %}
+            {% if nxt and nxt.expected %}{{ nxt.expected|intcomma }}{% else %}-{% endif %}
+          </td>
+          <td class="num">
+            {% if inv.product.loss_prob != None %}
+              <span style="font-weight:700;color:{% if inv.product.loss_prob > 5 %}var(--red){% elif inv.product.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ inv.product.loss_prob }}%</span>
+            {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
           </td>
           <td class="num">{% if nxt and nxt.barrier %}{{ nxt.barrier }}%{% else %}-{% endif %}
             {% endwith %}

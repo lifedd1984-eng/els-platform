@@ -177,9 +177,29 @@ def product_detail(request, pk):
     # 수익률 모의실험 결과 (배치가 저장한 캐시)
     sim = product.sim_result or None
 
+    # 이 상품을 보유 중이면 상품별 낙인 모니터링 (자산별 레벨/버퍼)
+    from core.models import KnockInStatus
+    ki_statuses = None
+    ki_worst_buffer = None
+    ki_updated_at = None
+    inv = (product.investments.filter(user=request.user, status="보유중")
+           .prefetch_related("ki_status").first())
+    if inv:
+        rows = list(inv.ki_status.all())
+        if rows:
+            for s in rows:
+                s.buffer = None if (s.level_pct is None or product.ki is None or product.is_no_ki) \
+                    else round(s.level_pct - product.ki, 1)
+                if s.updated_at and (ki_updated_at is None or s.updated_at > ki_updated_at):
+                    ki_updated_at = s.updated_at
+            ki_statuses = sorted(rows, key=lambda s: (s.level_pct if s.level_pct is not None else 999))
+            ki_worst_buffer = inv.ki_buffer
+
     return render(request, "core/product_detail.html", {
         "product": product, "is_watched": is_watched, "svg": svg,
         "sim": sim, "sim_updated": product.sim_updated,
+        "ki_statuses": ki_statuses, "ki_worst_buffer": ki_worst_buffer,
+        "ki_updated_at": ki_updated_at,
         "active_nav": "weekly",
     })
 
@@ -369,21 +389,39 @@ def portfolio(request):
         (i.redeemed_amount - i.amount) for i in done if i.redeemed_amount
     )
 
-    # 세후 예상 수익 (보유분이 1차 평가에 전부 조기상환된다고 가정)
-    total_expected_after_tax = sum(
-        (i.first_eval_after_tax or i.amount) for i in holding
-    )
-    expected_profit_after_tax = total_expected_after_tax - total_invested
+    # 세전 예상 수익 (보유분이 1차 평가에 전부 조기상환된다고 가정)
+    total_expected_pretax = 0
+    for i in holding:
+        sched = i.schedule
+        total_expected_pretax += sched[0]["expected"] if sched else i.amount
+    expected_profit_pretax = total_expected_pretax - total_invested
+
+    # 포트폴리오 예상 손실율 = Σ(투자금 × 손실확률) / Σ투자금  (금액 가중평균)
+    weighted_loss = 0
+    loss_weight = 0  # 손실확률이 있는 투자금 합 (커버리지 표기용)
+    for i in holding:
+        lp = i.product.loss_prob
+        if lp is not None:
+            weighted_loss += i.amount * lp
+            loss_weight += i.amount
+    port_loss_rate = round(weighted_loss / total_invested, 2) if total_invested else None
+    loss_coverage_pct = round(loss_weight / total_invested * 100) if total_invested else 0
 
     # ── 리스크 분석 ──────────────────────────────
     risk = _analyze_risk(holding, total_invested)
 
-    # ── 낙인 모니터링 갱신 시각 ──
+    # ── 낙인 모니터링: 전체 보유 중 위험/경고(버퍼 ≤ 15%p)만 추림 ──
     ki_updated = None
+    ki_alerts = []
     for inv in holding:
+        worst = inv.worst_ki_status
         for s in inv.ki_status.all():
             if s.updated_at and (ki_updated is None or s.updated_at > ki_updated):
                 ki_updated = s.updated_at
+        buf = inv.ki_buffer
+        if worst is not None and buf is not None and buf <= 15:
+            ki_alerts.append({"inv": inv, "worst": worst, "buffer": buf})
+    ki_alerts.sort(key=lambda a: a["buffer"])  # 위험한 순
     has_ki_data = ki_updated is not None
 
     # 투자 등록 폼용 상품 후보 (최근 청약 상품)
@@ -392,13 +430,18 @@ def portfolio(request):
     ).order_by("-sub_end", "issuer")[:200]
 
     # ── 보유 리스트 정렬 ──
+    def _pretax(i):
+        s = i.schedule
+        return s[0]["expected"] if s else 0
+
     H_SORT = {
         "issuer": lambda i: (i.product.issuer or ""),
         "assets": lambda i: (i.product.assets_raw or ""),
         "amount": lambda i: i.amount or 0,
         "yield": lambda i: i.product.yield_rate if i.product.yield_rate is not None else -1,
         "next": lambda i: (i.next_evaluation["date"] if i.next_evaluation else date.max),
-        "aftertax": lambda i: (i.first_eval_after_tax or 0),
+        "pretax": _pretax,
+        "loss": lambda i: (i.product.loss_prob if i.product.loss_prob is not None else -1),
     }
     h_sort = request.GET.get("hsort", "next")
     if h_sort not in H_SORT:
@@ -428,7 +471,8 @@ def portfolio(request):
         for k, lbl, num in [
             ("issuer", "상품", False), ("assets", "기초자산", False),
             ("amount", "투자금액", True), ("yield", "수익률", True),
-            ("next", "다음 평가일", False), ("aftertax", "세후 실수령", True),
+            ("next", "다음 평가일", False), ("pretax", "예상상환금", True),
+            ("loss", "손실확률", True),
         ]
     ]
 
@@ -439,11 +483,14 @@ def portfolio(request):
         "total_invested": total_invested,
         "this_month_evals": this_month_evals,
         "total_redeemed_profit": total_redeemed_profit,
-        "total_expected_after_tax": total_expected_after_tax,
-        "expected_profit_after_tax": expected_profit_after_tax,
+        "total_expected_pretax": total_expected_pretax,
+        "expected_profit_pretax": expected_profit_pretax,
+        "port_loss_rate": port_loss_rate,
+        "loss_coverage_pct": loss_coverage_pct,
         "risk": risk,
         "ki_updated": ki_updated,
         "has_ki_data": has_ki_data,
+        "ki_alerts": ki_alerts,
         "candidates": candidates,
         "today": today,
         "active_nav": "portfolio",

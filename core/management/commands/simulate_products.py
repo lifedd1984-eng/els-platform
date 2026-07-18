@@ -35,13 +35,22 @@ class Command(BaseCommand):
         parser.add_argument("--years", type=int, default=20, help="과거 데이터 기간(년)")
 
     def handle(self, *args, **opts):
-        qs = Product.objects.filter(
+        from django.db.models import Q
+        from core.models import Investment
+
+        base = Product.objects.filter(
             barriers_raw__isnull=False, period_months__isnull=False,
             yield_rate__isnull=False,
         )
-        if not opts["all"]:
+        if opts["all"]:
+            qs = base
+        else:
+            # 최근 청약 상품 + 보유중인 투자 상품(오래됐어도 포함)은 항상 시뮬
             cutoff = date.today() - timedelta(days=opts["days"])
-            qs = qs.filter(sub_end__gte=cutoff)
+            held_ids = list(
+                Investment.objects.filter(status="보유중").values_list("product_id", flat=True)
+            )
+            qs = base.filter(Q(sub_end__gte=cutoff) | Q(id__in=held_ids))
 
         products = list(qs)
         self.stdout.write(f"대상 상품: {len(products)}건")

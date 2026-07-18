@@ -168,6 +168,52 @@
   {% endif %}
 </div>
 
+{% if ki_statuses %}
+<div class="card">
+  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+    <span><i class="fa-solid fa-gauge-high" style="color:var(--blue)"></i> 낙인 모니터링
+      <small style="font-weight:400;color:var(--text-3)">(보유 중)</small></span>
+    {% if ki_updated_at %}<span style="font-weight:400;font-size:11px;color:var(--text-3)">{{ ki_updated_at|date:"m/d H:i" }} 기준</span>{% endif %}
+  </div>
+
+  {% if ki_worst_buffer != None %}
+  <div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;
+       background:{% if ki_worst_buffer <= 5 %}var(--red-bg){% elif ki_worst_buffer <= 15 %}var(--orange-bg){% else %}var(--green-bg){% endif %}">
+    <span style="font-size:13px;font-weight:700;color:{% if ki_worst_buffer <= 5 %}var(--red){% elif ki_worst_buffer <= 15 %}var(--orange){% else %}var(--green){% endif %}">
+      {% if ki_worst_buffer <= 5 %}<i class="fa-solid fa-triangle-exclamation"></i> 위험 — 낙인 임박{% elif ki_worst_buffer <= 15 %}<i class="fa-solid fa-circle-exclamation"></i> 경고 — 낙인 주의{% else %}<i class="fa-solid fa-circle-check"></i> 안전{% endif %}
+    </span>
+    <span style="font-size:13px;color:var(--text-2)"> · 워스트오브 기준 낙인까지 <b>{{ ki_worst_buffer }}%p</b> 남음</span>
+  </div>
+  {% endif %}
+
+  <div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>기초자산</th><th class="num">발행일 기준가</th><th class="num">현재가</th>
+        <th class="num">현재 레벨</th><th class="num">KI배리어</th><th class="num">낙인까지</th>
+      </tr></thead>
+      <tbody>
+        {% for s in ki_statuses %}
+        <tr>
+          <td style="font-weight:600">{{ s.asset_name }}</td>
+          <td class="num" style="color:var(--text-3)">{{ s.ref_price|floatformat:0|default:"-" }}</td>
+          <td class="num">{{ s.current_price|floatformat:0|default:"-" }}</td>
+          <td class="num" style="font-weight:700">{% if s.level_pct != None %}{{ s.level_pct }}%{% else %}-{% endif %}</td>
+          <td class="num">{% if product.is_no_ki %}NoKI{% else %}{{ product.ki }}%{% endif %}</td>
+          <td class="num" style="font-weight:800;color:{% if s.buffer == None %}var(--text-3){% elif s.buffer <= 5 %}var(--red){% elif s.buffer <= 15 %}var(--orange){% else %}var(--green){% endif %}">
+            {% if s.buffer != None %}{{ s.buffer }}%p{% else %}-{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:11px;color:var(--text-3);margin-top:10px">
+    현재 레벨 = 현재가 ÷ 발행일 기준가 × 100. 낙인까지 = 레벨 − KI배리어. 시세: Yahoo Finance.
+  </p>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-title">상품설명 원문</div>
   <div style="font-size:13px;color:var(--text-2);line-height:1.7;word-break:break-all">{{ product.description }}</div>
