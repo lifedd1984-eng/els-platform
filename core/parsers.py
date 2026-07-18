@@ -295,6 +295,11 @@ def extract_barriers(text):
         if vals:
             return vals
 
+    # 한국투자증권 상승참여형: "조기상환: 85이상(4개월...)" — 단일 조기상환 배리어
+    m = re.search(r'조기상환:\s*(\d+)\s*이상', text)
+    if m:
+        return [m.group(1)]
+
     return None
 
 

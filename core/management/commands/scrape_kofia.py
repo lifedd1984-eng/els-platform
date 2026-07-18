@@ -25,8 +25,11 @@ class Command(BaseCommand):
         if row["product_code"]:
             existing = Product.objects.filter(product_code=row["product_code"]).first()
         if existing is None:
+            # 폴백은 exe 소스(product_code 빈값) 행에만 병합 —
+            # 다른 KOFIA 상품(코드 있음)을 실수로 덮어쓰지 않도록 제한
             existing = Product.objects.filter(
                 issuer=row["issuer"], product_no=row["product_no"], sub_end=row["sub_end"],
+                product_code="",
             ).first()
 
         if existing:

@@ -77,6 +77,25 @@ def _to_float(s):
         return None
 
 
+def _extract_product_no(name: str, product_code: str) -> str:
+    """상품명에서 회차/상품번호 추출.
+
+    우선순위:
+      1) "제 N 회" 형식 → N
+      2) 상품명 끝의 숫자 토큰 (예: "N2 ELS 369"→369, "NH투자증권(ELS) 24981"→24981)
+         — exe 엑셀의 product_no와 동일하게 맞춰 중복 병합되게 함
+      3) 그래도 없으면 product_code 뒤 6자리 (최후 폴백)
+    """
+    m = re.search(r"제\s*(\d+)\s*회", name)
+    if m:
+        return m.group(1)
+    # 상품명 끝에 붙은 숫자 (뒤에서부터 마지막 숫자 토큰)
+    nums = re.findall(r"\d+", name)
+    if nums:
+        return nums[-1]
+    return (product_code or "")[-6:]
+
+
 def fetch_subscribing(timeout=25) -> list[dict]:
     """
     청약중인 상품 전체를 가져와 표준 dict 리스트로 반환.
@@ -111,8 +130,7 @@ def fetch_subscribing(timeout=25) -> list[dict]:
         if not issuer or not name:
             continue
 
-        m = re.search(r"제\s*(\d+)\s*회", name)
-        product_no = m.group(1) if m else _v(el, 22)[-6:]  # 회차 없으면 코드 뒷부분 대체
+        product_no = _extract_product_no(name, _v(el, 22))
 
         assets_raw = _v(el, 8).replace("<br/>", "/").replace("<br>", "/")
         desc = _v(el, 18)
