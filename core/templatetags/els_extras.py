@@ -1,6 +1,14 @@
 from django import template
 
+from core import market
+
 register = template.Library()
+
+
+@register.filter
+def asset_short(value):
+    """기초자산 원본 문자열을 화면 표시용으로 축약 (저장값 변경 없음)."""
+    return market.shorten_asset_display(value)
 
 
 @register.simple_tag(takes_context=True)

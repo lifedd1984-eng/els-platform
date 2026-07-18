@@ -51,6 +51,58 @@ def split_assets(assets_raw: str):
     return [a.strip() for a in re.split(r"[,/]+", assets_raw or "") if a.strip()]
 
 
+# 표시 전용 축약 매핑 (화면에만 사용 — 원본 assets_raw 저장값은 절대 변경 금지).
+# 키는 소문자로 저장하고 대소문자 무시로 매칭한다.
+_DISPLAY_SHORTEN_MAP = {
+    # ── 지수 ──
+    "kospi200 index": "KOSPI200",
+    "s&p500 index": "S&P500",
+    "euro stoxx 50 index": "Euro 50",
+    "eurostoxx50": "Euro 50",
+    "euro stoxx 50": "Euro 50",
+    "nikkei225 index": "Nikkei225",
+    "hscei index": "HSCEI",
+    "kosdaq150 index": "KOSDAQ150",
+    # ── 해외 종목 (실데이터 등장 이름 전수 반영) ──
+    "micron technology": "Micron",
+    "tesla inc.(uw)": "Tesla",
+    "tesla inc.(us)": "Tesla",
+    "tesla inc.": "Tesla",
+    "advanced micro devices, inc.": "AMD",
+    "advanced micro devices": "AMD",
+    "broadcom inc.": "Broadcom",
+    "broadcom limited": "Broadcom",
+    "nvidia corporation": "NVIDIA",
+    "nvidia corporation(nasdaq)": "NVIDIA",
+    "alphabet inc.": "Alphabet",
+    "alphabet inc(nasdaq)": "Alphabet",
+    "amazone inc": "Amazon",
+    "eli lilly and company": "Eli Lilly",
+    "intel corporation": "Intel",
+    "palantir technologies inc. class a": "Palantir",
+}
+
+
+def shorten_asset_display(assets_raw: str) -> str:
+    """기초자산 원본 문자열을 화면 표시용으로만 축약한다 (저장값 변경 금지).
+
+    - split_assets() 로 분리 (구분자 [,/]+)
+    - 각 자산명: 명시 매핑(대소문자 무시) 우선, 없으면 끝의 " Index" 접미사만 제거,
+      그 외(한글 종목명 등)는 원본 유지
+    - "/" 로 조인
+    """
+    out = []
+    for name in split_assets(assets_raw):
+        key = name.lower()
+        if key in _DISPLAY_SHORTEN_MAP:
+            out.append(_DISPLAY_SHORTEN_MAP[key])
+        elif re.search(r"\sIndex$", name, re.IGNORECASE):
+            out.append(re.sub(r"\sIndex$", "", name, flags=re.IGNORECASE).strip())
+        else:
+            out.append(name)
+    return "/".join(out)
+
+
 def resolve_ticker(asset_name: str):
     """기초자산명 → 티커. 매핑 실패 시 None."""
     name = asset_name.strip()

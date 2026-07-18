@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load els_extras %}
 {% block title %}관심 목록 — ELS 플랫폼{% endblock %}
 
 {% block content %}
@@ -20,7 +21,7 @@
       <tr class="clickable" onclick="location.href='{% url 'product_detail' item.product.id %}'">
         <td style="font-weight:700">{{ item.product.issuer }}</td>
         <td>{{ item.product.product_no }}</td>
-        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.product.assets_raw }}</td>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.product.assets_raw|asset_short }}</td>
         <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ item.product.yield_rate|default:"-" }}%</td>
         <td class="num">
           {% if item.product.is_no_ki %}<span class="badge badge-green">NoKI</span>

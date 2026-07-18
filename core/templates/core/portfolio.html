@@ -1,5 +1,6 @@
 {% extends "core/base.html" %}
 {% load humanize %}
+{% load els_extras %}
 {% block title %}포트폴리오 — ELS 플랫폼{% endblock %}
 
 {% block content %}
@@ -124,7 +125,7 @@
             <a href="{% url 'product_detail' a.inv.product.id %}" style="color:var(--blue-dark)">
               {{ a.inv.product.issuer }} {{ a.inv.product.product_no }}</a>
           </td>
-          <td>{{ a.worst.asset_name }} <small style="color:var(--text-3)">{{ a.worst.level_pct }}% ({{ a.worst.current_price|floatformat:0 }})</small></td>
+          <td>{{ a.worst.asset_name|asset_short }} <small style="color:var(--text-3)">{{ a.worst.level_pct }}% ({{ a.worst.current_price|floatformat:0 }})</small></td>
           <td class="num" style="font-weight:700">{{ a.worst.level_pct }}%</td>
           <td class="num">{{ a.inv.product.ki }}%</td>
           <td class="num" style="font-weight:800;color:{% if a.buffer <= 5 %}var(--red){% else %}var(--orange){% endif %}">{{ a.buffer }}%p</td>
@@ -160,7 +161,7 @@
           <option value="">상품 선택</option>
           {% for c in candidates %}
           <option value="{{ c.id }}" {% if request.GET.product == c.id|stringformat:'s' %}selected{% endif %}>
-            {{ c.issuer }} {{ c.product_no }} ({{ c.yield_rate }}%) {{ c.assets_raw|truncatechars:24 }} ~{{ c.sub_end|date:"m.d" }}
+            {{ c.issuer }} {{ c.product_no }} ({{ c.yield_rate }}%) {{ c.assets_raw|asset_short|truncatechars:24 }} ~{{ c.sub_end|date:"m.d" }}
           </option>
           {% endfor %}
         </select>
@@ -251,7 +252,7 @@
             </a>
             {% if inv.broker_account %}<div style="font-size:11px;color:var(--text-3)">{{ inv.broker_account }}</div>{% endif %}
           </td>
-          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw }}</td>
+          <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw|asset_short }}</td>
           <td class="num" style="font-weight:700">{{ inv.amount|intcomma }}</td>
           <td class="num" style="color:var(--blue-dark);font-weight:700">{{ inv.product.yield_rate|default:"-" }}%</td>
           <td>
