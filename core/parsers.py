@@ -323,12 +323,29 @@ def extract_period(text, issue_date=None, expiry_date=None, barriers=None):
         m = re.search(pat, text)
         if m:
             return int(m.group(1))
+    # 폴백: 설명에 주기 텍스트가 없으면 (만기-발행) 개월수 ÷ 배리어 회차로 추정
     if issue_date and expiry_date and barriers:
-        try:
-            d1, d2 = str(int(issue_date)), str(int(expiry_date))
-            total = (int(d2[:4]) - int(d1[:4])) * 12 + (int(d2[4:6]) - int(d1[4:6]))
-            if len(barriers) > 0:
-                return round(total / len(barriers))
-        except Exception:
-            pass
+        ym1 = _year_month(issue_date)
+        ym2 = _year_month(expiry_date)
+        if ym1 and ym2:
+            total = (ym2[0] - ym1[0]) * 12 + (ym2[1] - ym1[1])
+            n = len(barriers)
+            if total > 0 and n > 0:
+                # 대개 3/4/6개월 등 정수 주기 → 가장 가까운 통상값으로 스냅
+                raw = total / n
+                for cand in (1, 3, 4, 6, 12):
+                    if abs(raw - cand) <= 0.75:
+                        return cand
+                return round(raw)
+    return None
+
+
+def _year_month(d):
+    """date 객체 / 정수(20260723) / 문자열 어느 형태든 (year, month) 반환."""
+    from datetime import date as _date
+    if isinstance(d, _date):
+        return (d.year, d.month)
+    s = str(d).replace("-", "").replace(".", "").strip()
+    if len(s) >= 6 and s[:8].isdigit():
+        return (int(s[:4]), int(s[4:6]))
     return None
