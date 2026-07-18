@@ -10,16 +10,14 @@ downloads 폴더의 청약중인상품_*.xlsx를 감지해 Product로 임포트.
 
 import glob
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 import openpyxl
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from core import parsers, telegram
-from core.models import (
-    ImportLog, Investment, NotifiedMatch, Preset, Product, RedemptionAlert,
-)
+from core import notify, parsers, telegram
+from core.models import ImportLog, Product
 
 
 def _to_date(val):
@@ -50,7 +48,7 @@ class Command(BaseCommand):
         parser.add_argument("--no-notify", action="store_true", help="텔레그램 발송 생략")
 
     def handle(self, *args, **opts):
-        notify = not opts["no_notify"]
+        should_notify = not opts["no_notify"]
 
         if opts.get("file"):
             files = [opts["file"]]
@@ -74,17 +72,17 @@ class Command(BaseCommand):
 
         if not new_files:
             self.stdout.write("새 파일 없음")
-            self._maybe_remind(notify)
+            self._maybe_remind(should_notify)
 
         # 프리셋 매칭 알림
-        if notify and total_new_products:
-            self._notify_preset_matches()
+        if should_notify and total_new_products:
+            notify.notify_preset_matches(self.stdout)
 
         # 상환 평가일 알림
-        if notify:
-            self._notify_redemptions()
+        if should_notify:
+            notify.notify_redemptions(self.stdout)
 
-        if new_files and notify:
+        if new_files and should_notify:
             telegram.send_message(
                 f"[ELS 플랫폼] 임포트 완료\n"
                 f"파일 {len(new_files)}개 / 신규 상품 {total_new_products}건\n"
@@ -155,72 +153,15 @@ class Command(BaseCommand):
         )
         return n_rows, n_new
 
-    # ── 프리셋 매칭 알림 ─────────────────────────
-    def _notify_preset_matches(self):
-        today = date.today()
-        for preset in Preset.objects.filter(notify=True):
-            matches = preset.match_queryset(
-                Product.objects.filter(sub_end__gte=today)
-            )
-            already = set(
-                NotifiedMatch.objects.filter(preset=preset).values_list("product_id", flat=True)
-            )
-            new_matches = [p for p in matches if p.id not in already]
-            if not new_matches:
-                continue
-            lines = [f"[프리셋 매칭] {preset.name} — 신규 {len(new_matches)}건"]
-            for p in new_matches[:10]:
-                lines.append(
-                    f"- {p.issuer} {p.product_no} ({p.yield_rate}%) "
-                    f"KI{p.ki_display} {p.assets_raw[:20]} ~{p.sub_end:%m.%d}"
-                )
-            if len(new_matches) > 10:
-                lines.append(f"... 외 {len(new_matches)-10}건")
-            lines.append(f"대시보드: {settings.SITE_URL}")
-            if telegram.send_message("\n".join(lines)):
-                NotifiedMatch.objects.bulk_create(
-                    [NotifiedMatch(preset=preset, product=p) for p in new_matches],
-                    ignore_conflicts=True,
-                )
-                self.stdout.write(f"[알림] {preset.name}: {len(new_matches)}건 발송")
-
-    # ── 상환 평가일 알림 ─────────────────────────
-    def _notify_redemptions(self):
-        today = date.today()
-        for inv in Investment.objects.filter(status="보유중").select_related("product"):
-            nxt = inv.next_evaluation
-            if not nxt:
-                continue
-            days_left = (nxt["date"] - today).days
-            alert_type = None
-            if days_left == 7:
-                alert_type = "D-7"
-            elif days_left == 1:
-                alert_type = "D-1"
-            if not alert_type:
-                continue
-            _, created = RedemptionAlert.objects.get_or_create(
-                investment=inv, round_no=nxt["n"], alert_type=alert_type
-            )
-            if not created:
-                continue
-            expected = f"{nxt['expected']:,}원" if nxt["expected"] else "-"
-            telegram.send_message(
-                f"[상환 평가 {alert_type}] {inv.product.issuer} {inv.product.product_no}\n"
-                f"{nxt['n']}회차 평가일: {nxt['date']:%Y-%m-%d}\n"
-                f"배리어: {nxt['barrier'] or '-'}% / 예상상환금: {expected}"
-            )
-            self.stdout.write(f"[상환알림] {inv} {alert_type}")
-
     # ── 목요일 리마인더 ──────────────────────────
-    def _maybe_remind(self, notify):
+    def _maybe_remind(self, should_notify):
         today = date.today()
         if today.weekday() != 3:  # 목요일
             return
         monday = today - timedelta(days=3)
         recent = ImportLog.objects.filter(imported_at__date__gte=monday).exists()
-        if not recent and notify:
+        if not recent and should_notify:
             telegram.send_message(
                 "[리마인더] 이번 주 ELS 데이터가 아직 없습니다.\n"
-                "ELS_Curator를 실행해주세요."
+                "ELS_Curator를 실행하거나 자동수집(scrape_kofia)을 확인해주세요."
             )

@@ -40,6 +40,9 @@ class Product(models.Model):
 
     issuer = models.CharField("발행사", max_length=50)
     product_no = models.CharField("상품번호", max_length=30, blank=True)
+    product_code = models.CharField(  # KOFIA 표준코드 (예: KR6MZ0006074) — 있으면 최우선 고유키
+        "상품코드", max_length=20, blank=True, db_index=True
+    )
     name = models.CharField("상품명", max_length=200, blank=True)
     product_type = models.CharField("상품유형", max_length=5, choices=PRODUCT_TYPES, default="ELS")
 

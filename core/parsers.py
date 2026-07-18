@@ -49,6 +49,7 @@ def extract_ki(text):
         r'KI\s*(\d+)',               # KI 30  KI30  (범용 catch-all)
         r'/\s*(\d+)\s*KI\b',         # /30 KI
         r'(\d+)\s*KI\b',             # 30KI
+        r',(\d+)%-\([0-9,]+\)%',     # KOFIA형: ,30%-(85,85,80,...)%  ("KI" 텍스트 없이 %로만 표기)
     ]
     for pat in patterns:
         m = re.search(pat, text)
@@ -177,6 +178,22 @@ def extract_barriers(text):
     m = re.search(r'스텝다운\s*\(([0-9\-]+)\)', text)
     if m:
         vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # 범용 폴백: 접두 문맥과 무관하게 "숫자-숫자-...(선택적 (Lxx))" 가
+    # 바로 KI숫자 앞에 오는 모든 경우 (KOFIA 원문 다양한 표기 대응)
+    m = re.search(r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*/?\s*KI\s*\d+', text)
+    if m:
+        raw = re.sub(r'\(L\d+\)', '', m.group(1))
+        vals = [v for v in raw.split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # KOFIA형: ,30%-(85,85,80,80,75,75)%  (콤마 구분 배리어, "KI" 텍스트 없음)
+    m = re.search(r',\d+%-\(([0-9,]+)\)%', text)
+    if m:
+        vals = [v.strip() for v in m.group(1).split(',') if v.strip()]
         if vals:
             return vals
 
