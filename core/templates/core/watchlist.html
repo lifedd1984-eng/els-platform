@@ -8,48 +8,77 @@
 
 {% if items %}
 <div class="card" style="padding:8px 16px">
-  <table>
-    <thead>
-      <tr>
-        <th>발행사</th><th>상품번호</th><th>기초자산</th>
-        <th class="num">수익률</th><th class="num">KI</th>
-        <th class="num">마감</th><th>등록일</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for item in items %}
-      <tr class="clickable" onclick="location.href='{% url 'product_detail' item.product.id %}'">
-        <td style="font-weight:700">{{ item.product.issuer }}</td>
-        <td>{{ item.product.product_no }}</td>
-        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.product.assets_raw|asset_short }}</td>
-        <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ item.product.yield_rate|default:"-" }}%</td>
-        <td class="num">
-          {% if item.product.is_no_ki %}<span class="badge badge-green">NoKI</span>
-          {% elif item.product.ki %}<span class="badge badge-gray">{{ item.product.ki }}</span>
-          {% else %}-{% endif %}
-        </td>
-        <td class="num">
-          {% if item.product.d_day is not None %}
-            {% if item.product.d_day < 0 %}<span class="badge badge-gray">마감됨</span>
-            {% elif item.product.d_day <= 1 %}<span class="dday-soon">D-{{ item.product.d_day }}</span>
-            {% else %}<span class="dday-normal">D-{{ item.product.d_day }}</span>{% endif %}
-          {% endif %}
-        </td>
-        <td style="color:var(--text-3)">{{ item.created_at|date:"n.j" }}</td>
-        <td onclick="event.stopPropagation()">
-          <div style="display:flex;gap:4px">
-            <a href="{% url 'portfolio' %}?product={{ item.product.id }}" class="btn btn-primary btn-sm">투자 등록</a>
-            <form method="post">{% csrf_token %}
-              <input type="hidden" name="action" value="remove">
-              <input type="hidden" name="product_id" value="{{ item.product.id }}">
-              <button class="btn btn-icon" title="관심 해제"><i class="fa-solid fa-xmark"></i></button>
-            </form>
-          </div>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th style="white-space:nowrap">발행사</th>
+          <th style="white-space:nowrap">상품번호</th>
+          <th style="white-space:nowrap">기초자산</th>
+          <th class="num" style="white-space:nowrap">수익률</th>
+          <th class="num" style="white-space:nowrap">KI</th>
+          <th class="num" style="white-space:nowrap">1차</th>
+          <th class="num" style="white-space:nowrap">막차</th>
+          <th class="num" style="white-space:nowrap">기간</th>
+          <th class="num" style="white-space:nowrap">주기</th>
+          <th class="num" style="white-space:nowrap">손실확률</th>
+          <th style="white-space:nowrap">유형</th>
+          <th class="num" style="white-space:nowrap">마감</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr class="clickable" onclick="location.href='{% url 'product_detail' item.product.id %}'">
+          <td style="font-weight:700">{{ item.product.issuer }}</td>
+          <td>
+            {{ item.product.product_no }}
+            {% if item.memo %}<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px"><i class="fa-regular fa-note-sticky"></i> {{ item.memo }}</div>{% endif %}
+          </td>
+          <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.product.assets_raw|asset_short }}</td>
+          <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ item.product.yield_rate|default:"-" }}%</td>
+          <td class="num">
+            {% if item.product.is_no_ki %}<span class="badge badge-green">NoKI</span>
+            {% elif item.product.ki %}<span class="badge badge-gray">{{ item.product.ki }}</span>
+            {% else %}-{% endif %}
+          </td>
+          <td class="num">{{ item.product.barrier_first|default:"-" }}</td>
+          <td class="num">{{ item.product.barrier_last|default:"-" }}</td>
+          <td class="num">{{ item.product.term_display }}</td>
+          <td class="num">{{ item.product.period_months|default:"-" }}{% if item.product.period_months %}개월{% endif %}</td>
+          <td class="num">
+            {% if item.product.loss_prob is not None %}
+              <span style="font-weight:700;color:{% if item.product.loss_prob > 5 %}var(--red){% elif item.product.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ item.product.loss_prob }}%</span>
+            {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
+          </td>
+          <td>
+            {% if item.product.asset_type %}<span class="badge {% if item.product.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ item.product.asset_type }}</span>{% endif %}
+            {% if item.product.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}
+          </td>
+          <td class="num" style="white-space:nowrap">
+            {% if item.product.sub_end %}<span style="color:var(--text-2)">{{ item.product.sub_end|date:"n/j" }}</span>{% endif %}
+            {% if item.product.d_day is not None %}
+              {% if item.product.d_day < 0 %}<span class="badge badge-gray">마감</span>
+              {% elif item.product.d_day == 0 %}<span class="dday-soon">오늘</span>
+              {% elif item.product.d_day <= 1 %}<span class="dday-soon">D-{{ item.product.d_day }}</span>
+              {% else %}<span class="dday-normal">D-{{ item.product.d_day }}</span>{% endif %}
+            {% endif %}
+          </td>
+          <td onclick="event.stopPropagation()">
+            <div style="display:flex;gap:4px">
+              <a href="{% url 'portfolio' %}?product={{ item.product.id }}" class="btn btn-primary btn-sm">투자 등록</a>
+              <form method="post">{% csrf_token %}
+                <input type="hidden" name="action" value="remove">
+                <input type="hidden" name="product_id" value="{{ item.product.id }}">
+                <button class="btn btn-icon" title="관심 해제"><i class="fa-solid fa-xmark"></i></button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% else %}
 <div class="card empty">
