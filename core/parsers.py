@@ -42,6 +42,9 @@ def extract_ki(text):
         return 'NoKI'
     if re.search(r'하이파이브|Hi-Five|원금지급형|원금추가지급형|Digital형|원금보장', text):
         return 'NoKI'
+    # 실물상환형: 손실 시 현금이 아닌 주식 실물로 상환 — 낙인(KI) 개념 자체가 없음
+    if re.search(r'실물상환|실물인수|실물결제', text):
+        return 'NoKI'
     patterns = [
         r'/(\d+)KI[\]\)]',           # /25KI]  /40KI)
         r',\s*(\d+)KI\s*\(',         # ,30KI(
@@ -57,6 +60,12 @@ def extract_ki(text):
         m = re.search(pat, text, re.IGNORECASE)
         if m:
             return m.group(1)
+
+    # 하나증권형: "3y/6m 90-85-85-80-75-65 ..." — 조기상환 배리어는 있으나
+    # KI/knock in 관련 텍스트가 전혀 없음(위 패턴 전부 실패) → 낙인 없는 상품으로 판정
+    if re.search(r'\d+y/\d+m,?\s+[\d\-]+', text):
+        return 'NoKI'
+
     return None
 
 
@@ -215,6 +224,21 @@ def extract_barriers(text):
     if m:
         raw = re.sub(r'\(L\d+\)', '', m.group(1))
         vals = [v for v in raw.split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # 하나증권 실물상환형: "90(3m)-90(4m)-90(5m)-75, Cpn=" — (Nm) 평가월 표기 배리어열
+    m = re.search(r'([\d()a-zA-Z\-]+)\s*,\s*Cpn=', text)
+    if m and re.search(r'\(\d+m\)', m.group(1)):
+        raw = re.sub(r'\(\d+m\)', '', m.group(1))
+        vals = [v for v in raw.split('-') if re.match(r'^\d+$', v.strip())]
+        if vals:
+            return vals
+
+    # 하나증권 노낙인형: "3y/6m 90-85-85-80-75-65 ..." — KI 텍스트 없이 배리어만
+    m = re.search(r'\d+y/\d+m,?\s+([\d\-]+)', text)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
         if vals:
             return vals
 
