@@ -11,5 +11,11 @@ echo ================================================== >> "%LOGFILE%"
 echo [%date% %time%] scrape_kofia 시작 >> "%LOGFILE%"
 
 python "%~dp0manage.py" scrape_kofia >> "%LOGFILE%" 2>&1
-
 echo [%date% %time%] scrape_kofia 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"
+
+REM 시세 갱신(낙인 경보) → 신규 상품 손실확률 순으로 이어서 실행
+python "%~dp0manage.py" update_prices >> "%LOGFILE%" 2>&1
+echo [%date% %time%] update_prices 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"
+
+python "%~dp0manage.py" simulate_products >> "%LOGFILE%" 2>&1
+echo [%date% %time%] simulate_products 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"

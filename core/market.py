@@ -113,6 +113,9 @@ def resolve_ticker(asset_name: str):
     name = asset_name.strip()
     # 지수형 자산명 뒤의 " Index" 접미사 제거 (예: "KOSPI200 Index" → "KOSPI200")
     name = re.sub(r"\sIndex$", "", name, flags=re.IGNORECASE).strip()
+    # 정식 회사명 → 축약명 정규화 (예: "Micron Technology" → "Micron",
+    # "Palantir Technologies Inc. Class A" → "Palantir") — 표시용 맵 재사용
+    name = _DISPLAY_SHORTEN_MAP.get(name.lower(), name)
     if name in TICKER_MAP:
         return TICKER_MAP[name]
     # 부분 일치 (대소문자 무시)
