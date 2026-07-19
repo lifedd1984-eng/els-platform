@@ -559,12 +559,88 @@ def portfolio_template(request):
     return resp
 
 
+@login_required
+def portfolio_export(request):
+    """현재 보유 투자내역을 xlsx로 다운로드."""
+    import io
+
+    import openpyxl
+    from django.http import HttpResponse
+
+    cols = ["발행사", "상품번호", "기초자산", "투자금액(원)", "수익률(%)", "KI",
+            "주기(개월)", "1차까지(개월)", "다음평가일", "예상상환금", "손실확률(%)",
+            "발행일", "만기일", "스케줄"]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "보유내역"
+    ws.append(cols)
+
+    invs = (Investment.objects.filter(user=request.user, status="보유중")
+            .select_related("product"))
+    holding = sorted(
+        invs,
+        key=lambda i: (i.next_evaluation["date"] if i.next_evaluation else date.max),
+    )
+    for inv in holding:
+        p = inv.product
+        nxt = inv.next_evaluation
+        badge = inv.schedule_badge or "확정"
+        ws.append([
+            p.issuer, p.product_no, p.assets_raw or "",
+            inv.amount,
+            p.yield_rate if p.yield_rate is not None else "",
+            p.ki_display,
+            p.period_months if p.period_months is not None else "",
+            p.first_eval_months if p.first_eval_months is not None else "",
+            (nxt["date"].strftime("%Y-%m-%d") if nxt else ""),
+            (nxt["expected"] if nxt and nxt["expected"] else ""),
+            p.loss_prob if p.loss_prob is not None else "",
+            (p.issue_date.strftime("%Y-%m-%d") if p.issue_date else ""),
+            (p.expiry_date.strftime("%Y-%m-%d") if p.expiry_date else ""),
+            badge,
+        ])
+
+    widths = [12, 10, 22, 14, 9, 6, 9, 11, 12, 14, 9, 12, 12, 8]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    fname = f"ELS_보유내역_{date.today():%Y%m%d}.xlsx"
+    from urllib.parse import quote
+    resp["Content-Disposition"] = (
+        f"attachment; filename=\"portfolio.xlsx\"; "
+        f"filename*=UTF-8''{quote(fname)}"
+    )
+    return resp
+
+
 def _match_product_for_investment(issuer, product_no):
-    """발행사+상품번호로 Product 매칭 (여러 개면 최근 sub_end)."""
+    """발행사+상품번호로 Product 매칭.
+
+    중복 행(같은 issuer·product_no, sub_end만 다름)이 있을 때 배리어(스케줄 정보)가
+    있는 '정상 행'을 우선 선택한다. 그다음 최신 sub_end. 이렇게 해야 스케줄이 빈
+    껍데기 행에 투자가 연결되는 문제(예: 미래에셋 37858)를 막는다.
+    """
     qs = Product.objects.filter(
         issuer=str(issuer).strip(), product_no=str(product_no).strip()
     )
-    return qs.order_by("-sub_end").first()
+    candidates = list(qs)
+    if not candidates:
+        return None
+
+    def _sort_key(p):
+        has_barriers = 1 if (p.barriers_raw and len(p.barriers_raw) > 0) else 0
+        sub = p.sub_end or date.min  # None은 가장 뒤로
+        return (has_barriers, sub, p.id)
+
+    return max(candidates, key=_sort_key)
 
 
 @login_required
@@ -606,7 +682,11 @@ def portfolio_upload(request):
 
         product = _match_product_for_investment(issuer, product_no)
         if not product:
-            errors.append(f"{i}행: '{issuer} {product_no}' 상품을 찾을 수 없습니다.")
+            errors.append(
+                f"{i}행: 발행사 '{str(issuer).strip()}' + 상품번호 '{str(product_no).strip()}' "
+                f"에 해당하는 수집 상품이 없어 등록하지 못했습니다 "
+                f"(발행사명·상품번호를 목록과 동일하게 입력했는지 확인)."
+            )
             continue
 
         try:
@@ -749,6 +829,8 @@ def redemption_calendar(request):
                 events.setdefault(d.day, []).append({
                     "inv": inv, "n": row["n"],
                     "barrier": row["barrier"], "expected": row["expected"],
+                    "badge": inv.schedule_badge,
+                    "is_past": d < today,
                 })
 
     cal = pycalendar.Calendar(firstweekday=0)  # 월요일 시작
@@ -759,6 +841,7 @@ def redemption_calendar(request):
             row.append({
                 "day": day or "",
                 "is_today": bool(day) and date(year, month, day) == today,
+                "is_past": bool(day) and date(year, month, day) < today,
                 "events": events.get(day, []) if day else [],
             })
         weeks.append(row)

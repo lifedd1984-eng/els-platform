@@ -202,6 +202,9 @@
         </button>
       </form>
       <span style="font-size:12px;color:var(--text-3)">양식 다운로드 → 작성 → 업로드</span>
+      <a href="{% url 'portfolio_export' %}" class="btn btn-sm" style="margin-left:auto">
+        <i class="fa-solid fa-file-excel" style="color:var(--green)"></i> 보유 내역 다운로드
+      </a>
     </div>
   </div>
 </div>
@@ -239,7 +242,7 @@
             </a>
           </th>
           {% endfor %}
-          <th class="num">배리어</th><th></th>
+          <th class="num">배리어</th><th class="num">주기</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -257,11 +260,12 @@
           <td class="num" style="color:var(--blue-dark);font-weight:700">{{ inv.product.yield_rate|default:"-" }}%</td>
           <td>{% if inv.product.issue_date %}{{ inv.product.issue_date|date:"Y.n.j" }}{% else %}-{% endif %}</td>
           <td>
-            {% with nxt=inv.next_evaluation %}
+            {% with nxt=inv.next_evaluation badge=inv.schedule_badge %}
             {% if nxt %}
               {{ nxt.date|date:"Y.n.j" }}
               <span class="badge badge-blue">{{ nxt.n }}회차</span>
             {% else %}-{% endif %}
+            {% if badge %}<span class="badge" style="background:var(--orange);color:#fff" title="발행사 정보로 스케줄을 확정하지 못했습니다. 실제 조기상환일을 확인하세요.">{{ badge }}</span>{% endif %}
           </td>
           <td class="num" style="font-weight:800;color:var(--green)">
             {% if nxt and nxt.expected %}{{ nxt.expected|intcomma }}{% else %}-{% endif %}
@@ -274,6 +278,7 @@
           <td class="num">{% if nxt and nxt.barrier %}{{ nxt.barrier }}%{% else %}-{% endif %}
             {% endwith %}
           </td>
+          <td class="num" style="white-space:nowrap">{{ inv.product.period_display }}</td>
           <td>
             <details style="position:relative">
               <summary class="btn btn-sm" style="list-style:none;cursor:pointer">상환 처리</summary>

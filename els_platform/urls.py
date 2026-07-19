@@ -15,6 +15,7 @@ urlpatterns = [
     path('watchlist/', views.watchlist, name='watchlist'),
     path('portfolio/', views.portfolio, name='portfolio'),
     path('portfolio/template/', views.portfolio_template, name='portfolio_template'),
+    path('portfolio/export/', views.portfolio_export, name='portfolio_export'),
     path('portfolio/upload/', views.portfolio_upload, name='portfolio_upload'),
     path('calendar/', views.redemption_calendar, name='calendar'),
     path('trend/', views.market_trend, name='trend'),

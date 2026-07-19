@@ -54,7 +54,13 @@ class Product(models.Model):
     barrier_first = models.IntegerField("1차 조기상환(%)", null=True, blank=True)
     barrier_last = models.IntegerField("마지막 조기상환(%)", null=True, blank=True)
     barriers_raw = models.JSONField("배리어 전체", null=True, blank=True)
-    period_months = models.IntegerField("조기상환주기(개월)", null=True, blank=True)
+    period_months = models.IntegerField("조기상환주기(개월)", null=True, blank=True)  # 이후(2차~) 조기상환 간격
+    first_eval_months = models.IntegerField(  # 1차 조기상환까지 개월(비균등 대응). None이면 period_months와 동일(균등)
+        "1차상환까지(개월)", null=True, blank=True
+    )
+    schedule_estimated = models.BooleanField(  # 주기 판정 실패로 임의 추정한 경우 True
+        "스케줄 추정여부", default=False
+    )
 
     asset_type = models.CharField("기초자산유형", max_length=5, choices=ASSET_TYPES, blank=True)
     assets_raw = models.CharField("기초자산", max_length=200, blank=True)
@@ -117,6 +123,39 @@ class Product(models.Model):
         if months == 0:
             return f"{years}년"
         return f"{years}년{months}개월"
+
+    @property
+    def period_display(self):
+        """조기상환 주기 표시. 균등→'6개월', 비균등(첫평가 다름)→'3+1개월'. 없으면 '-'."""
+        if not self.period_months:
+            return "-"
+        first = self.first_eval_months
+        if first and first != self.period_months:
+            return f"{first}+{self.period_months}개월"
+        return f"{self.period_months}개월"
+
+    @property
+    def structure_label(self):
+        """상품 구조 라벨. 스텝다운(배리어 있음)은 None(라벨 불필요).
+
+        배리어가 없는 비(非)스텝다운 상품이 왜 배리어·주기·KI 칸이 비는지
+        화면에서 바로 알 수 있도록 구조를 표시한다.
+        """
+        if self.barriers_raw:
+            return None  # 정상 스텝다운 → 별도 라벨 없음
+        import re
+        d = self.description or ""
+        if re.search(r"원금지급|원금보장", d) or self.product_type == "ELB":
+            return "원금보장"
+        if re.search(r"digital|디지털", d, re.I):
+            return "디지털"
+        if re.search(r"하이파이브|Hi-Five", d, re.I):
+            return "하이파이브"
+        if re.search(r"국고채|국채|KTB|금리|환율|USD/KRW|DLS", d, re.I):
+            return "DLS"
+        if self.is_no_ki:
+            return "노낙인"
+        return "기타"
 
 
 class Preset(models.Model):
@@ -216,32 +255,51 @@ class Investment(models.Model):
 
     @property
     def schedule(self):
-        """조기상환 평가 스케줄 [{n, date, barrier, expected}] — 만기까지."""
+        """조기상환 평가 스케줄 [{n, date, barrier, expected}] — 만기까지.
+
+        비균등 스케줄 지원: first_eval_months(1차까지) + period_months(이후 간격).
+        first_eval_months가 None이면 period_months와 동일(균등)해 기존과 결과 동일.
+        회차 수는 배리어 개수로 확정한다(마지막 회차 = 만기).
+        """
         p = self.product
         base = p.issue_date or self.invested_at
         if not base or not p.period_months:
             return []
-        rows = []
-        n = 1
         barriers = p.barriers_raw or []
-        while True:
-            eval_date = _add_months(base, p.period_months * n)
-            if p.expiry_date and eval_date > p.expiry_date:
-                break
-            barrier = barriers[n - 1] if n <= len(barriers) else None
+        n_barriers = len(barriers)
+        if n_barriers == 0:
+            return []
+        first = p.first_eval_months if p.first_eval_months else p.period_months
+        interval = p.period_months
+        rows = []
+        for n in range(1, n_barriers + 1):
+            months = first + (n - 1) * interval
+            eval_date = _add_months(base, months)
+            barrier = barriers[n - 1]
             expected = expected_after_tax = None
             if p.yield_rate is not None:
-                months = p.period_months * n
                 expected = round(self.amount * (1 + p.yield_rate / 100 * months / 12))
                 expected_after_tax = after_tax_amount(self.amount, expected)
             rows.append({
                 "n": n, "date": eval_date, "barrier": barrier,
                 "expected": expected, "expected_after_tax": expected_after_tax,
             })
-            n += 1
-            if n > 40:  # 안전장치
-                break
         return rows
+
+    @property
+    def schedule_badge(self):
+        """스케줄 신뢰도 배지 라벨. 확정이면 None.
+
+        - 배리어/주기가 없어 스케줄을 못 만들면 '확인필요'
+        - 주기를 판정 못해 임의 추정한 경우 '추정'
+        - 텍스트 주기/규칙1/규칙2로 확정된 경우 None(배지 없음)
+        """
+        p = self.product
+        if not p.barriers_raw or not p.period_months:
+            return "확인필요"
+        if p.schedule_estimated:
+            return "추정"
+        return None
 
     @property
     def next_evaluation(self):

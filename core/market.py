@@ -30,8 +30,13 @@ TICKER_MAP = {
     "셀트리온": "068270.KS",
     "한화에어로스페이스": "012450.KS",
     "카카오": "035720.KS",
+    "현대모비스": "012330.KS",
+    "LG전자": "066570.KS",
+    "HD현대중공업": "329180.KS",
     # ── 해외 종목 ──
     "Micron": "MU", "마이크론": "MU", "MU": "MU",
+    "Applied Materials": "AMAT", "AMAT": "AMAT",
+    "Intel": "INTC", "인텔": "INTC", "INTC": "INTC",
     "Palantir": "PLTR", "PALANTIR": "PLTR", "PALANTIR-A": "PLTR", "팔란티어": "PLTR", "PLTR": "PLTR",
     "Tesla": "TSLA", "TESLA": "TSLA", "테슬라": "TSLA", "TSLA": "TSLA",
     "NVIDIA": "NVDA", "엔비디아": "NVDA", "NVDA": "NVDA",
@@ -106,6 +111,8 @@ def shorten_asset_display(assets_raw: str) -> str:
 def resolve_ticker(asset_name: str):
     """기초자산명 → 티커. 매핑 실패 시 None."""
     name = asset_name.strip()
+    # 지수형 자산명 뒤의 " Index" 접미사 제거 (예: "KOSPI200 Index" → "KOSPI200")
+    name = re.sub(r"\sIndex$", "", name, flags=re.IGNORECASE).strip()
     if name in TICKER_MAP:
         return TICKER_MAP[name]
     # 부분 일치 (대소문자 무시)

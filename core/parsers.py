@@ -303,23 +303,87 @@ def extract_barriers(text):
     return None
 
 
+# 명시적 "주기 텍스트" 패턴 — 있으면 주기 확정(최우선)
+_PERIOD_TEXT_PATTERNS = [
+    r'(\d+)개월단위 조기상환',
+    r'상환주기\s*(\d+)개월',
+    r'만기\s*(\d+)개월',
+    r'\d+y/(\d+)m\b',
+    r'/(\d+)개월/',
+    r'/(\d+)개월,',
+    r'조기상환 평가주기\s*(\d+)개월',
+    r'(\d+)개월 평가',
+    r'매\s*(\d+)개월마다',
+    r'(\d+)개월마다\s*(?:총|조기|기회)',
+    r'/(\d+)개월단위',
+]
+
+
+def extract_period_text(text):
+    """설명에 명시적 주기 텍스트가 있으면 정수 개월 반환, 없으면 None (폴백 없음)."""
+    if not text:
+        return None
+    text = str(text)
+    for pat in _PERIOD_TEXT_PATTERNS:
+        m = re.search(pat, text)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def infer_schedule(n_barriers, issue_date, expiry_date, desc):
+    """조기상환 스케줄(1차까지, 이후간격, 추정여부) 판정.
+
+    반환: (first_eval_months, interval_months, estimated) 또는 None.
+    - 텍스트 주기 우선(확정) → 규칙1(균등 정수) → 규칙2(첫3개월 가정) → None.
+    - estimated는 항상 False(확정된 경우만 값 반환). 판정 불가 시 None을 돌려주고,
+      호출측(reparse)이 폴백값을 채우며 schedule_estimated=True로 표시한다.
+    - day 아티팩트 보정: 발행/만기일의 '일(day)'이 달라 총개월이 ±1 어긋날 수 있어
+      span, span+1, span-1 세 값을 시도한다.
+    """
+    if not n_barriers or n_barriers < 1:
+        return None
+
+    # (0) 텍스트 주기 최우선 — 균등으로 확정
+    tp = extract_period_text(desc)
+    if tp and tp > 0:
+        return (tp, tp, False)
+
+    ym1 = _year_month(issue_date)
+    ym2 = _year_month(expiry_date)
+    if not ym1 or not ym2:
+        return None
+    span = (ym2[0] - ym1[0]) * 12 + (ym2[1] - ym1[1])
+    if span <= 0:
+        return None
+
+    candidates = [span, span + 1, span - 1]  # day 아티팩트 ±1 보정
+
+    # (1) 규칙1: 총개월 ÷ 배리어수가 정수 → 균등
+    for total in candidates:
+        if total > 0 and total % n_barriers == 0:
+            interval = total // n_barriers
+            if interval > 0:
+                return (interval, interval, False)
+
+    # (2) 규칙2: 첫 3개월 가정 — (총개월-3) ÷ (배리어수-1)이 정수
+    if n_barriers >= 2:
+        for total in candidates:
+            rem = total - 3
+            if rem > 0 and rem % (n_barriers - 1) == 0:
+                interval = rem // (n_barriers - 1)
+                if interval > 0:
+                    return (3, interval, False)
+
+    # (3) 판정 불가
+    return None
+
+
 def extract_period(text, issue_date=None, expiry_date=None, barriers=None):
     if not text:
         text = ''
     text = str(text)
-    for pat in [
-        r'(\d+)개월단위 조기상환',
-        r'상환주기\s*(\d+)개월',
-        r'만기\s*(\d+)개월',
-        r'\d+y/(\d+)m\b',
-        r'/(\d+)개월/',
-        r'/(\d+)개월,',
-        r'조기상환 평가주기\s*(\d+)개월',
-        r'(\d+)개월 평가',
-        r'매\s*(\d+)개월마다',
-        r'(\d+)개월마다\s*(?:총|조기|기회)',
-        r'/(\d+)개월단위',
-    ]:
+    for pat in _PERIOD_TEXT_PATTERNS:
         m = re.search(pat, text)
         if m:
             return int(m.group(1))
