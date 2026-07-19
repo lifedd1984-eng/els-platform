@@ -194,8 +194,42 @@
       {% endfor %}
       {% for s in chart.series %}
       <polyline points="{{ s.poly }}" fill="none" stroke="{{ s.color }}" stroke-width="1.8"/>
+      <circle cx="{{ s.hi_x }}" cy="{{ s.hi_y }}" r="3.5" fill="{{ s.color }}" stroke="#fff" stroke-width="1.2">
+        <title>52주 최고 {{ s.hi_price }} ({{ s.hi_date|date:"m.d" }})</title>
+      </circle>
+      <circle cx="{{ s.lo_x }}" cy="{{ s.lo_y }}" r="3.5" fill="#fff" stroke="{{ s.color }}" stroke-width="1.8">
+        <title>52주 최저 {{ s.lo_price }} ({{ s.lo_date|date:"m.d" }})</title>
+      </circle>
       {% endfor %}
     </svg>
+  </div>
+  <div style="overflow-x:auto;margin-top:8px">
+    <table style="font-size:12px">
+      <thead>
+        <tr>
+          <th>기초자산</th><th class="num">현재가</th><th class="num">기준가</th>
+          <th class="num">1차 상환가</th><th class="num">KI 가격</th>
+          <th class="num">52주 최고</th><th class="num">52주 최저</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in chart.series %}
+        <tr>
+          <td style="font-weight:700"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:{{ s.color }};margin-right:5px"></span>{{ s.asset }}</td>
+          <td class="num" style="font-weight:700">{{ s.cur_price }} <span style="color:var(--text-3)">({{ s.last }})</span></td>
+          <td class="num">{{ s.ref_price }}</td>
+          <td class="num" style="color:#e8590c">{% if s.first_price %}{{ s.first_price }}{% else %}-{% endif %}</td>
+          <td class="num" style="color:#e03131">{% if s.ki_price %}{{ s.ki_price }}{% else %}-{% endif %}</td>
+          <td class="num">{{ s.hi_price }} <span style="color:var(--text-3)">{{ s.hi_date|date:"m.d" }}</span></td>
+          <td class="num">{{ s.lo_price }} <span style="color:var(--text-3)">{{ s.lo_date|date:"m.d" }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="font-size:11px;color:var(--text-3);margin-top:4px">
+      괄호 = 기준가 대비 레벨(%). 1차 상환가·KI 가격은 기준가 × 배리어 환산.
+      {% if not chart.based_on_issue %}미발행 상품은 1년 전 종가를 기준가로 임시 표시.{% endif %}
+    </div>
   </div>
 </div>
 {% endif %}

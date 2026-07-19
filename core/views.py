@@ -256,7 +256,11 @@ def product_detail(request, pk):
             ref = past[-1] if past else None
         if ref is None:
             ref = hist[0][1]  # 미발행 상품은 1년 전 시점=100
-        series_list.append({"asset": asset,
+        hi_d, hi_c = max(hist, key=lambda x: x[1])
+        lo_d, lo_c = min(hist, key=lambda x: x[1])
+        series_list.append({"asset": asset, "ref": ref,
+                            "hi": (hi_d, hi_c), "lo": (lo_d, lo_c),
+                            "cur": hist[-1][1],
                             "pts": [(d, c / ref * 100) for d, c in hist]})
     if series_list:
         all_d = [d for s in series_list for d, _ in s["pts"]]
@@ -280,11 +284,30 @@ def product_detail(request, pk):
             return round(PT + ph * (1 - (v - lo) / (hi - lo)), 1)
 
         palette = ["#1b64da", "#e8590c", "#0ca678", "#845ef7"]
-        chart_series = [{
-            "asset": s["asset"], "color": palette[i % 4],
-            "poly": " ".join(f"{_x(d)},{_y(v)}" for d, v in s["pts"]),
-            "last": round(s["pts"][-1][1], 1),
-        } for i, s in enumerate(series_list)]
+
+        def _fmt_price(v):
+            return f"{v:,.0f}" if v >= 1000 else f"{v:,.2f}"
+
+        chart_series = []
+        for i, s in enumerate(series_list):
+            ref = s["ref"]
+            (hi_d, hi_c), (lo_d, lo_c) = s["hi"], s["lo"]
+            chart_series.append({
+                "asset": s["asset"], "color": palette[i % 4],
+                "poly": " ".join(f"{_x(d)},{_y(v)}" for d, v in s["pts"]),
+                "last": round(s["pts"][-1][1], 1),
+                # 실제 가격 정보 (기준가 통화 단위 그대로)
+                "ref_price": _fmt_price(ref),
+                "cur_price": _fmt_price(s["cur"]),
+                "first_price": _fmt_price(ref * product.barrier_first / 100)
+                               if product.barrier_first is not None else None,
+                "ki_price": _fmt_price(ref * product.ki / 100)
+                            if (product.ki is not None and not product.is_no_ki) else None,
+                "hi_price": _fmt_price(hi_c), "hi_date": hi_d,
+                "hi_x": _x(hi_d), "hi_y": _y(hi_c / ref * 100),
+                "lo_price": _fmt_price(lo_c), "lo_date": lo_d,
+                "lo_x": _x(lo_d), "lo_y": _y(lo_c / ref * 100),
+            })
         chart_lines = [{"label": "기준 100", "y": _y(100), "color": "#868e96", "dash": "4 3"}]
         if product.barrier_first is not None:
             chart_lines.append({"label": f"1차 {product.barrier_first:g}",
