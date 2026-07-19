@@ -154,3 +154,25 @@ def fetch_price_on(ticker: str, target_date):
     except Exception:
         pass
     return None
+
+
+_history_cache = {}  # (ticker, date.today()) → [(date, close), ...]
+
+
+def fetch_history(ticker: str, days: int = 365):
+    """최근 days일 일별 종가 [(date, close), ...]. 실패 시 []. 하루 단위 캐시."""
+    import yfinance as yf
+    from datetime import date as _date
+
+    key = (ticker, _date.today())
+    if key in _history_cache:
+        return _history_cache[key]
+    rows = []
+    try:
+        h = yf.Ticker(ticker).history(period=f"{days}d")
+        closes = h["Close"].dropna()
+        rows = [(idx.date(), float(v)) for idx, v in closes.items()]
+    except Exception:
+        pass
+    _history_cache[key] = rows
+    return rows

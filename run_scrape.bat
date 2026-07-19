@@ -13,9 +13,16 @@ echo [%date% %time%] scrape_kofia 시작 >> "%LOGFILE%"
 python "%~dp0manage.py" scrape_kofia >> "%LOGFILE%" 2>&1
 echo [%date% %time%] scrape_kofia 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"
 
-REM 시세 갱신(낙인 경보) → 신규 상품 손실확률 순으로 이어서 실행
+REM 시세 갱신(낙인 경보) → 조기상환 판정 → 신규 상품 손실확률 순으로 실행
 python "%~dp0manage.py" update_prices >> "%LOGFILE%" 2>&1
 echo [%date% %time%] update_prices 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"
 
+python "%~dp0manage.py" check_redemptions >> "%LOGFILE%" 2>&1
+echo [%date% %time%] check_redemptions 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"
+
 python "%~dp0manage.py" simulate_products >> "%LOGFILE%" 2>&1
 echo [%date% %time%] simulate_products 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"
+
+REM 주간 요약 (월요일에만 실제 발송됨)
+python "%~dp0manage.py" send_digest >> "%LOGFILE%" 2>&1
+echo [%date% %time%] send_digest 종료 (exit=%ERRORLEVEL%) >> "%LOGFILE%"

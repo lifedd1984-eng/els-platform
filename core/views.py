@@ -136,8 +136,40 @@ def weekly(request):
         .values_list("issuer", flat=True)
     ))
 
+    # ── 이번주 추천 TOP5 (현재 주만) ──
+    # 추천점수 = 연수익률 × (1 - 손실확률/100) — 손실 반영 기대수익률.
+    # 중복도 = 보유 포트폴리오 중 같은 기초자산을 가진 투자금 비중.
+    recommendations = []
+    if offset >= 0:  # 지난 주 조회 시에는 표시 안 함
+        from core import market as _mkt
+
+        def _asset_keys(raw):
+            return {_mkt.resolve_ticker(a) or a for a in _mkt.split_assets(raw)}
+
+        inv_assets = [
+            (inv.amount, _asset_keys(inv.product.assets_raw))
+            for inv in Investment.objects.filter(status="보유중").select_related("product")
+        ]
+        total_held = sum(amt for amt, _ in inv_assets)
+
+        pool = Product.objects.filter(
+            sub_end__gte=max(monday, date.today()), sub_end__lte=sunday,
+            barriers_raw__isnull=False, yield_rate__isnull=False,
+            loss_prob__isnull=False,
+        )
+        scored = []
+        for p in pool:
+            score = round(p.yield_rate * (1 - p.loss_prob / 100), 2)
+            pkeys = _asset_keys(p.assets_raw)
+            overlap = sum(amt for amt, keys in inv_assets if keys & pkeys)
+            overlap_pct = round(overlap / total_held * 100) if total_held else 0
+            scored.append({"p": p, "score": score, "overlap_pct": overlap_pct})
+        scored.sort(key=lambda r: -r["score"])
+        recommendations = scored[:5]
+
     return render(request, "core/weekly.html", {
         "products": products,
+        "recommendations": recommendations,
         "columns": columns,
         "monday": monday, "sunday": sunday, "offset": offset,
         "total": len(products),
@@ -206,11 +238,69 @@ def product_detail(request, pk):
             ki_statuses = sorted(rows, key=lambda s: (s.level_pct if s.level_pct is not None else 999))
             ki_worst_buffer = inv.ki_buffer
 
+    # ── 기초자산 1년 시세 차트 (레벨% = 종가/기준가×100, SVG) ──
+    from core import market as _mkt
+    chart = None
+    assets = _mkt.split_assets(product.assets_raw)
+    series_list = []
+    for asset in assets[:4]:
+        t = _mkt.resolve_ticker(asset)
+        if not t:
+            continue
+        hist = _mkt.fetch_history(t)
+        if len(hist) < 10:
+            continue
+        ref = None
+        if product.issue_date:
+            past = [c for d, c in hist if d <= product.issue_date]
+            ref = past[-1] if past else None
+        if ref is None:
+            ref = hist[0][1]  # 미발행 상품은 1년 전 시점=100
+        series_list.append({"asset": asset,
+                            "pts": [(d, c / ref * 100) for d, c in hist]})
+    if series_list:
+        all_d = [d for s in series_list for d, _ in s["pts"]]
+        dmin, dmax = min(all_d), max(all_d)
+        span = (dmax - dmin).days or 1
+        levels = [v for s in series_list for _, v in s["pts"]]
+        marks = [100]
+        if product.barrier_first is not None:
+            marks.append(product.barrier_first)
+        if product.ki is not None and not product.is_no_ki:
+            marks.append(product.ki)
+        lo = min(min(levels), min(marks)) - 5
+        hi = max(max(levels), max(marks)) + 5
+        W, H, PL, PR, PT, PB = 720, 260, 44, 10, 14, 30
+        pw, ph = W - PL - PR, H - PT - PB
+
+        def _x(d):
+            return round(PL + pw * (d - dmin).days / span, 1)
+
+        def _y(v):
+            return round(PT + ph * (1 - (v - lo) / (hi - lo)), 1)
+
+        palette = ["#1b64da", "#e8590c", "#0ca678", "#845ef7"]
+        chart_series = [{
+            "asset": s["asset"], "color": palette[i % 4],
+            "poly": " ".join(f"{_x(d)},{_y(v)}" for d, v in s["pts"]),
+            "last": round(s["pts"][-1][1], 1),
+        } for i, s in enumerate(series_list)]
+        chart_lines = [{"label": "기준 100", "y": _y(100), "color": "#868e96", "dash": "4 3"}]
+        if product.barrier_first is not None:
+            chart_lines.append({"label": f"1차 {product.barrier_first:g}",
+                                "y": _y(product.barrier_first), "color": "#e8590c", "dash": "6 3"})
+        if product.ki is not None and not product.is_no_ki:
+            chart_lines.append({"label": f"KI {product.ki:g}",
+                                "y": _y(product.ki), "color": "#e03131", "dash": "2 3"})
+        chart = {"W": W, "H": H, "series": chart_series, "lines": chart_lines,
+                 "based_on_issue": bool(product.issue_date)}
+
     return render(request, "core/product_detail.html", {
         "product": product, "is_watched": is_watched, "svg": svg,
         "sim": sim, "sim_updated": product.sim_updated,
         "ki_statuses": ki_statuses, "ki_worst_buffer": ki_worst_buffer,
         "ki_updated_at": ki_updated_at,
+        "chart": chart,
         "active_nav": "weekly",
     })
 
@@ -489,7 +579,38 @@ def portfolio(request):
         ]
     ]
 
+    # ── 실현수익 실적 (상환완료 + 상환금 입력된 건) ──
+    realized = [i for i in done if i.redeemed_amount is not None and i.redeemed_at]
+    perf = None
+    if realized:
+        from collections import defaultdict
+        total_in = sum(i.amount for i in realized)
+        total_out = sum(i.redeemed_amount for i in realized)
+        profit = total_out - total_in
+        # 연환산: 각 건의 보유일수 가중 수익률 평균
+        ann_rates = []
+        for i in realized:
+            days = (i.redeemed_at - i.invested_at).days if i.invested_at else None
+            if days and days > 0:
+                ann_rates.append((i.redeemed_amount - i.amount) / i.amount * 365 / days * 100)
+        monthly = defaultdict(int)
+        for i in realized:
+            monthly[i.redeemed_at.strftime("%Y.%m")] += i.redeemed_amount - i.amount
+        months = sorted(monthly)[-12:]
+        max_abs = max(abs(monthly[m]) for m in months) or 1
+        bars = [{"label": m, "value": monthly[m],
+                 "h": round(abs(monthly[m]) / max_abs * 100, 1),
+                 "neg": monthly[m] < 0} for m in months]
+        perf = {
+            "count": len(realized),
+            "profit": profit,
+            "rate": round(profit / total_in * 100, 2) if total_in else 0,
+            "ann_rate": round(sum(ann_rates) / len(ann_rates), 2) if ann_rates else None,
+            "bars": bars,
+        }
+
     return render(request, "core/portfolio.html", {
+        "perf": perf,
         "h_page": h_page, "d_page": d_page,
         "holding_count": len(holding), "done_count": len(done),
         "h_cols": h_cols, "page_size": page_size,

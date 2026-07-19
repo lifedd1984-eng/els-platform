@@ -169,6 +169,37 @@
   {% endif %}
 </div>
 
+{% if chart %}
+<div class="card">
+  <div class="card-title">
+    <i class="fa-solid fa-chart-line" style="color:var(--blue)"></i> 기초자산 1년 추이
+    <small style="font-weight:400;color:var(--text-3)">
+      {% if chart.based_on_issue %}(발행일 기준가 = 100){% else %}(미발행 — 1년 전 = 100){% endif %}
+    </small>
+  </div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:6px">
+    {% for s in chart.series %}
+    <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ s.color }};margin-right:4px"></span>{{ s.asset }} <b>{{ s.last }}</b></span>
+    {% endfor %}
+    {% for l in chart.lines %}
+    <span style="color:{{ l.color }}">— {{ l.label }}</span>
+    {% endfor %}
+  </div>
+  <div style="overflow-x:auto">
+    <svg viewBox="0 0 {{ chart.W }} {{ chart.H }}" style="width:100%;min-width:520px;height:auto">
+      {% for l in chart.lines %}
+      <line x1="44" x2="{{ chart.W|add:'-10' }}" y1="{{ l.y }}" y2="{{ l.y }}"
+            stroke="{{ l.color }}" stroke-width="1" stroke-dasharray="{{ l.dash }}"/>
+      <text x="4" y="{{ l.y|add:'4' }}" font-size="10" fill="{{ l.color }}">{{ l.label }}</text>
+      {% endfor %}
+      {% for s in chart.series %}
+      <polyline points="{{ s.poly }}" fill="none" stroke="{{ s.color }}" stroke-width="1.8"/>
+      {% endfor %}
+    </svg>
+  </div>
+</div>
+{% endif %}
+
 {% if ki_statuses %}
 <div class="card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">

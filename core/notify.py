@@ -2,7 +2,7 @@
 프리셋 매칭 / 상환 평가일 텔레그램 알림 (import_els, scrape_kofia 공용).
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.conf import settings
 
@@ -67,3 +67,57 @@ def notify_redemptions(stdout=None):
         )
         if stdout:
             stdout.write(f"[상환알림] {inv} {alert_type}")
+
+
+def notify_weekly_digest(stdout=None):
+    """주간 요약: 이번주 마감 고수익 TOP5 + 향후 7일 평가예정 + 낙인 현황."""
+    today = date.today()
+    week_end = today + timedelta(days=6)
+
+    weekday = "월화수목금토일"[today.weekday()]
+    lines = [f"[주간 요약] {today:%m.%d}({weekday})"]
+
+    # ① 이번주 마감 고수익 TOP5 (스텝다운형만 — 손실확률 있는 것 우선)
+    closing = (
+        Product.objects.filter(sub_end__gte=today, sub_end__lte=week_end,
+                               barriers_raw__isnull=False, yield_rate__isnull=False)
+        .order_by("-yield_rate")
+    )
+    lines.append(f"\n▶ 이번주 마감 청약 {closing.count()}건 — 수익률 TOP5")
+    for p in closing[:5]:
+        loss = f"손실확률 {p.loss_prob}%" if p.loss_prob is not None else "손실확률 -"
+        lines.append(
+            f"- {p.issuer} {p.product_no}: 연 {p.yield_rate}% "
+            f"KI{p.ki_display} {loss} ~{p.sub_end:%m.%d}"
+        )
+
+    # ② 향후 7일 보유상품 평가예정
+    upcoming = []
+    for inv in Investment.objects.filter(status="보유중").select_related("product"):
+        nxt = inv.next_evaluation
+        if nxt and today <= nxt["date"] <= week_end:
+            upcoming.append((nxt["date"], inv, nxt))
+    lines.append(f"\n▶ 7일내 조기상환 평가 {len(upcoming)}건")
+    for d, inv, nxt in sorted(upcoming, key=lambda x: x[0])[:5]:
+        lines.append(f"- {d:%m.%d} {inv.product.issuer} {inv.product.product_no} "
+                     f"{nxt['n']}회차 배리어 {nxt['barrier'] or '-'}%")
+    if len(upcoming) > 5:
+        lines.append(f"... 외 {len(upcoming)-5}건")
+
+    # ③ 낙인 현황 (update_prices가 채운 KnockInStatus 기반)
+    danger = warn = safe = 0
+    for inv in Investment.objects.filter(status="보유중").select_related("product"):
+        buf = inv.ki_buffer
+        if buf is None:
+            continue
+        if buf <= 5:
+            danger += 1
+        elif buf <= 15:
+            warn += 1
+        else:
+            safe += 1
+    lines.append(f"\n▶ 낙인 현황: 위험 {danger} / 경고 {warn} / 안전 {safe}")
+    lines.append(f"\n대시보드: {settings.SITE_URL}")
+
+    if telegram.send_message("\n".join(lines)) and stdout:
+        stdout.write("[주간요약] 발송 완료")

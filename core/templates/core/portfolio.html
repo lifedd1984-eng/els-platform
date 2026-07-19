@@ -253,6 +253,9 @@
             <a href="{% url 'product_detail' inv.product.id %}" style="color:var(--blue-dark)">
               {{ inv.product.issuer }} {{ inv.product.product_no }}
             </a>
+            {% with rp=inv.redemption_pending %}
+            {% if rp %}<span class="badge" style="background:var(--green);color:#fff" title="{{ rp.round_no }}회차({{ rp.eval_date|date:'m.d' }}) 배리어 {{ rp.barrier }}% 충족 — 워스트 {{ rp.worst_level }}%. 증권사 확인 후 상환 처리하세요.">상환예정</span>{% endif %}
+            {% endwith %}
             {% if inv.broker_account %}<div style="font-size:11px;color:var(--text-3)">{{ inv.broker_account }}</div>{% endif %}
           </td>
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw|asset_short }}</td>
@@ -315,6 +318,39 @@
   <div class="empty" style="padding:24px 0">보유 중인 투자가 없습니다</div>
   {% endif %}
 </div>
+
+{% if perf %}
+<div class="card" style="padding:14px 16px">
+  <div class="card-title" style="padding:0 0 10px"><i class="fa-solid fa-chart-column" style="color:var(--blue-dark)"></i> 실현수익 실적</div>
+  <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end">
+    <div>
+      <div style="font-size:12px;color:var(--text-3)">누적 실현수익 ({{ perf.count }}건)</div>
+      <div style="font-size:24px;font-weight:800;color:{% if perf.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">{{ perf.profit|intcomma }}원</div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--text-3)">실현수익률</div>
+      <div style="font-size:18px;font-weight:700">{{ perf.rate }}%</div>
+    </div>
+    {% if perf.ann_rate is not None %}
+    <div>
+      <div style="font-size:12px;color:var(--text-3)">연환산 수익률</div>
+      <div style="font-size:18px;font-weight:700;color:var(--blue-dark)">{{ perf.ann_rate }}%</div>
+    </div>
+    {% endif %}
+    <div style="flex:1;min-width:260px">
+      <div style="font-size:12px;color:var(--text-3);margin-bottom:4px">월별 실현수익</div>
+      <div style="display:flex;gap:6px;align-items:flex-end;height:80px">
+        {% for b in perf.bars %}
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%" title="{{ b.label }}: {{ b.value|intcomma }}원">
+          <div style="width:100%;max-width:42px;height:{{ b.h }}%;min-height:3px;border-radius:3px 3px 0 0;background:{% if b.neg %}var(--red){% else %}var(--blue){% endif %}"></div>
+          <div style="font-size:10px;color:var(--text-3);margin-top:3px;white-space:nowrap">{{ b.label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% if done_count %}
 <div class="card" style="padding:8px 16px">

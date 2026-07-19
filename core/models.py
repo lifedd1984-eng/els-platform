@@ -330,6 +330,12 @@ class Investment(models.Model):
         return sched[-1]["expected_after_tax"] if sched else None
 
     @property
+    def redemption_pending(self):
+        """직전 회차 배리어 충족 판정(check_redemptions 기록). 충족 시 verdict, 아니면 None."""
+        v = self.verdicts.first()  # ordering=-eval_date → 최신
+        return v if (v and v.met) else None
+
+    @property
     def worst_ki_status(self):
         """워스트오브: 레벨이 가장 낮은(위험한) 기초자산 상태."""
         statuses = [s for s in self.ki_status.all() if s.level_pct is not None]
@@ -420,3 +426,29 @@ class RedemptionAlert(models.Model):
                 fields=["investment", "round_no", "alert_type"], name="uniq_redemption_alert"
             )
         ]
+
+
+class RedemptionVerdict(models.Model):
+    """지난 평가일 조기상환 판정 (check_redemptions 배치가 기록).
+
+    평가일 종가 기준 워스트 레벨 >= 배리어 → met=True(상환 예정).
+    실제 상환 처리(상태 변경)는 사용자가 증권사 확인 후 수동으로 한다.
+    """
+    investment = models.ForeignKey(
+        Investment, on_delete=models.CASCADE, related_name="verdicts"
+    )
+    round_no = models.IntegerField("회차")
+    eval_date = models.DateField("평가일")
+    barrier = models.FloatField("배리어(%)", null=True, blank=True)
+    worst_level = models.FloatField("워스트 레벨(%)", null=True, blank=True)
+    worst_asset = models.CharField(max_length=50, blank=True)
+    met = models.BooleanField("충족 여부", null=True)  # None=시세 미확보로 판정불가
+    checked_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["investment", "round_no"], name="uniq_redemption_verdict"
+            )
+        ]
+        ordering = ["-eval_date"]
