@@ -230,6 +230,38 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   .page-title { font-size: 19px; }
   .stat-value { font-size: 17px; }
 }
+
+/* ── 스마트폰 (480px 이하) ── */
+@media (max-width: 480px) {
+  .container { padding: 10px; }
+  .card { padding: 14px; margin-bottom: 12px; }
+  .page-title { font-size: 18px; }
+  .page-sub { font-size: 12px; margin-bottom: 14px; }
+
+  .stat-grid { gap: 8px; margin-bottom: 14px; }
+  .stat-card { padding: 12px 14px; }
+  .stat-value { font-size: 16px; }
+
+  /* 필터바 입력은 풀폭으로 */
+  .filterbar input, .filterbar select { width: 100%; }
+  .filterbar .form-field { width: 100%; }
+  .filterbar .btn { width: 100%; justify-content: center; }
+  .chk-dropdown { width: 100%; }
+  .chk-dropdown > summary { display: block; text-align: left; }
+  .chk-panel { width: calc(100vw - 60px); max-width: 280px; }
+
+  .week-nav { flex-wrap: wrap; gap: 8px; }
+  .week-label { font-size: 14px; }
+
+  th { padding: 7px 6px; font-size: 11px; }
+  td { padding: 8px 6px; font-size: 13px; }
+  .badge { font-size: 11px; padding: 1px 6px; }
+
+  .cal-table td { height: 52px; }
+
+  /* 추천 TOP5 카드 — 한 줄에 하나씩 */
+  .rec-card { min-width: 100% !important; }
+}
 </style>
 {% block head %}{% endblock %}
 </head>

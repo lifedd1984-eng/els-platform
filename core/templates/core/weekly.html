@@ -76,7 +76,7 @@
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
     {% for r in recommendations %}
-    <a href="{% url 'product_detail' r.p.id %}" style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-decoration:none;color:inherit">
+    <a href="{% url 'product_detail' r.p.id %}" class="rec-card" style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-decoration:none;color:inherit">
       <div style="font-size:12px;color:var(--text-2)">{{ r.p.issuer }} {{ r.p.product_no }}</div>
       <div style="font-weight:800;font-size:18px;color:var(--blue-dark)">{{ r.score }}<span style="font-size:11px;color:var(--text-3)"> 점</span></div>
       <div style="font-size:12px">연 {{ r.p.yield_rate }}% · 손실 {{ r.p.loss_prob }}%</div>
