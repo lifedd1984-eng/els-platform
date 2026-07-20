@@ -19,19 +19,15 @@
     <table>
       <thead>
         <tr>
-          <th style="white-space:nowrap">발행사</th>
-          <th style="white-space:nowrap">상품번호</th>
-          <th style="white-space:nowrap">기초자산</th>
-          <th class="num" style="white-space:nowrap">수익률</th>
-          <th class="num" style="white-space:nowrap">KI</th>
-          <th class="num" style="white-space:nowrap">1차</th>
-          <th class="num" style="white-space:nowrap">막차</th>
-          <th class="num" style="white-space:nowrap">기간</th>
-          <th class="num" style="white-space:nowrap">주기</th>
-          <th class="num" style="white-space:nowrap">손실확률</th>
-          <th style="white-space:nowrap">유형</th>
-          <th class="num" style="white-space:nowrap">마감</th>
-          <th class="num" style="white-space:nowrap" title="고령(65세+)·부적합 투자자는 2영업일 숙려기간 때문에 이 날까지 청약해야 합니다 (일반 마감 -2영업일, 공휴일 미반영)">숙려마감</th>
+          {% for c in w_cols %}
+          <th class="{% if c.num %}num{% endif %}" style="white-space:nowrap">
+            <a href="{{ c.url }}" style="color:inherit;text-decoration:none;{% if c.active %}color:var(--blue-dark);font-weight:700{% endif %}">
+              {{ c.label }}
+              {% if c.active %}<i class="fa-solid fa-caret-{% if c.dir == 'asc' %}up{% else %}down{% endif %}"></i>
+              {% else %}<i class="fa-solid fa-sort" style="color:var(--border)"></i>{% endif %}
+            </a>
+          </th>
+          {% endfor %}
           <th></th>
         </tr>
       </thead>

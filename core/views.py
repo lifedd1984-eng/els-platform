@@ -489,12 +489,52 @@ def watchlist(request):
             return JsonResponse({"watched": action == "add"})
         return redirect(request.POST.get("next") or "watchlist")
 
-    items = _scope(WatchItem.objects.select_related("product").all(), request.user)
+    items = list(_scope(WatchItem.objects.select_related("product").all(), request.user))
     invested_ids = set(Investment.objects.filter(
         user=request.user, status="보유중").values_list("product_id", flat=True))
+
+    # ── 정렬 (헤더 클릭) ──
+    _min_date = date.min
+    W_SORT = {
+        "issuer": lambda i: i.product.issuer or "",
+        "no": lambda i: i.product.product_no or "",
+        "assets": lambda i: i.product.assets_raw or "",
+        "yield": lambda i: i.product.yield_rate if i.product.yield_rate is not None else -1,
+        "ki": lambda i: 999 if i.product.is_no_ki else (i.product.ki if i.product.ki is not None else -1),
+        "first": lambda i: i.product.barrier_first if i.product.barrier_first is not None else -1,
+        "last": lambda i: i.product.barrier_last if i.product.barrier_last is not None else -1,
+        "term": lambda i: i.product.term_months if i.product.term_months is not None else -1,
+        "period": lambda i: i.product.period_months if i.product.period_months is not None else -1,
+        "loss": lambda i: i.product.loss_prob if i.product.loss_prob is not None else -1,
+        "type": lambda i: i.product.asset_type or "",
+        "sub_end": lambda i: i.product.sub_end or _min_date,
+        "confirm": lambda i: i.product.confirm_date or _min_date,
+    }
+    w_sort = request.GET.get("wsort", "")
+    w_dir = request.GET.get("wdir", "asc")
+    if w_sort in W_SORT:
+        items.sort(key=W_SORT[w_sort], reverse=(w_dir == "desc"))
+
+    def _wurl(key):
+        d = "desc" if (w_sort == key and w_dir == "asc") else "asc"
+        return f"?wsort={key}&wdir={d}"
+
+    w_cols = [
+        {"key": k, "label": lbl, "num": num, "url": _wurl(k),
+         "active": w_sort == k, "dir": w_dir}
+        for k, lbl, num in [
+            ("issuer", "발행사", False), ("no", "상품번호", False),
+            ("assets", "기초자산", False), ("yield", "수익률", True),
+            ("ki", "KI", True), ("first", "1차", True), ("last", "막차", True),
+            ("term", "기간", True), ("period", "주기", True),
+            ("loss", "손실확률", True), ("type", "유형", False),
+            ("sub_end", "마감", True), ("confirm", "숙려마감", True),
+        ]
+    ]
+
     return render(request, "core/watchlist.html", {
         "invested_ids": invested_ids,
-        "items": items, "active_nav": "watchlist",
+        "items": items, "w_cols": w_cols, "active_nav": "watchlist",
     })
 
 

@@ -63,8 +63,13 @@ class Command(BaseCommand):
         fetch_failed_products = []
 
         ok = skip = 0
+        unmapped = {}  # 자산명 → 건수 (티커맵 누락 감지용)
         for p in products:
             result = self._simulate_one(p, price_cache, years)
+            reason = result.get("reason", "")
+            if reason.startswith("시세 매핑 없음: "):
+                name = reason.split(": ", 1)[1]
+                unmapped[name] = unmapped.get(name, 0) + 1
             if result.get("available"):
                 self._save_ok(p, result)
                 ok += 1
@@ -108,6 +113,17 @@ class Command(BaseCommand):
                 self.stdout.write(f"[재시도] 재시뮬 성공 {re_ok}건")
 
         self.stdout.write(f"[시뮬] 완료 {ok}건 / 불가 {skip}건")
+
+        # 티커맵 누락 자산이 있으면 텔레그램으로 알림 → 티커만 추가하면 다음 배치에 자동 반영
+        if unmapped:
+            from core import telegram
+            lines = [f"[티커 누락] 손실확률 미산출 자산 {len(unmapped)}종"]
+            for name, cnt in sorted(unmapped.items(), key=lambda x: -x[1]):
+                lines.append(f"- {name} ({cnt}개 상품)")
+            lines.append("core/market.py TICKER_MAP에 추가 필요")
+            telegram.send_message("
+".join(lines))
+            self.stdout.write(f"[티커누락 알림] {len(unmapped)}종 발송")
 
     def _save_ok(self, p, result):
         p.loss_prob = result["loss_prob_pct"]
