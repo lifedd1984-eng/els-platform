@@ -3,8 +3,15 @@
 {% block title %}관심 목록 — ELS 플랫폼{% endblock %}
 
 {% block content %}
-<div class="page-title">관심 목록</div>
-<div class="page-sub">투자 검토 중인 상품 {{ items|length }}건</div>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+  <div>
+    <div class="page-title">관심 목록</div>
+    <div class="page-sub">투자 검토 중인 상품 {{ items|length }}건</div>
+  </div>
+  {% if items %}
+  <a href="{% url 'watchlist_export' %}" class="btn"><i class="fa-solid fa-file-excel" style="color:var(--green)"></i> 엑셀 다운로드</a>
+  {% endif %}
+</div>
 
 {% if items %}
 <div class="card" style="padding:8px 16px">

@@ -16,6 +16,7 @@ urlpatterns = [
     path('product/<int:pk>/', views.product_detail, name='product_detail'),
     path('presets/', views.presets, name='presets'),
     path('watchlist/', views.watchlist, name='watchlist'),
+    path('watchlist/export/', views.watchlist_export, name='watchlist_export'),
     path('portfolio/', views.portfolio, name='portfolio'),
     path('portfolio/template/', views.portfolio_template, name='portfolio_template'),
     path('portfolio/export/', views.portfolio_export, name='portfolio_export'),

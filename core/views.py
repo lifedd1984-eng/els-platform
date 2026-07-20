@@ -744,6 +744,51 @@ def portfolio_template(request):
 
 
 @login_required
+def watchlist_export(request):
+    """관심목록을 xlsx로 다운로드 (본인 범위)."""
+    import io
+
+    import openpyxl
+    from django.http import HttpResponse
+
+    cols = ["발행사", "상품번호", "기초자산", "수익률(%)", "KI", "1차", "막차",
+            "기간", "주기", "손실확률(%)", "유형", "청약마감", "메모"]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "관심목록"
+    ws.append(cols)
+
+    items = _scope(WatchItem.objects.select_related("product").all(), request.user)
+    for item in items:
+        p = item.product
+        ws.append([
+            p.issuer, p.product_no, p.assets_raw or "",
+            p.yield_rate if p.yield_rate is not None else "",
+            p.ki_display,
+            p.barrier_first if p.barrier_first is not None else "",
+            p.barrier_last if p.barrier_last is not None else "",
+            p.term_display,
+            p.period_display,
+            p.loss_prob if p.loss_prob is not None else "",
+            p.asset_type or (p.structure_label or ""),
+            p.sub_end.strftime("%Y-%m-%d") if p.sub_end else "",
+            item.memo or "",
+        ])
+    for i, c in enumerate(cols, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = max(10, len(c) + 4)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    resp = HttpResponse(
+        buf.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="watchlist_{date.today():%Y%m%d}.xlsx"'
+    return resp
+
+
+@login_required
 def portfolio_export(request):
     """현재 보유 투자내역을 xlsx로 다운로드."""
     import io
