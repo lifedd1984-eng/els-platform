@@ -16,7 +16,7 @@ TICKER_MAP = {
     "S&P500": "^GSPC", "S&P 500": "^GSPC", "SP500": "^GSPC",
     "Nikkei225": "^N225", "Nikkei 225": "^N225", "니케이225": "^N225",
     "Euro Stoxx 50": "^STOXX50E", "EuroStoxx50": "^STOXX50E", "Euro 50": "^STOXX50E",
-    "LG이노텍": "011070.KS", "삼성증권": "016360.KS",
+    "LG이노텍": "011070.KS", "삼성증권": "016360.KS", "삼성전기": "009150.KS",
     "EUROSTOXX50": "^STOXX50E", "유로스탁스50": "^STOXX50E",
     "HSCEI": "^HSCE", "항셍중국기업지수": "^HSCE",
     "HSI": "^HSI", "NASDAQ100": "^NDX", "나스닥": "^NDX",
