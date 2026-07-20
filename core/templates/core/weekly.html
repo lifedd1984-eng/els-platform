@@ -109,6 +109,7 @@
             </a>
           </th>
           {% endfor %}
+          <th class="num" style="white-space:nowrap" title="고령(65세+)·부적합 투자자는 청약마감+2영업일(주말 제외, 공휴일 미반영)까지 확정 의사표시 필요">숙려확정</th>
           <th></th>
         </tr>
       </thead>
@@ -146,6 +147,9 @@
               {% elif p.d_day <= 1 %}<span class="dday-soon">D-{{ p.d_day }}</span>
               {% else %}<span class="dday-normal">D-{{ p.d_day }}</span>{% endif %}
             {% endif %}
+          </td>
+          <td class="num" style="white-space:nowrap;color:var(--text-2)" title="고령(65세+)·부적합 투자자는 청약마감+2영업일(주말 제외, 공휴일 미반영)까지 확정 의사표시 필요">
+            {% if p.confirm_date %}{{ p.confirm_date|date:"n/j" }}{% else %}-{% endif %}
           </td>
           <td onclick="event.stopPropagation()">
             {% if user.is_authenticated %}

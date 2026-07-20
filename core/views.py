@@ -805,7 +805,7 @@ def watchlist_export(request):
     from django.http import HttpResponse
 
     cols = ["발행사", "상품번호", "기초자산", "수익률(%)", "KI", "1차", "막차",
-            "기간", "주기", "손실확률(%)", "유형", "청약마감", "메모", "보유"]
+            "기간", "주기", "손실확률(%)", "유형", "청약마감", "숙려확정", "메모", "보유"]
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -828,6 +828,7 @@ def watchlist_export(request):
             p.loss_prob if p.loss_prob is not None else "",
             p.asset_type or (p.structure_label or ""),
             p.sub_end.strftime("%Y-%m-%d") if p.sub_end else "",
+            p.confirm_date.strftime("%Y-%m-%d") if p.confirm_date else "",
             item.memo or "",
             "보유중" if p.id in invested_ids else "",
         ])

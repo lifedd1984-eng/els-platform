@@ -135,6 +135,22 @@ class Product(models.Model):
         return f"{self.period_months}개월"
 
     @property
+    def confirm_date(self):
+        """숙려 확정일 = 청약마감 + 2영업일 (주말 제외, 공휴일 미반영 근사치).
+
+        고령(65세+)·부적합 투자자는 이 날까지 청약 확정 의사표시를 해야 체결된다.
+        """
+        if not self.sub_end:
+            return None
+        d = self.sub_end
+        added = 0
+        while added < 2:
+            d += timedelta(days=1)
+            if d.weekday() < 5:
+                added += 1
+        return d
+
+    @property
     def structure_label(self):
         """상품 구조 라벨. 스텝다운(배리어 있음)은 None(라벨 불필요).
 

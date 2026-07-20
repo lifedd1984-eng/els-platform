@@ -31,6 +31,7 @@
           <th class="num" style="white-space:nowrap">손실확률</th>
           <th style="white-space:nowrap">유형</th>
           <th class="num" style="white-space:nowrap">마감</th>
+          <th class="num" style="white-space:nowrap" title="고령(65세+)·부적합 투자자는 청약마감+2영업일(주말 제외, 공휴일 미반영)까지 확정 의사표시 필요">숙려확정</th>
           <th></th>
         </tr>
       </thead>
@@ -72,6 +73,7 @@
               {% else %}<span class="dday-normal">D-{{ item.product.d_day }}</span>{% endif %}
             {% endif %}
           </td>
+          <td class="num" style="white-space:nowrap;color:var(--text-2)" title="고령(65세+)·부적합 투자자는 청약마감+2영업일(주말 제외, 공휴일 미반영)까지 확정 의사표시 필요">{% if item.product.confirm_date %}{{ item.product.confirm_date|date:"n/j" }}{% else %}-{% endif %}</td>
           <td onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px">
               <a href="{% url 'portfolio' %}?product={{ item.product.id }}" class="btn btn-primary btn-sm">투자 등록</a>
