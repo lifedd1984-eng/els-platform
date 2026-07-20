@@ -805,7 +805,7 @@ def watchlist_export(request):
     from django.http import HttpResponse
 
     cols = ["발행사", "상품번호", "기초자산", "수익률(%)", "KI", "1차", "막차",
-            "기간", "주기", "손실확률(%)", "유형", "청약마감", "숙려확정", "메모", "보유"]
+            "기간", "주기", "손실확률(%)", "유형", "청약마감", "숙려마감", "메모", "보유"]
 
     wb = openpyxl.Workbook()
     ws = wb.active

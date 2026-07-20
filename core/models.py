@@ -136,18 +136,19 @@ class Product(models.Model):
 
     @property
     def confirm_date(self):
-        """숙려 확정일 = 청약마감 + 2영업일 (주말 제외, 공휴일 미반영 근사치).
+        """숙려대상자 청약 마감 = 일반 마감 - 2영업일 (주말 제외, 공휴일 미반영 근사치).
 
-        고령(65세+)·부적합 투자자는 이 날까지 청약 확정 의사표시를 해야 체결된다.
+        고령(65세+)·부적합 투자자는 2영업일 숙려기간이 필요하므로
+        일반 마감보다 2영업일 먼저 청약을 넣어야 한다.
         """
         if not self.sub_end:
             return None
         d = self.sub_end
-        added = 0
-        while added < 2:
-            d += timedelta(days=1)
+        subtracted = 0
+        while subtracted < 2:
+            d -= timedelta(days=1)
             if d.weekday() < 5:
-                added += 1
+                subtracted += 1
         return d
 
     @property
