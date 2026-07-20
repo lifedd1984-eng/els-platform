@@ -34,6 +34,13 @@ TICKER_MAP = {
     "현대모비스": "012330.KS",
     "LG전자": "066570.KS",
     "HD현대중공업": "329180.KS",
+    "KB금융": "105560.KS",
+    "두산에너빌리티": "034020.KS",
+    "삼성SDI": "006400.KS",
+    "한국가스공사": "036460.KS",
+    "한국전력": "015760.KS",
+    "LG화학": "051910.KS",
+    "POSCO홀딩스": "005490.KS",
     # ── 해외 종목 ──
     "Micron": "MU", "마이크론": "MU", "MU": "MU",
     "Applied Materials": "AMAT", "AMAT": "AMAT",
@@ -49,6 +56,7 @@ TICKER_MAP = {
     "Apple": "AAPL", "AAPL": "AAPL",
     "Microsoft": "MSFT", "MSFT": "MSFT",
     "META": "META",
+    "Google": "GOOGL", "Oracle": "ORCL", "ORCL": "ORCL",
     "Eli Lilly": "LLY", "일라이릴리": "LLY", "LLY": "LLY",
 }
 
