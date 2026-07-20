@@ -1,0 +1,72 @@
+{% extends "core/base.html" %}
+{% load humanize %}
+{% block title %}회원 관리 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title"><i class="fa-solid fa-users" style="color:var(--blue)"></i> 회원 관리</div>
+<div class="page-sub">전체 {{ members|length }}명 · 운영자만 볼 수 있는 페이지입니다</div>
+
+<div class="card" style="padding:8px 16px">
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>아이디</th>
+          <th>이메일</th>
+          <th>구분</th>
+          <th>가입일</th>
+          <th>최근 로그인</th>
+          <th class="num">보유 투자</th>
+          <th class="num">관심</th>
+          <th class="num">프리셋</th>
+          <th>상태</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in members %}
+        <tr {% if not m.is_active %}style="opacity:.5"{% endif %}>
+          <td style="font-weight:700">{{ m.username }}
+            {% if m.is_superuser %}<span class="badge badge-blue">운영자</span>{% endif %}
+          </td>
+          <td>{{ m.email|default:"-" }}</td>
+          <td>
+            {% if m.is_superuser %}<span class="badge badge-blue">운영자</span>
+            {% elif m.is_staff %}<span class="badge badge-green">가족</span>
+            {% else %}<span class="badge badge-gray">일반</span>{% endif %}
+          </td>
+          <td>{{ m.date_joined|date:"Y.n.j" }}</td>
+          <td>{% if m.last_login %}{{ m.last_login|date:"n.j H:i" }}{% else %}<span style="color:var(--text-3)">-</span>{% endif %}</td>
+          <td class="num">{{ m.inv_count }}건{% if m.inv_total %} <span style="color:var(--text-3);font-size:11px">({{ m.inv_total|intcomma }}원)</span>{% endif %}</td>
+          <td class="num">{{ m.watch_count }}</td>
+          <td class="num">{{ m.preset_count }}</td>
+          <td>
+            {% if m.is_active %}<span class="badge badge-green">활성</span>
+            {% else %}<span class="badge badge-red">비활성</span>{% endif %}
+          </td>
+          <td>
+            {% if not m.is_superuser %}
+            <div style="display:flex;gap:4px">
+              <form method="post" onsubmit="return confirm('{{ m.username }} 계정을 {% if m.is_active %}비활성화{% else %}활성화{% endif %}할까요?')">{% csrf_token %}
+                <input type="hidden" name="id" value="{{ m.id }}">
+                <input type="hidden" name="action" value="toggle_active">
+                <button class="btn btn-sm {% if m.is_active %}btn-danger{% endif %}">{% if m.is_active %}비활성화{% else %}활성화{% endif %}</button>
+              </form>
+              <form method="post" onsubmit="return confirm('{{ m.username }} 계정을 {% if m.is_staff %}일반회원으로{% else %}가족(staff)으로{% endif %} 바꿀까요?')">{% csrf_token %}
+                <input type="hidden" name="id" value="{{ m.id }}">
+                <input type="hidden" name="action" value="toggle_staff">
+                <button class="btn btn-sm">{% if m.is_staff %}일반으로{% else %}가족으로{% endif %}</button>
+              </form>
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:11px;color:var(--text-3);margin-top:10px">
+    비활성화된 계정은 로그인이 차단됩니다 (데이터는 보존). 계정 완전 삭제가 필요하면 /admin/ (Django 관리자)에서 하세요.
+  </p>
+</div>
+{% endblock %}

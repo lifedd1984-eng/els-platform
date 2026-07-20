@@ -13,6 +13,9 @@ from .models import ImportLog, Investment, Preset, Product, WatchItem
 # 가족(운영진) 전용 — 공유 데이터(관심·프리셋·업로드)는 staff 계정만
 family_required = user_passes_test(lambda u: u.is_active and u.is_staff, login_url="/accounts/login/")
 
+# 운영자(superuser) 전용 — 회원 관리
+admin_required = user_passes_test(lambda u: u.is_active and u.is_superuser, login_url="/accounts/login/")
+
 
 def _scope(qs, user):
     """프리셋/관심 소유 범위: 가족(staff)=공용(user=None)+본인, 일반회원=본인 것만."""
@@ -1178,4 +1181,39 @@ def upload_excel(request):
         "result": result,
         "recent": recent,
         "active_nav": "upload",
+    })
+
+
+# ── 회원 관리 (운영자 전용) ─────────────────────────
+@admin_required
+def member_admin(request):
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    if request.method == "POST":
+        target = get_object_or_404(User, pk=request.POST.get("id"))
+        action = request.POST.get("action")
+        if target.is_superuser:
+            messages.error(request, "운영자 계정은 변경할 수 없습니다.")
+        elif action == "toggle_active":
+            target.is_active = not target.is_active
+            target.save()
+            messages.success(request, f"{target.username} 계정을 {'활성화' if target.is_active else '비활성화'}했습니다.")
+        elif action == "toggle_staff":
+            target.is_staff = not target.is_staff
+            target.save()
+            messages.success(request, f"{target.username} 계정을 {'가족(staff)으로 지정' if target.is_staff else '일반회원으로 변경'}했습니다.")
+        return redirect("member_admin")
+
+    # 회원 수가 적어 파이썬 집계 (다중 조인 annotate의 Sum 부풀림 회피)
+    members = list(User.objects.order_by("-date_joined"))
+    for m in members:
+        held = m.investments.filter(status="보유중")
+        m.inv_count = held.count()
+        m.inv_total = sum(i.amount for i in held)
+        m.watch_count = m.watch_items.count()
+        m.preset_count = m.presets.count()
+    return render(request, "core/members.html", {
+        "members": members,
+        "active_nav": "members",
     })

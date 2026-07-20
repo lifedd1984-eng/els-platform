@@ -35,4 +35,5 @@ urlpatterns = [
     path('calendar/', views.redemption_calendar, name='calendar'),
     path('trend/', views.market_trend, name='trend'),
     path('upload/', views.upload_excel, name='upload'),
+    path('manage/members/', views.member_admin, name='member_admin'),
 ]
