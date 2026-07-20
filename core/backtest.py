@@ -166,6 +166,9 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate):
 
     loss_count = len(losses)
     early_count = sum(round_counts)
+    # 투자 후 1년(12개월) 이내에 상환되는 회차만 집계 — 헤드라인 지표용
+    early_1y = sum(round_counts[n] for n in range(n_rounds)
+                   if period_months * (n + 1) <= 12)
 
     return {
         "available": True,
@@ -179,6 +182,7 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate):
         "loss_count": loss_count,
         "loss_prob_pct": round(loss_count / samples * 100, 2),
         "early_redemp_pct": round(early_count / samples * 100, 2),
+        "early_1y_pct": round(early_1y / samples * 100, 2),
         "avg_loss_pct": round(sum(losses) / loss_count, 2) if losses else None,
         "low_confidence": samples < MIN_SAMPLES,
     }

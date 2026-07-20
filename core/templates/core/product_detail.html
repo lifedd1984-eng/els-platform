@@ -85,8 +85,8 @@
   {% if sim and sim.available %}
   <div class="stat-grid" style="margin-bottom:16px">
     <div class="stat-card">
-      <div class="stat-label">조기상환 확률</div>
-      <div class="stat-value" style="color:var(--green)">{{ sim.early_redemp_pct }}<small>%</small></div>
+      <div class="stat-label">1년내 상환 확률 <small style="color:var(--text-3)">(12개월 이내 회차)</small></div>
+      <div class="stat-value" style="color:var(--green)">{% if sim.early_1y_pct is not None %}{{ sim.early_1y_pct }}{% else %}{{ sim.early_redemp_pct }}{% endif %}<small>%</small></div>
     </div>
     <div class="stat-card">
       <div class="stat-label">만기 손실확률 <small style="color:var(--text-3)">(핵심)</small></div>
