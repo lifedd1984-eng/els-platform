@@ -200,6 +200,10 @@ def weekly(request):
     ]
 
     watched_ids = set(_scope(WatchItem.objects.all(), request.user).values_list("product_id", flat=True))
+    invested_ids = set()
+    if request.user.is_authenticated:
+        invested_ids = set(Investment.objects.filter(
+            user=request.user, status="보유중").values_list("product_id", flat=True))
     last_import = ImportLog.objects.first()
     freshness_days = None
     if last_import:
@@ -255,6 +259,7 @@ def weekly(request):
         "presets": _scope(Preset.objects.all(), request.user),
         "issuers": issuers,
         "watched_ids": watched_ids,
+        "invested_ids": invested_ids,
         "freshness_days": freshness_days,
         "filters": {
             "asset": f_asset, "ki_max": f_ki_max, "yield_min": f_yield_min,
@@ -475,7 +480,10 @@ def watchlist(request):
         return redirect(request.POST.get("next") or "watchlist")
 
     items = _scope(WatchItem.objects.select_related("product").all(), request.user)
+    invested_ids = set(Investment.objects.filter(
+        user=request.user, status="보유중").values_list("product_id", flat=True))
     return render(request, "core/watchlist.html", {
+        "invested_ids": invested_ids,
         "items": items, "active_nav": "watchlist",
     })
 
@@ -797,7 +805,7 @@ def watchlist_export(request):
     from django.http import HttpResponse
 
     cols = ["발행사", "상품번호", "기초자산", "수익률(%)", "KI", "1차", "막차",
-            "기간", "주기", "손실확률(%)", "유형", "청약마감", "메모"]
+            "기간", "주기", "손실확률(%)", "유형", "청약마감", "메모", "보유"]
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -805,6 +813,8 @@ def watchlist_export(request):
     ws.append(cols)
 
     items = _scope(WatchItem.objects.select_related("product").all(), request.user)
+    invested_ids = set(Investment.objects.filter(
+        user=request.user, status="보유중").values_list("product_id", flat=True))
     for item in items:
         p = item.product
         ws.append([
@@ -819,6 +829,7 @@ def watchlist_export(request):
             p.asset_type or (p.structure_label or ""),
             p.sub_end.strftime("%Y-%m-%d") if p.sub_end else "",
             item.memo or "",
+            "보유중" if p.id in invested_ids else "",
         ])
     for i, c in enumerate(cols, 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = max(10, len(c) + 4)

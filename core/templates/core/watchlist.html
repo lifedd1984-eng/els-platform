@@ -39,7 +39,7 @@
         <tr class="clickable" onclick="location.href='{% url 'product_detail' item.product.id %}'">
           <td style="font-weight:700">{{ item.product.issuer }}</td>
           <td>
-            {{ item.product.product_no }}
+            {{ item.product.product_no }}{% if item.product.id in invested_ids %} <span class="badge badge-green" title="내 포트폴리오에 보유 중인 상품입니다"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}
             {% if item.memo %}<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px"><i class="fa-regular fa-note-sticky"></i> {{ item.memo }}</div>{% endif %}
           </td>
           <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.product.assets_raw|asset_short }}</td>

@@ -116,7 +116,7 @@
         {% for p in products %}
         <tr class="clickable" onclick="location.href='{% url 'product_detail' p.id %}'">
           <td style="font-weight:700">{{ p.issuer }}</td>
-          <td>{{ p.product_no }}</td>
+          <td>{{ p.product_no }}{% if p.id in invested_ids %} <span class="badge badge-green" title="내 포트폴리오에 보유 중인 상품입니다"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}</td>
           <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.assets_raw|asset_short }}</td>
           <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ p.yield_rate|default:"-" }}%</td>
           <td class="num">
