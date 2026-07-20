@@ -276,6 +276,7 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
       <span>ELS <span style="color:var(--blue)">레이더</span></span>
     </a>
     <a href="{% url 'weekly' %}" class="nav-link {% if active_nav == 'weekly' %}active{% endif %}">주간 청약</a>
+    <a href="{% url 'search' %}" class="nav-link {% if active_nav == 'search' %}active{% endif %}" title="상품 검색"><i class="fa-solid fa-magnifying-glass"></i> 검색</a>
     {% if user.is_authenticated %}
     <a href="{% url 'presets' %}" class="nav-link {% if active_nav == 'presets' %}active{% endif %}">프리셋</a>
     <a href="{% url 'watchlist' %}" class="nav-link {% if active_nav == 'watchlist' %}active{% endif %}">관심</a>
@@ -283,7 +284,6 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
     <a href="{% url 'calendar' %}" class="nav-link {% if active_nav == 'calendar' %}active{% endif %}">상환 캘린더</a>
     {% endif %}
     <a href="{% url 'trend' %}" class="nav-link {% if active_nav == 'trend' %}active{% endif %}">트렌드</a>
-    <a href="{% url 'search' %}" class="nav-link {% if active_nav == 'search' %}active{% endif %}" title="상품 검색"><i class="fa-solid fa-magnifying-glass"></i> 검색</a>
     {% if user.is_staff %}
     <a href="{% url 'upload' %}" class="nav-link {% if active_nav == 'upload' %}active{% endif %}">업로드</a>
     {% endif %}
