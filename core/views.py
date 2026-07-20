@@ -473,14 +473,20 @@ def watchlist(request):
     if request.method == "POST":
         action = request.POST.get("action")
         product = get_object_or_404(Product, pk=request.POST.get("product_id"))
+        is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
         if action == "add":
             WatchItem.objects.get_or_create(
                 product=product,
                 user=None if request.user.is_staff else request.user)
-            messages.success(request, "관심 목록에 등록했습니다.")
+            if not is_ajax:
+                messages.success(request, "관심 목록에 등록했습니다.")
         elif action == "remove":
             _scope(WatchItem.objects.filter(product=product), request.user).delete()
-            messages.success(request, "관심 목록에서 해제했습니다.")
+            if not is_ajax:
+                messages.success(request, "관심 목록에서 해제했습니다.")
+        if is_ajax:
+            from django.http import JsonResponse
+            return JsonResponse({"watched": action == "add"})
         return redirect(request.POST.get("next") or "watchlist")
 
     items = _scope(WatchItem.objects.select_related("product").all(), request.user)

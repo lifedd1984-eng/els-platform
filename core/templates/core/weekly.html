@@ -153,7 +153,7 @@
           </td>
           <td onclick="event.stopPropagation()">
             {% if user.is_authenticated %}
-            <form method="post" action="{% url 'watchlist' %}">{% csrf_token %}
+            <form method="post" action="{% url 'watchlist' %}" class="watch-form">{% csrf_token %}
               <input type="hidden" name="product_id" value="{{ p.id }}">
               <input type="hidden" name="next" value="{{ request.get_full_path }}">
               {% if p.id in watched_ids %}
@@ -177,4 +177,30 @@
   이번 주 청약 마감 상품이 없습니다
 </div>
 {% endif %}
+<script>
+// 별표 토글을 새로고침 없이 그 자리에서 처리
+document.querySelectorAll('form.watch-form').forEach(function(f) {
+  f.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    try {
+      const r = await fetch(f.action, {
+        method: 'POST', body: new FormData(f),
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!r.ok) { f.submit(); return; }
+      const j = await r.json();
+      const btn = f.querySelector('button');
+      const ic = btn.querySelector('i');
+      const act = f.querySelector('input[name=action]');
+      if (j.watched) {
+        act.value = 'remove'; btn.title = '관심 해제';
+        ic.className = 'fa-solid fa-star'; ic.style.color = 'var(--orange)';
+      } else {
+        act.value = 'add'; btn.title = '관심 등록';
+        ic.className = 'fa-regular fa-star'; ic.style.color = '';
+      }
+    } catch (err) { f.submit(); }
+  });
+});
+</script>
 {% endblock %}
