@@ -34,7 +34,7 @@
       <tbody>
         {% for item in items %}
         <tr class="clickable" onclick="location.href='{% url 'product_detail' item.product.id %}'">
-          <td style="font-weight:700">{{ item.product.issuer }}</td>
+          <td style="font-weight:700;white-space:nowrap">{{ item.product.issuer }}</td>
           <td>
             {{ item.product.product_no }}{% if item.product.id in invested_ids %} <span class="badge badge-green" title="내 포트폴리오에 보유 중인 상품입니다"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}
             {% if item.memo %}<div style="font-size:11px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px"><i class="fa-regular fa-note-sticky"></i> {{ item.memo }}</div>{% endif %}
@@ -48,8 +48,8 @@
           </td>
           <td class="num">{{ item.product.barrier_first|default:"-" }}</td>
           <td class="num">{{ item.product.barrier_last|default:"-" }}</td>
-          <td class="num">{{ item.product.term_display }}</td>
-          <td class="num">{{ item.product.period_months|default:"-" }}{% if item.product.period_months %}개월{% endif %}</td>
+          <td class="num" style="white-space:nowrap">{{ item.product.term_display }}</td>
+          <td class="num" style="white-space:nowrap">{{ item.product.period_months|default:"-" }}{% if item.product.period_months %}개월{% endif %}</td>
           <td class="num">
             {% if item.product.loss_prob is not None %}
               <span style="font-weight:700;color:{% if item.product.loss_prob > 5 %}var(--red){% elif item.product.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ item.product.loss_prob }}%</span>
@@ -72,7 +72,7 @@
           <td class="num" style="white-space:nowrap;color:var(--text-2)" title="고령(65세+)·부적합 투자자는 2영업일 숙려기간 때문에 이 날까지 청약해야 합니다 (일반 마감 -2영업일, 공휴일 미반영)">{% if item.product.confirm_date %}{{ item.product.confirm_date|date:"n/j" }}{% else %}-{% endif %}</td>
           <td onclick="event.stopPropagation()">
             <div style="display:flex;gap:4px">
-              <a href="{% url 'portfolio' %}?product={{ item.product.id }}" class="btn btn-primary btn-sm">투자 등록</a>
+              <a href="{% url 'portfolio' %}?product={{ item.product.id }}" class="btn btn-primary btn-sm" style="white-space:nowrap" title="투자 등록">등록</a>
               <form method="post">{% csrf_token %}
                 <input type="hidden" name="action" value="remove">
                 <input type="hidden" name="product_id" value="{{ item.product.id }}">
