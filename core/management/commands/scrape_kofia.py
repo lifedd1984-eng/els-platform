@@ -50,14 +50,14 @@ class Command(BaseCommand):
         except kofia_scraper.KofiaFetchError as e:
             self.stderr.write(f"[실패] {e}")
             if should_notify:
-                telegram.send_message(f"[ELS 플랫폼] KOFIA 자동수집 실패\n{e}")
+                telegram.send_message(f"[ELS 레이더] KOFIA 자동수집 실패\n{e}")
             return
 
         if not rows:
             self.stdout.write("수집된 데이터 없음 (KOFIA 응답 구조 변경 가능성 — 확인 필요)")
             if should_notify:
                 telegram.send_message(
-                    "[ELS 플랫폼] KOFIA 자동수집: 0건 수집됨\n"
+                    "[ELS 레이더] KOFIA 자동수집: 0건 수집됨\n"
                     "사이트 구조가 바뀌었을 수 있습니다. 확인이 필요합니다."
                 )
             return
@@ -119,7 +119,7 @@ class Command(BaseCommand):
         if should_notify:
             from django.conf import settings
             telegram.send_message(
-                f"[ELS 플랫폼] KOFIA 자동수집 완료\n"
+                f"[ELS 레이더] KOFIA 자동수집 완료\n"
                 f"전체 {len(rows)}건 / 신규 {n_new}건\n"
                 f"대시보드: {settings.SITE_URL}"
             )

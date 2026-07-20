@@ -762,7 +762,7 @@ def portfolio_template(request):
 
     guide = wb.create_sheet("작성안내")
     for row in [
-        ["ELS 플랫폼 — 투자내역 일괄등록 양식"],
+        ["ELS 레이더 — 투자내역 일괄등록 양식"],
         [""],
         ["1. '투자내역' 시트에 한 행씩 입력하세요."],
         ["2. 발행사 + 상품번호로 수집된 상품과 자동 매칭합니다."],

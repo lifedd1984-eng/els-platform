@@ -84,7 +84,7 @@ class Command(BaseCommand):
 
         if new_files and should_notify:
             telegram.send_message(
-                f"[ELS 플랫폼] 임포트 완료\n"
+                f"[ELS 레이더] 임포트 완료\n"
                 f"파일 {len(new_files)}개 / 신규 상품 {total_new_products}건\n"
                 f"대시보드: {settings.SITE_URL}"
             )
