@@ -476,3 +476,97 @@ class RedemptionVerdict(models.Model):
             )
         ]
         ordering = ["-eval_date"]
+
+
+class HistoricalIssue(models.Model):
+    """SEIBro(한국예탁결제원 증권정보포털) 발행종목조회 이력 — 자체 백테스팅 연구용.
+
+    현재 서비스(Product)와는 별개 테이블. 배리어/쿠폰 등 상세 지급조건은 없고
+    발행사·기초자산·발행/만기일·발행금액 수준의 요약 정보만 담는다.
+    """
+    isin = models.CharField("ISIN", max_length=20, unique=True, db_index=True)
+    shotn_isin = models.CharField("단축코드", max_length=15, blank=True)
+    name = models.CharField("종목명", max_length=100, blank=True)
+    issuer = models.CharField("발행사", max_length=50, db_index=True)
+    product_type = models.CharField("상품유형", max_length=5)  # ELS/ELB
+    recu_whcd = models.CharField("발행구분", max_length=10, blank=True)  # 공모/사모
+    currency_name = models.CharField("통화", max_length=10, blank=True)
+
+    issue_date = models.DateField("발행일", null=True, blank=True, db_index=True)
+    expiry_date = models.DateField("만기일", null=True, blank=True)
+
+    basset_sort = models.CharField("기초자산유형", max_length=20, blank=True)
+    basset_count = models.IntegerField("기초자산개수", null=True, blank=True)
+    assets = models.JSONField("기초자산 목록", default=list, blank=True)  # [{name, isin, std_price}]
+
+    issue_amount = models.BigIntegerField("발행금액", null=True, blank=True)
+
+    collected_at = models.DateTimeField("수집일시", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-issue_date"]
+
+    def __str__(self):
+        return f"{self.issuer} {self.name} ({self.isin})"
+
+
+class HistoricalRedemption(models.Model):
+    """SEIBro 상환종목조회 이력 — 실제 조기/만기상환 결과(연구용, HistoricalIssue와 별개).
+
+    수익률/손실금액 필드는 SEIBro 대량조회 API에 없음(상환유형·시점만 제공).
+    """
+    isin = models.CharField("ISIN", max_length=20, db_index=True)
+    name = models.CharField("종목명", max_length=100, blank=True)
+    issuer = models.CharField("발행사", max_length=50, db_index=True)
+    product_type = models.CharField("상품유형", max_length=5, blank=True)
+    recu_whcd = models.CharField("발행구분", max_length=10, blank=True)
+
+    issue_date = models.DateField("발행일", null=True, blank=True)
+    expiry_date = models.DateField("만기일", null=True, blank=True)
+    redemption_date = models.DateField("상환일", null=True, blank=True, db_index=True)
+    exercise_type = models.CharField("상환유형", max_length=10, blank=True)  # 조기상환/만기상환
+
+    planned_term_months = models.IntegerField("예정만기(개월)", null=True, blank=True)
+    held_months = models.IntegerField("실제보유(개월)", null=True, blank=True)
+
+    asset_type_name = models.CharField("기초자산유형", max_length=20, blank=True)
+    basset_count = models.IntegerField("기초자산개수", null=True, blank=True)
+    assets = models.JSONField("기초자산명 목록", default=list, blank=True)
+
+    collected_at = models.DateTimeField("수집일시", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-redemption_date"]
+        constraints = [
+            models.UniqueConstraint(fields=["isin", "redemption_date"], name="uniq_redemption_isin_date")
+        ]
+
+    def __str__(self):
+        return f"{self.issuer} {self.name} ({self.isin}) {self.exercise_type}"
+
+
+class HistoricalYieldStat(models.Model):
+    """SEIBro '주요기초자산별상환수익률'(공식 집계) — 연도×기초자산조합별 실현수익률·손실 통계.
+
+    개별 종목이 아니라 SEIBro가 직접 집계한 값이라 실제 시장 실현수익률로 신뢰할 수 있다.
+    """
+    year = models.IntegerField("연도", db_index=True)
+    basset_sort = models.CharField("기초자산유형", max_length=20, blank=True)
+    assets = models.JSONField("기초자산 조합", default=list, blank=True)  # 이름 리스트
+
+    count = models.IntegerField("상환건수(CNT_HAP)", null=True, blank=True)
+    redemption_amount = models.BigIntegerField("상환금액합계(REDAMT_VAL_HAP)", null=True, blank=True)
+    margin_rate = models.FloatField("실현수익률(%, RED_MARGIN_RATE)", null=True, blank=True)
+    planned_months = models.IntegerField("평균예정만기(개월)", null=True, blank=True)
+    held_months = models.IntegerField("평균실제보유(개월)", null=True, blank=True)
+
+    minus_count = models.IntegerField("손실건수(MINUS_CNT)", null=True, blank=True)
+    minus_amount = models.BigIntegerField("손실금액(MINUS_RED_AMT)", null=True, blank=True)
+
+    collected_at = models.DateTimeField("수집일시", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-year", "-count"]
+
+    def __str__(self):
+        return f"{self.year} {'/'.join(self.assets[:2])} {self.margin_rate}%"
