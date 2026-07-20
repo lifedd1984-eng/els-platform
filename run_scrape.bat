@@ -28,4 +28,8 @@ python "%~dp0manage.py" send_digest >> "%LOGFILE%" 2>&1
 set "EC_DIGEST=%ERRORLEVEL%"
 echo [%date% %time%] send_digest end exit=%EC_DIGEST% >> "%LOGFILE%"
 
-python "%~dp0manage.py" notify_batch --results "scrape=%EC_SCRAPE%,prices=%EC_PRICES%,redeem=%EC_REDEEM%,simulate=%EC_SIM%,digest=%EC_DIGEST%" >> "%LOGFILE%" 2>&1
+python "%~dp0manage.py" backup_db >> "%LOGFILE%" 2>&1
+set "EC_BACKUP=%ERRORLEVEL%"
+echo [%date% %time%] backup_db end exit=%EC_BACKUP% >> "%LOGFILE%"
+
+python "%~dp0manage.py" notify_batch --results "scrape=%EC_SCRAPE%,prices=%EC_PRICES%,redeem=%EC_REDEEM%,simulate=%EC_SIM%,digest=%EC_DIGEST%,backup=%EC_BACKUP%" >> "%LOGFILE%" 2>&1

@@ -17,6 +17,7 @@ STEP_LABELS = {
     "redeem": "상환판정",
     "simulate": "손실확률",
     "digest": "주간요약",
+    "backup": "DB백업",
 }
 
 
