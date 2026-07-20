@@ -121,8 +121,7 @@ class Command(BaseCommand):
             for name, cnt in sorted(unmapped.items(), key=lambda x: -x[1]):
                 lines.append(f"- {name} ({cnt}개 상품)")
             lines.append("core/market.py TICKER_MAP에 추가 필요")
-            telegram.send_message("
-".join(lines))
+            telegram.send_message("\n".join(lines))
             self.stdout.write(f"[티커누락 알림] {len(unmapped)}종 발송")
 
     def _save_ok(self, p, result):
