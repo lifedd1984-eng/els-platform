@@ -10,5 +10,5 @@ if %ERRORLEVEL% NEQ 0 (
 
 tasklist | findstr /i "cloudflared" >nul
 if %ERRORLEVEL% NEQ 0 (
-  start "ELS_TUNNEL" /min cmd /c ""C:\Program Files (x86)\cloudflared\cloudflared.exe" tunnel run els >> logs\tunnel.log 2>&1"
+  start "ELS_TUNNEL" /min "C:\Program Files (x86)\cloudflared\cloudflared.exe" --logfile logs\tunnel.log tunnel run els
 )
