@@ -36,3 +36,4 @@ build/
 dist/
 *.exe
 logs/
+seibro_raw*/
