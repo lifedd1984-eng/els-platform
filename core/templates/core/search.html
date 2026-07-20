@@ -1,0 +1,74 @@
+{% extends "core/base.html" %}
+{% load els_extras %}
+{% block title %}검색{% if q %} — {{ q }}{% endif %} — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title"><i class="fa-solid fa-magnifying-glass" style="color:var(--blue)"></i> 상품 검색</div>
+<div class="page-sub">발행사·상품번호·기초자산·상품명으로 전체 이력을 검색합니다</div>
+
+<div class="card" style="padding:14px 16px">
+  <form method="get" class="form-row">
+    <input type="search" name="q" value="{{ q }}" placeholder="예: 삼성전자, 키움 1806, Tesla"
+           autofocus style="flex:1;min-width:200px;font-size:14px;padding:10px 12px">
+    <button class="btn btn-primary" type="submit"><i class="fa-solid fa-magnifying-glass"></i> 검색</button>
+  </form>
+</div>
+
+{% if q %}
+  {% if results %}
+  <div class="card" style="padding:8px 16px">
+    <div class="card-title" style="padding:10px 4px 4px">"{{ q }}" 검색결과 {{ results|length }}건{% if results|length == 200 %} <small style="color:var(--text-3)">(최근 200건만 표시)</small>{% endif %}</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>발행사</th><th>상품번호</th><th>기초자산</th>
+            <th class="num">수익률</th><th class="num">KI</th>
+            <th class="num">1차</th><th class="num">막차</th>
+            <th class="num">기간</th><th class="num">손실확률</th>
+            <th>유형</th><th class="num">마감</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in results %}
+          <tr class="clickable" onclick="location.href='{% url 'product_detail' p.id %}'">
+            <td style="font-weight:700">{{ p.issuer }}</td>
+            <td>{{ p.product_no }}{% if p.id in invested_ids %} <span class="badge badge-green" title="내 포트폴리오에 보유 중"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}</td>
+            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.assets_raw|asset_short }}</td>
+            <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ p.yield_rate|default:"-" }}%</td>
+            <td class="num">
+              {% if p.is_no_ki %}<span class="badge badge-green">NoKI</span>
+              {% elif p.ki %}<span class="badge badge-gray">{{ p.ki }}</span>
+              {% else %}-{% endif %}
+            </td>
+            <td class="num">{{ p.barrier_first|default:"-" }}</td>
+            <td class="num">{{ p.barrier_last|default:"-" }}</td>
+            <td class="num">{{ p.term_display }}</td>
+            <td class="num">
+              {% if p.loss_prob is not None %}
+                <span style="font-weight:700;color:{% if p.loss_prob > 5 %}var(--red){% elif p.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ p.loss_prob }}%</span>
+              {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
+            </td>
+            <td>
+              {% if p.asset_type %}<span class="badge {% if p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ p.asset_type }}</span>{% endif %}
+              {% if p.structure_label %}<span class="badge badge-gray">{{ p.structure_label }}</span>{% endif %}
+            </td>
+            <td class="num" style="white-space:nowrap">
+              {{ p.sub_end|date:"y.n.j"|default:"-" }}
+              {% if p.d_day is not None and p.d_day >= 0 %}<span class="dday-normal">D-{{ p.d_day }}</span>
+              {% elif p.sub_end %}<span class="badge badge-gray">마감</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card empty">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    "{{ q }}" 검색결과가 없습니다
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}

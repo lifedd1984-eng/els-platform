@@ -1218,3 +1218,59 @@ def member_admin(request):
         "members": members,
         "active_nav": "members",
     })
+
+
+# ── PWA (홈화면 앱 설치) ─────────────────────────
+def pwa_manifest(request):
+    from django.http import JsonResponse
+    return JsonResponse({
+        "name": "ELS 레이더",
+        "short_name": "ELS 레이더",
+        "description": "매주 쏟아지는 ELS, 레이더가 대신 찾아드립니다",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#F2F4F6",
+        "theme_color": "#3182F6",
+        "icons": [
+            {"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+            {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png",
+             "purpose": "any maskable"},
+        ],
+    })
+
+
+def pwa_icon(request, size):
+    from pathlib import Path
+
+    from django.conf import settings as _s
+    from django.http import FileResponse, Http404
+    if size not in ("180", "192", "512"):
+        raise Http404
+    path = Path(_s.BASE_DIR) / "core" / "assets" / f"icon-{size}.png"
+    if not path.exists():
+        raise Http404
+    resp = FileResponse(open(path, "rb"), content_type="image/png")
+    resp["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
+# ── 상품 검색 (공개) ─────────────────────────────
+def product_search(request):
+    from django.db.models import Q
+    q = request.GET.get("q", "").strip()
+    results = []
+    if q:
+        results = list(
+            Product.objects.filter(
+                Q(product_no__icontains=q) | Q(issuer__icontains=q)
+                | Q(assets_raw__icontains=q) | Q(name__icontains=q)
+            ).order_by("-sub_end")[:200]
+        )
+    invested_ids = set()
+    if request.user.is_authenticated:
+        invested_ids = set(Investment.objects.filter(
+            user=request.user, status="보유중").values_list("product_id", flat=True))
+    return render(request, "core/search.html", {
+        "q": q, "results": results, "invested_ids": invested_ids,
+        "active_nav": "search",
+    })
