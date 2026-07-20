@@ -45,8 +45,18 @@ button:hover { background:#1B64DA; }
     <input type="text" name="username" autofocus autocomplete="username">
     <label>비밀번호</label>
     <input type="password" name="password" autocomplete="current-password">
+    <label style="display:flex;align-items:center;gap:7px;margin-bottom:16px;cursor:pointer;font-size:13px;color:#4E5968">
+      <input type="checkbox" name="remember" style="width:auto;margin:0" checked> 로그인 유지 (30일)
+    </label>
     <button type="submit">로그인</button>
   </form>
+  <div style="display:flex;justify-content:center;gap:14px;margin-top:18px;font-size:13px">
+    <a href="/accounts/find-id/" style="color:#8B95A1;text-decoration:none">아이디 찾기</a>
+    <span style="color:#E5E8EB">|</span>
+    <a href="/accounts/password-reset/" style="color:#8B95A1;text-decoration:none">비밀번호 찾기</a>
+    <span style="color:#E5E8EB">|</span>
+    <a href="/accounts/signup/" style="color:#3182F6;font-weight:700;text-decoration:none">회원가입</a>
+  </div>
 </div>
 </body>
 </html>

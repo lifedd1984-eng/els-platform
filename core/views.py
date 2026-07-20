@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import ImportLog, Investment, Preset, Product, WatchItem
@@ -23,20 +24,64 @@ def _scope(qs, user):
     return qs.filter(user=user)
 
 
+from django import forms as _forms
+
+
+class SignUpForm(UserCreationForm):
+    """가입 폼 — 이메일 필수 (아이디/비밀번호 찾기에 사용)."""
+    email = _forms.EmailField(required=True)
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data["email"]
+        if commit:
+            user.save()
+        return user
+
+
+class RememberLoginView(LoginView):
+    """로그인 유지 체크 시 30일, 미체크 시 브라우저 종료로 세션 만료."""
+    template_name = "core/login.html"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        if self.request.POST.get("remember"):
+            self.request.session.set_expiry(60 * 60 * 24 * 30)  # 30일
+        else:
+            self.request.session.set_expiry(0)  # 브라우저 닫으면 로그아웃
+        return response
+
+
 def signup(request):
     """회원가입 — 일반 회원은 공개 화면 + 본인 포트폴리오만 사용."""
     if request.user.is_authenticated:
         return redirect("weekly")
     if request.method == "POST":
-        form = UserCreationForm(request.POST)
+        form = SignUpForm(request.POST)
         if form.is_valid():
             user = form.save()
             auth_login(request, user)
             messages.success(request, "가입을 환영합니다! 포트폴리오에서 투자를 등록해보세요.")
             return redirect("weekly")
     else:
-        form = UserCreationForm()
+        form = SignUpForm()
     return render(request, "core/signup.html", {"form": form})
+
+
+def find_id(request):
+    """아이디 찾기 — 가입 이메일 입력 시 마스킹된 아이디 표시."""
+    from django.contrib.auth import get_user_model
+    found = None
+    searched = False
+    if request.method == "POST":
+        searched = True
+        email = request.POST.get("email", "").strip()
+        if email:
+            names = list(get_user_model().objects.filter(email__iexact=email)
+                         .values_list("username", flat=True))
+            found = [n[:2] + "*" * max(len(n) - 4, 1) + n[-2:] if len(n) > 4
+                     else n[0] + "*" * (len(n) - 1) for n in names]
+    return render(request, "core/find_id.html", {"found": found, "searched": searched})
 
 
 def _week_range(offset: int = 0):

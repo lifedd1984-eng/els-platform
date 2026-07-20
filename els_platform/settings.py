@@ -165,5 +165,19 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 # 알림 메시지에 넣을 사이트 주소 (배포 시 실제 도메인으로)
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 
+# ── 이메일 (비밀번호 재설정용) ──
+# .env에 EMAIL_HOST_USER / EMAIL_HOST_PASSWORD(구글 앱 비밀번호) 설정 시 실제 발송.
+# 미설정이면 콘솔 출력(개발용)으로 폴백.
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+if EMAIL_HOST_USER and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_HOST = "smtp.gmail.com"
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+else:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
 # 업로드 엑셀 임시 저장 폴더
 UPLOAD_DIR = BASE_DIR / "uploads"
