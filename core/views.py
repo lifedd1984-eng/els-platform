@@ -13,6 +13,16 @@ from .models import ImportLog, Investment, Preset, Product, WatchItem
 family_required = user_passes_test(lambda u: u.is_active and u.is_staff, login_url="/accounts/login/")
 
 
+def _scope(qs, user):
+    """프리셋/관심 소유 범위: 가족(staff)=공용(user=None)+본인, 일반회원=본인 것만."""
+    from django.db.models import Q
+    if not user.is_authenticated:
+        return qs.none()
+    if user.is_staff:
+        return qs.filter(Q(user__isnull=True) | Q(user=user))
+    return qs.filter(user=user)
+
+
 def signup(request):
     """회원가입 — 일반 회원은 공개 화면 + 본인 포트폴리오만 사용."""
     if request.user.is_authenticated:
@@ -144,7 +154,7 @@ def weekly(request):
         for k, lbl, num in col_defs
     ]
 
-    watched_ids = set(WatchItem.objects.values_list("product_id", flat=True))
+    watched_ids = set(_scope(WatchItem.objects.all(), request.user).values_list("product_id", flat=True))
     last_import = ImportLog.objects.first()
     freshness_days = None
     if last_import:
@@ -197,7 +207,7 @@ def weekly(request):
         "columns": columns,
         "monday": monday, "sunday": sunday, "offset": offset,
         "total": len(products),
-        "presets": Preset.objects.all(),
+        "presets": _scope(Preset.objects.all(), request.user),
         "issuers": issuers,
         "watched_ids": watched_ids,
         "freshness_days": freshness_days,
@@ -214,7 +224,7 @@ def weekly(request):
 # ── 상품 상세 ─────────────────────────────────────
 def product_detail(request, pk):
     product = get_object_or_404(Product, pk=pk)
-    is_watched = WatchItem.objects.filter(product=product).exists()
+    is_watched = _scope(WatchItem.objects.filter(product=product), request.user).exists()
 
     # 배리어 계단 SVG용 데이터
     barriers = product.barriers_raw or []
@@ -354,12 +364,12 @@ def product_detail(request, pk):
 
 
 # ── 프리셋 관리 ───────────────────────────────────
-@family_required
+@login_required
 def presets(request):
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "delete":
-            Preset.objects.filter(id=request.POST.get("id")).delete()
+            _scope(Preset.objects.filter(id=request.POST.get("id")), request.user).delete()
             messages.success(request, "프리셋을 삭제했습니다.")
         else:  # create / update
             pid = request.POST.get("id")
@@ -376,9 +386,12 @@ def presets(request):
                 notify=request.POST.get("notify") == "on",
             )
             if pid:
-                Preset.objects.filter(id=pid).update(**data)
+                _scope(Preset.objects.filter(id=pid), request.user).update(**data)
                 messages.success(request, "프리셋을 수정했습니다.")
             else:
+                if not request.user.is_staff:
+                    data["user"] = request.user
+                    data["notify"] = False  # 텔레그램은 가족 채널 전용
                 Preset.objects.create(**data)
                 messages.success(request, "프리셋을 추가했습니다.")
         return redirect("presets")
@@ -386,7 +399,7 @@ def presets(request):
     today = date.today()
     active_products = Product.objects.filter(sub_end__gte=today)
     preset_list = []
-    for p in Preset.objects.all():
+    for p in _scope(Preset.objects.all(), request.user):
         preset_list.append({"obj": p, "match_count": p.match_queryset(active_products).count()})
 
     # 발행사 후보 (전체 상품 기준 — 최근 60일)
@@ -401,20 +414,22 @@ def presets(request):
 
 
 # ── 관심 목록 ─────────────────────────────────────
-@family_required
+@login_required
 def watchlist(request):
     if request.method == "POST":
         action = request.POST.get("action")
         product = get_object_or_404(Product, pk=request.POST.get("product_id"))
         if action == "add":
-            WatchItem.objects.get_or_create(product=product)
+            WatchItem.objects.get_or_create(
+                product=product,
+                user=None if request.user.is_staff else request.user)
             messages.success(request, "관심 목록에 등록했습니다.")
         elif action == "remove":
-            WatchItem.objects.filter(product=product).delete()
+            _scope(WatchItem.objects.filter(product=product), request.user).delete()
             messages.success(request, "관심 목록에서 해제했습니다.")
         return redirect(request.POST.get("next") or "watchlist")
 
-    items = WatchItem.objects.select_related("product").all()
+    items = _scope(WatchItem.objects.select_related("product").all(), request.user)
     return render(request, "core/watchlist.html", {
         "items": items, "active_nav": "watchlist",
     })
@@ -501,7 +516,7 @@ def portfolio(request):
                 broker_account=request.POST.get("broker_account", ""),
                 memo=request.POST.get("memo", ""),
             )
-            WatchItem.objects.filter(product=product).delete()
+            _scope(WatchItem.objects.filter(product=product), request.user).delete()
             messages.success(request, "투자를 등록했습니다.")
         elif action == "redeem":
             inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)

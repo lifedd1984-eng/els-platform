@@ -148,7 +148,7 @@
             {% endif %}
           </td>
           <td onclick="event.stopPropagation()">
-            {% if user.is_staff %}
+            {% if user.is_authenticated %}
             <form method="post" action="{% url 'watchlist' %}">{% csrf_token %}
               <input type="hidden" name="product_id" value="{{ p.id }}">
               <input type="hidden" name="next" value="{{ request.get_full_path }}">

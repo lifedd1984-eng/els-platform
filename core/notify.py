@@ -13,7 +13,7 @@ from core.models import Investment, NotifiedMatch, Preset, Product, RedemptionAl
 def notify_preset_matches(stdout=None):
     """신규 프리셋 매칭 상품 알림. NotifiedMatch로 중복 발송 방지."""
     today = date.today()
-    for preset in Preset.objects.filter(notify=True):
+    for preset in Preset.objects.filter(notify=True, user__isnull=True):  # 가족 공용만 (개인 프리셋은 텔레그램 미발송)
         matches = preset.match_queryset(Product.objects.filter(sub_end__gte=today))
         already = set(
             NotifiedMatch.objects.filter(preset=preset).values_list("product_id", flat=True)

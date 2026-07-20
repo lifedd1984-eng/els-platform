@@ -159,10 +159,12 @@ class Product(models.Model):
 
 
 class Preset(models.Model):
-    """조건 프리셋 — 기본 3종 시드, 전부 수정/삭제 가능."""
+    """조건 프리셋 — 계정별 소유(7/20 분리). user null=과거 공용(가족)."""
     ASSET_CHOICES = [("전체", "전체"), ("지수형", "지수형"), ("종목형", "종목형")]
     CURRENCY_CHOICES = [("전체", "전체"), ("KRW", "KRW"), ("USD", "USD")]
 
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, null=True, blank=True,
+                             related_name="presets")
     name = models.CharField("프리셋명", max_length=50)
     is_default = models.BooleanField("기본 프리셋", default=False)
 
@@ -218,13 +220,18 @@ class Preset(models.Model):
 
 
 class WatchItem(models.Model):
-    """관심 목록 — 투자 전 후보."""
-    product = models.OneToOneField(Product, on_delete=models.CASCADE, related_name="watch")
+    """관심 목록 — 계정별 소유(7/20 분리)."""
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, null=True, blank=True,
+                             related_name="watch_items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="watch")
     memo = models.CharField("메모", max_length=200, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["user", "product"], name="uniq_watch_user_product")
+        ]
 
 
 class Investment(models.Model):
