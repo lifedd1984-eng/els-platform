@@ -158,10 +158,11 @@ def weekly(request):
         "last": "barrier_last", "period": "period_months", "type": "asset_type",
         "sub_end": "sub_end", "loss": "loss_prob",
     }
-    sort_key = request.GET.get("sort", "sub_end")
+    # 기본 정렬: 수익률 내림차순 (정렬 파라미터 없을 때)
+    sort_key = request.GET.get("sort", "yield")
     if sort_key != "term" and sort_key not in SORT_FIELDS:
-        sort_key = "sub_end"
-    sort_dir = request.GET.get("dir", "asc")
+        sort_key = "yield"
+    sort_dir = request.GET.get("dir", "desc" if "sort" not in request.GET else "asc")
     if sort_key == "term":
         # term_months는 계산 property(DB 컬럼 아님) → Python 정렬. None은 항상 뒤로.
         # 정렬 방향과 무관하게 None이 끝에 오도록 sentinel 사용.
