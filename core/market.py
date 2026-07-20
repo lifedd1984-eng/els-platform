@@ -51,9 +51,25 @@ TICKER_MAP = {
 }
 
 
+# 쉼표 분리 시 회사명 접미사("Advanced Micro Devices, Inc.")를 자산으로 오인하지 않게 재결합
+_CORP_SUFFIXES = {"inc", "inc.", "ltd", "ltd.", "co", "co.", "corp", "corp.",
+                  "llc", "plc", "n.v.", "s.a.", "class a", "class b"}
+
+
 def split_assets(assets_raw: str):
-    """'KOSPI200 , SK하이닉스' → ['KOSPI200', 'SK하이닉스']."""
-    return [a.strip() for a in re.split(r"[,/]+", assets_raw or "") if a.strip()]
+    """'KOSPI200 , SK하이닉스' → ['KOSPI200', 'SK하이닉스'].
+
+    'Advanced Micro Devices, Inc.'처럼 회사명 안의 쉼표는 구분자가 아니므로
+    접미사 조각은 앞 자산에 다시 붙인다.
+    """
+    parts = [a.strip() for a in re.split(r"[,/]+", assets_raw or "") if a.strip()]
+    merged = []
+    for part in parts:
+        if merged and part.lower().rstrip(")").split("(")[0].strip() in _CORP_SUFFIXES:
+            merged[-1] = f"{merged[-1]}, {part}"
+        else:
+            merged.append(part)
+    return merged
 
 
 # 표시 전용 축약 매핑 (화면에만 사용 — 원본 assets_raw 저장값은 절대 변경 금지).
