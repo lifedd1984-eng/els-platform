@@ -35,3 +35,4 @@ Thumbs.db
 build/
 dist/
 *.exe
+logs/

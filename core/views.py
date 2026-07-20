@@ -2,10 +2,31 @@ import calendar as pycalendar
 from datetime import date, timedelta
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth import login as auth_login
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.forms import UserCreationForm
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .models import ImportLog, Investment, Preset, Product, WatchItem
+
+# 가족(운영진) 전용 — 공유 데이터(관심·프리셋·업로드)는 staff 계정만
+family_required = user_passes_test(lambda u: u.is_active and u.is_staff, login_url="/accounts/login/")
+
+
+def signup(request):
+    """회원가입 — 일반 회원은 공개 화면 + 본인 포트폴리오만 사용."""
+    if request.user.is_authenticated:
+        return redirect("weekly")
+    if request.method == "POST":
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            auth_login(request, user)
+            messages.success(request, "가입을 환영합니다! 포트폴리오에서 투자를 등록해보세요.")
+            return redirect("weekly")
+    else:
+        form = UserCreationForm()
+    return render(request, "core/signup.html", {"form": form})
 
 
 def _week_range(offset: int = 0):
@@ -20,7 +41,6 @@ WEEKLY_FILTER_PARAMS = ["asset", "ki_max", "yield_min", "currency",
                         "no_ki", "issuer", "preset", "sort", "dir"]
 
 
-@login_required
 def weekly(request):
     # ── 필터 세션 저장/복원 ──
     if "reset" in request.GET:
@@ -157,12 +177,16 @@ def weekly(request):
             barriers_raw__isnull=False, yield_rate__isnull=False,
             loss_prob__isnull=False,
         )
+        # 중복도는 가족(staff) 계정에만 표시 — 외부인에게 보유 성향 노출 방지
+        show_overlap = request.user.is_authenticated and request.user.is_staff
         scored = []
         for p in pool:
             score = round(p.yield_rate * (1 - p.loss_prob / 100), 2)
-            pkeys = _asset_keys(p.assets_raw)
-            overlap = sum(amt for amt, keys in inv_assets if keys & pkeys)
-            overlap_pct = round(overlap / total_held * 100) if total_held else 0
+            overlap_pct = None
+            if show_overlap:
+                pkeys = _asset_keys(p.assets_raw)
+                overlap = sum(amt for amt, keys in inv_assets if keys & pkeys)
+                overlap_pct = round(overlap / total_held * 100) if total_held else 0
             scored.append({"p": p, "score": score, "overlap_pct": overlap_pct})
         scored.sort(key=lambda r: -r["score"])
         recommendations = scored[:5]
@@ -188,7 +212,6 @@ def weekly(request):
 
 
 # ── 상품 상세 ─────────────────────────────────────
-@login_required
 def product_detail(request, pk):
     product = get_object_or_404(Product, pk=pk)
     is_watched = WatchItem.objects.filter(product=product).exists()
@@ -225,8 +248,10 @@ def product_detail(request, pk):
     ki_statuses = None
     ki_worst_buffer = None
     ki_updated_at = None
-    inv = (product.investments.filter(user=request.user, status="보유중")
-           .prefetch_related("ki_status").first())
+    inv = None
+    if request.user.is_authenticated:
+        inv = (product.investments.filter(user=request.user, status="보유중")
+               .prefetch_related("ki_status").first())
     if inv:
         rows = list(inv.ki_status.all())
         if rows:
@@ -329,7 +354,7 @@ def product_detail(request, pk):
 
 
 # ── 프리셋 관리 ───────────────────────────────────
-@login_required
+@family_required
 def presets(request):
     if request.method == "POST":
         action = request.POST.get("action")
@@ -376,7 +401,7 @@ def presets(request):
 
 
 # ── 관심 목록 ─────────────────────────────────────
-@login_required
+@family_required
 def watchlist(request):
     if request.method == "POST":
         action = request.POST.get("action")
@@ -878,7 +903,6 @@ def _parse_invest_date(val):
 
 
 # ── 시장 트렌드 ───────────────────────────────────
-@login_required
 def market_trend(request):
     """주차별 평균 수익률·KI 추이 (sub_end 기준, 최근 20주)."""
     from collections import defaultdict
@@ -999,7 +1023,7 @@ def redemption_calendar(request):
 
 
 # ── 엑셀 업로드 ──────────────────────────────────
-@login_required
+@family_required
 def upload_excel(request):
     """ELS_Curator가 만든 청약중인상품_*.xlsx를 웹에서 업로드해 임포트."""
     import io

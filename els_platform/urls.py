@@ -8,6 +8,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/login/', auth_views.LoginView.as_view(template_name='core/login.html'), name='login'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
+    path('accounts/signup/', views.signup, name='signup'),
 
     path('', views.weekly, name='weekly'),
     path('product/<int:pk>/', views.product_detail, name='product_detail'),

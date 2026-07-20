@@ -286,6 +286,7 @@
 </div>
 
 <div style="display:flex;gap:8px">
+  {% if user.is_staff %}
   <form method="post" action="{% url 'watchlist' %}">{% csrf_token %}
     <input type="hidden" name="product_id" value="{{ product.id }}">
     <input type="hidden" name="next" value="{{ request.path }}">
@@ -297,6 +298,7 @@
     <button class="btn"><i class="fa-regular fa-star"></i> 관심 등록</button>
     {% endif %}
   </form>
+  {% endif %}
   <a href="{% url 'portfolio' %}?product={{ product.id }}" class="btn btn-primary">
     <i class="fa-solid fa-plus"></i> 투자 등록
   </a>

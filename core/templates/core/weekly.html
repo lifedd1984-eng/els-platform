@@ -82,10 +82,12 @@
       <div style="font-size:12px">연 {{ r.p.yield_rate }}% · 손실 {{ r.p.loss_prob }}%</div>
       <div style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)">{{ r.p.assets_raw|asset_short }}</div>
       <div style="font-size:11px;margin-top:4px">
-        {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700"><i class="fa-solid fa-triangle-exclamation"></i> 보유 {{ r.overlap_pct }}% 중복</span>
-        {% elif r.overlap_pct > 0 %}<span style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</span>
-        {% else %}<span style="color:var(--green)">신규 자산</span>{% endif %}
-        <span style="color:var(--text-3)"> · ~{{ r.p.sub_end|date:"m.d" }}</span>
+        {% if r.overlap_pct is not None %}
+          {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700"><i class="fa-solid fa-triangle-exclamation"></i> 보유 {{ r.overlap_pct }}% 중복</span>
+          {% elif r.overlap_pct > 0 %}<span style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</span>
+          {% else %}<span style="color:var(--green)">신규 자산</span>{% endif %}
+        {% endif %}
+        <span style="color:var(--text-3)">~{{ r.p.sub_end|date:"m.d" }} 마감</span>
       </div>
     </a>
     {% endfor %}
@@ -146,6 +148,7 @@
             {% endif %}
           </td>
           <td onclick="event.stopPropagation()">
+            {% if user.is_staff %}
             <form method="post" action="{% url 'watchlist' %}">{% csrf_token %}
               <input type="hidden" name="product_id" value="{{ p.id }}">
               <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -157,6 +160,7 @@
               <button class="btn btn-icon" title="관심 등록"><i class="fa-regular fa-star"></i></button>
               {% endif %}
             </form>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}

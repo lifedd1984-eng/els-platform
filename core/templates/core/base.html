@@ -270,18 +270,28 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   <div class="topnav-inner">
     <a href="{% url 'weekly' %}" class="logo"><i class="fa-solid fa-chart-line"></i>ELS 플랫폼</a>
     <a href="{% url 'weekly' %}" class="nav-link {% if active_nav == 'weekly' %}active{% endif %}">주간 청약</a>
+    {% if user.is_staff %}
     <a href="{% url 'presets' %}" class="nav-link {% if active_nav == 'presets' %}active{% endif %}">프리셋</a>
     <a href="{% url 'watchlist' %}" class="nav-link {% if active_nav == 'watchlist' %}active{% endif %}">관심</a>
+    {% endif %}
+    {% if user.is_authenticated %}
     <a href="{% url 'portfolio' %}" class="nav-link {% if active_nav == 'portfolio' %}active{% endif %}">포트폴리오</a>
     <a href="{% url 'calendar' %}" class="nav-link {% if active_nav == 'calendar' %}active{% endif %}">상환 캘린더</a>
+    {% endif %}
     <a href="{% url 'trend' %}" class="nav-link {% if active_nav == 'trend' %}active{% endif %}">트렌드</a>
+    {% if user.is_staff %}
     <a href="{% url 'upload' %}" class="nav-link {% if active_nav == 'upload' %}active{% endif %}">업로드</a>
+    {% endif %}
     <div class="nav-right">
       {% block nav_right %}{% endblock %}
       {% if user.is_authenticated %}
+      <span style="font-size:12px;color:var(--text-3)">{{ user.username }}</span>
       <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}
         <button class="btn-icon btn" title="로그아웃"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
       </form>
+      {% else %}
+      <a href="{% url 'login' %}" class="btn btn-sm">로그인</a>
+      <a href="{% url 'signup' %}" class="btn btn-sm btn-primary">회원가입</a>
       {% endif %}
     </div>
   </div>
