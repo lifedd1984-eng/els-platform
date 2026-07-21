@@ -10,6 +10,171 @@ DIVIDEND_TAX_RATE = 0.154
 # 금융소득 종합과세 기준 (연 2천만원 초과 시 다른 소득과 합산)
 FINANCIAL_INCOME_THRESHOLD = 20_000_000
 
+# ══════════════════════════════════════════════════════════════════
+# 레이더 신호 (v5) — 상품이 속한 "청약 주차 × 유형(지수형/종목형)" 그룹 안에서
+#   ① 자격 게이트로 위험상품을 배지 대상에서 제외
+#      (손실 ≥2% · 낙인 종목>40·지수>45 · 노낙인 · 수익 하위40%)
+#   ② 자격 통과 상품을 4축 백분위 가중합으로 순위 →
+#      상위 5위 = 아주 강한 신호, 6~10위 = 강한 신호, 나머지는 배지 없음.
+# 주차별 상대평가라 과거 주차 결과는 고정 → 지난 상품도 동일하게 배지가 붙는다.
+# ══════════════════════════════════════════════════════════════════
+RADAR_W = {"yield": 0.35, "early": 0.30, "defense": 0.20, "safe": 0.15}
+RADAR_KI_MAX = {"종목형": 40, "지수형": 45}   # 초과 시 배지 자격 실격
+RADAR_TOP_STRONG = 5    # 상위 5위 → 아주 강한 신호
+RADAR_TOP_WEAK = 10     # 6~10위 → 강한 신호, 그 외 배지 없음
+RADAR_COLORS = {"아주 강한 신호": "#1B64DA", "강한 신호": "#3182F6"}
+_RADAR_POOL_CACHE = {}   # (monday_iso, asset_type) -> {"day": date|None, "map": {pid: result}}
+
+
+def _radar_mini_points(ax):
+    """4축 백분위 → 파비콘(24px) 폴리곤 좌표. 중심 12,12, 반경 9.5."""
+    cx, cy, r = 12.0, 12.0, 9.5
+    return (f"{cx:g},{cy - ax['yield'] / 100 * r:.1f} "
+            f"{cx + ax['safe'] / 100 * r:.1f},{cy:g} "
+            f"{cx:g},{cy + ax['early'] / 100 * r:.1f} "
+            f"{cx - ax['defense'] / 100 * r:.1f},{cy:g}")
+
+
+def _radar_pct(values, v):
+    """정렬 없이 값 v의 그룹 내 백분위(0~100). 최상위 100, 최하위 0."""
+    n = len(values)
+    if n <= 1:
+        return 100.0
+    return (sum(1 for x in values if x <= v) - 1) / (n - 1) * 100
+
+
+def _radar_early(p):
+    sr = p.sim_result or {}
+    e = sr.get("early_1y_pct")
+    if e is None:
+        e = sr.get("early_redemp_pct")
+    return e or 0
+
+
+def _radar_defense_metric(p):
+    if p.is_no_ki or p.ki is None:
+        return -1          # 노낙인 = 위험(배리어 이하 손실) → 방어 최하위
+    return 100 - p.ki      # 낙인 낮을수록 buffer 큼
+
+
+def _radar_stars(v):
+    return max(1, min(5, int(v / 20 + 0.5)))
+
+
+def _radar_points(ax):
+    """4축 백분위 → SVG 폴리곤 좌표 (viewBox 150x130, 중심 75,64, 반경 38).
+    수익성(위)·안전성(오른쪽)·조기상환(아래)·방어력(왼쪽)."""
+    cx, cy, rad = 75.0, 64.0, 38.0
+    top = f"{cx:g},{cy - ax['yield'] / 100 * rad:.1f}"
+    right = f"{cx + ax['safe'] / 100 * rad:.1f},{cy:g}"
+    bottom = f"{cx:g},{cy + ax['early'] / 100 * rad:.1f}"
+    left = f"{cx - ax['defense'] / 100 * rad:.1f},{cy:g}"
+    return f"{top} {right} {bottom} {left}"
+
+
+def _radar_axes(p, ax):
+    early = _radar_early(p)
+    return [
+        {"name": "수익성", "val": f"연 {p.yield_rate:g}%" if p.yield_rate else "-",
+         "score": ax["yield"], "stars": _radar_stars(ax["yield"])},
+        {"name": "안전성", "val": f"손실확률 {p.loss_prob:g}%",
+         "score": ax["safe"], "stars": _radar_stars(ax["safe"])},
+        {"name": "조기상환", "val": f"1년내 {early:g}%" if early else "-",
+         "score": ax["early"], "stars": _radar_stars(ax["early"])},
+        {"name": "방어력",
+         "val": "노낙인 (배리어 이하 손실)" if p.is_no_ki else
+                (f"낙인 {p.ki}% ({100 - p.ki}% 하락까지 수익상환)" if p.ki is not None else "-"),
+         "score": ax["defense"], "stars": _radar_stars(ax["defense"])},
+    ]
+
+
+def _compute_radar_pool(monday, asset_type):
+    """(주차, 유형) 그룹의 {product_id: radar_result} 계산."""
+    sunday = monday + timedelta(days=6)
+    group = list(Product.objects.filter(
+        sub_end__gte=monday, sub_end__lte=sunday,
+        asset_type=asset_type, loss_prob__isnull=False))
+    n = len(group)
+    if n == 0:
+        return {}
+    ki_max = RADAR_KI_MAX[asset_type]
+    yields = [p.yield_rate or 0 for p in group]
+    y_thr = sorted(yields)[int(len(yields) * 0.4)]   # 하위 40% 경계
+    cols = {
+        "yield": yields,
+        "early": [_radar_early(p) for p in group],
+        "defense": [_radar_defense_metric(p) for p in group],
+        "safe": [-(p.loss_prob or 0) for p in group],
+    }
+    recs = []
+    for p in group:
+        m = {"yield": p.yield_rate or 0, "early": _radar_early(p),
+             "defense": _radar_defense_metric(p), "safe": -(p.loss_prob or 0)}
+        ax = {k: round(_radar_pct(cols[k], m[k])) for k in RADAR_W}
+        comp = sum(RADAR_W[k] * ax[k] for k in RADAR_W)
+
+        # ── 배지 자격 게이트: 하나라도 걸리면 실격(배지 없음) ──
+        loss = p.loss_prob or 0
+        eligible = True
+        reasons = []
+        if loss >= 2:
+            eligible = False
+            reasons.append(f"손실 {loss:g}%")
+        if p.is_no_ki or p.ki is None:
+            eligible = False
+            reasons.append("노낙인")
+        elif p.ki > ki_max:
+            eligible = False
+            reasons.append(f"낙인 {p.ki}")
+        if (p.yield_rate or 0) < y_thr:
+            eligible = False
+            reasons.append("저수익")
+        recs.append({"p": p, "ax": ax, "comp": comp,
+                     "eligible": eligible, "reasons": reasons})
+
+    # 자격 통과 상품 가중순위 → 1~5 아주강한, 6~10 강한, 그 외 배지 없음
+    survivors = sorted([r for r in recs if r["eligible"]],
+                       key=lambda r: r["comp"], reverse=True)
+    for i, r in enumerate(survivors):
+        if i < RADAR_TOP_STRONG:
+            r["tier"] = "아주 강한 신호"
+        elif i < RADAR_TOP_WEAK:
+            r["tier"] = "강한 신호"
+        else:
+            r["tier"] = None
+        r["srank"] = i + 1
+    for r in recs:
+        if not r["eligible"]:
+            r["tier"] = None
+            r["srank"] = None
+
+    result = {}
+    for r in recs:
+        p, ax = r["p"], r["ax"]
+        tier = r["tier"]
+        color = RADAR_COLORS.get(tier, "#B0B8C1")
+        result[p.id] = {
+            "tier": tier, "color": color, "srank": r["srank"], "group_n": n,
+            "reasons": r["reasons"], "eligible": r["eligible"],
+            "points": _radar_points(ax), "mini_points": _radar_mini_points(ax),
+            "axes": _radar_axes(p, ax),
+        }
+    return result
+
+
+def _radar_pool(monday, asset_type):
+    """(주차, 유형) 풀을 캐시와 함께 반환. 과거 주차는 영구 캐시,
+    이번 주(진행 중)는 하루 단위로 갱신."""
+    key = (monday.isoformat(), asset_type)
+    today = date.today()
+    cur_monday = today - timedelta(days=today.weekday())
+    ent = _RADAR_POOL_CACHE.get(key)
+    if ent is not None and (ent["day"] is None or ent["day"] == today):
+        return ent["map"]
+    m = _compute_radar_pool(monday, asset_type)
+    _RADAR_POOL_CACHE[key] = {"day": (today if monday >= cur_monday else None), "map": m}
+    return m
+
 
 def after_tax_amount(principal: int, gross_redeem: int) -> int:
     """세전 상환금 → 세후 상환금 (수익분에만 15.4% 과세)."""
@@ -150,6 +315,22 @@ class Product(models.Model):
             if d.weekday() < 5:
                 subtracted += 1
         return d
+
+    @property
+    def radar(self):
+        """레이더 신호 — 상품이 속한 (청약 주차 × 유형) 그룹에서 상위 5/10위 안에
+        든 경우에만 배지 정보를 반환. 그 외(자격 실격·순위 밖)는 None.
+
+        반환: {tier, color, srank, group_n, reasons, points, mini_points, axes[4]}
+        상세 산식은 모듈 상단 _compute_radar_pool 참고.
+        """
+        if self.loss_prob is None or not self.sub_end:
+            return None
+        if self.asset_type not in RADAR_KI_MAX:
+            return None
+        monday = self.sub_end - timedelta(days=self.sub_end.weekday())
+        r = _radar_pool(monday, self.asset_type).get(self.id)
+        return r if r and r["tier"] else None
 
     @property
     def structure_label(self):
@@ -500,6 +681,11 @@ class HistoricalIssue(models.Model):
     assets = models.JSONField("기초자산 목록", default=list, blank=True)  # [{name, isin, std_price}]
 
     issue_amount = models.BigIntegerField("발행금액", null=True, blank=True)
+
+    # SEIBro 상세조회로 채우는 낙인/스텝다운 (표본조사, 공모 ELS만)
+    ki = models.IntegerField("낙인배리어(%)", null=True, blank=True, db_index=True)
+    stepdown_barriers = models.JSONField("스텝다운 배리어", null=True, blank=True)
+    detail_fetched = models.BooleanField("상세조회완료", default=False, db_index=True)
 
     collected_at = models.DateTimeField("수집일시", auto_now_add=True)
 

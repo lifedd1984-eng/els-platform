@@ -14,6 +14,48 @@
 </div>
 <div class="page-sub">{{ product.assets_raw|asset_short }}</div>
 
+{% if product.radar %}
+{% with r=product.radar %}
+<div class="card" style="padding:20px">
+  <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+    <!-- 레이더 차트 -->
+    <svg viewBox="0 0 150 130" width="150" height="130" style="flex:0 0 auto">
+      <!-- 링 -->
+      <polygon points="75,26 113,64 75,102 37,64" fill="none" stroke="#E5E8EB" stroke-width="1"/>
+      <polygon points="75,38.7 100.3,64 75,89.3 49.7,64" fill="none" stroke="#E5E8EB" stroke-width="1"/>
+      <polygon points="75,51.3 87.7,64 75,76.7 62.3,64" fill="none" stroke="#E5E8EB" stroke-width="1"/>
+      <!-- 축선 -->
+      <line x1="75" y1="26" x2="75" y2="102" stroke="#E5E8EB" stroke-width="1"/>
+      <line x1="37" y1="64" x2="113" y2="64" stroke="#E5E8EB" stroke-width="1"/>
+      <!-- 데이터 폴리곤 -->
+      <polygon points="{{ r.points }}" fill="rgba(49,130,246,0.18)" stroke="{{ r.color }}" stroke-width="2"/>
+      <!-- 라벨 -->
+      <text x="75" y="18" text-anchor="middle" font-size="10" fill="#8B95A1" font-weight="600">수익성</text>
+      <text x="123" y="67" text-anchor="start" font-size="10" fill="#8B95A1" font-weight="600">안전성</text>
+      <text x="75" y="118" text-anchor="middle" font-size="10" fill="#8B95A1" font-weight="600">조기상환</text>
+      <text x="27" y="67" text-anchor="end" font-size="10" fill="#8B95A1" font-weight="600">방어력</text>
+    </svg>
+    <!-- 등급 + 순위 + 별점 -->
+    <div style="flex:1;min-width:220px">
+      <div style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text-3);font-weight:600">레이더 신호</span>
+          <span class="badge" style="background:{{ r.color }};color:#fff;font-weight:700;font-size:13px;padding:4px 11px">{{ r.tier }}</span>
+          <span style="font-size:12px;color:var(--text-2)">이번주 {{ product.asset_type }} <b style="color:{{ r.color }}">상위 {{ r.srank }}위</b></span>
+        </div>
+      </div>
+      {% for a in r.axes %}
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:13px">
+        <span style="color:var(--text-2)"><b style="color:var(--text-1);font-weight:700">{{ a.name }}</b> {{ a.val }}</span>
+        <span style="color:#F79009;letter-spacing:-1px;white-space:nowrap">{% for _ in "★★★★★"|make_list %}{% if forloop.counter <= a.stars %}★{% else %}<span style="color:#E5E8EB">★</span>{% endif %}{% endfor %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endwith %}
+{% endif %}
+
 <div class="stat-grid">
   <div class="stat-card">
     <div class="stat-label">연수익률</div>
