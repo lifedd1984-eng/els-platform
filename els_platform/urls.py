@@ -37,6 +37,7 @@ urlpatterns = [
     path('upload/', views.upload_excel, name='upload'),
     path('manage/members/', views.member_admin, name='member_admin'),
     path('search/', views.product_search, name='search'),
+    path('about/', views.about, name='about'),
     path('manifest.json', views.pwa_manifest, name='pwa_manifest'),
     path('icons/icon-<str:size>.png', views.pwa_icon, name='pwa_icon'),
 ]

@@ -1320,3 +1320,8 @@ def product_search(request):
         "q": q, "results": results, "invested_ids": invested_ids,
         "active_nav": "search",
     })
+
+
+# ── 소개 랜딩 (공개) ─────────────────────────────
+def about(request):
+    return render(request, "core/about.html", {"active_nav": "about"})

@@ -284,6 +284,7 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
     <a href="{% url 'calendar' %}" class="nav-link {% if active_nav == 'calendar' %}active{% endif %}">상환 캘린더</a>
     {% endif %}
     <a href="{% url 'trend' %}" class="nav-link {% if active_nav == 'trend' %}active{% endif %}">트렌드</a>
+    <a href="{% url 'about' %}" class="nav-link {% if active_nav == 'about' %}active{% endif %}">소개</a>
     {% if user.is_staff %}
     <a href="{% url 'upload' %}" class="nav-link {% if active_nav == 'upload' %}active{% endif %}">업로드</a>
     {% endif %}
