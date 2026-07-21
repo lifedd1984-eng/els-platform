@@ -472,6 +472,10 @@ def presets(request):
 def watchlist(request):
     if request.method == "POST":
         action = request.POST.get("action")
+        if action == "clear":  # product_id 없이 옴 → 상단에서 먼저 처리
+            n, _ = _scope(WatchItem.objects.all(), request.user).delete()
+            messages.success(request, f"관심 목록 {n}건을 초기화했습니다.")
+            return redirect("watchlist")
         product = get_object_or_404(Product, pk=request.POST.get("product_id"))
         is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
         if action == "add":
@@ -692,9 +696,10 @@ def portfolio(request):
     has_ki_data = ki_updated is not None
 
     # 투자 등록 폼용 상품 후보 (최근 청약 상품)
+    # 투자등록 후보 = 관심목록에 담아둔 상품만 (가족=공용+본인, 회원=본인)
     candidates = Product.objects.filter(
-        sub_end__gte=today - timedelta(days=30)
-    ).order_by("-sub_end", "issuer")[:200]
+        id__in=_scope(WatchItem.objects.all(), request.user).values_list("product_id", flat=True)
+    ).order_by("-sub_end", "issuer")
 
     # ── 보유 리스트 정렬 ──
     def _pretax(i):

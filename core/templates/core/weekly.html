@@ -156,9 +156,11 @@
           <td class="num" style="white-space:nowrap;color:var(--text-2)" title="고령(65세+)·부적합 투자자는 2영업일 숙려기간 때문에 이 날까지 청약해야 합니다 (일반 마감 -2영업일, 공휴일 미반영)">
             {% if p.confirm_date %}{{ p.confirm_date|date:"n/j" }}{% else %}-{% endif %}
           </td>
-          <td onclick="event.stopPropagation()">
+          <td onclick="event.stopPropagation()" style="white-space:nowrap">
             {% if user.is_authenticated %}
-            <form method="post" action="{% url 'watchlist' %}" class="watch-form">{% csrf_token %}
+            <button type="button" class="btn btn-primary btn-sm" style="margin-right:2px"
+              onclick="els_inv_open('{{ p.id }}', '{{ p.issuer }} {{ p.product_no }}')" title="투자 등록">등록</button>
+            <form method="post" action="{% url 'watchlist' %}" class="watch-form" style="display:inline">{% csrf_token %}
               <input type="hidden" name="product_id" value="{{ p.id }}">
               <input type="hidden" name="next" value="{{ request.get_full_path }}">
               {% if p.id in watched_ids %}

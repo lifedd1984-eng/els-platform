@@ -314,6 +314,57 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   {% endif %}
   {% block content %}{% endblock %}
 </div>
+
+{% if user.is_authenticated %}
+<!-- 공통 투자등록 모달 -->
+<div id="invModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:17px;font-weight:800">투자 등록</div>
+      <button type="button" onclick="els_inv_close()" class="btn-icon btn" style="font-size:16px"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="invProdName" style="font-size:13px;color:var(--text-2);margin-bottom:16px">-</div>
+    <form method="post" action="{% url 'portfolio' %}">{% csrf_token %}
+      <input type="hidden" name="action" value="add">
+      <input type="hidden" name="product_id" id="invProductId">
+      <input type="hidden" name="next" id="invNext">
+      <div class="form-field" style="margin-bottom:12px">
+        <label>투자금액 (원)</label>
+        <input type="number" name="amount" id="invAmount" placeholder="10000000" required style="width:100%">
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:12px">
+        <div class="form-field" style="flex:1">
+          <label>청약일</label>
+          <input type="date" name="invested_at" id="invDate" style="width:100%">
+        </div>
+        <div class="form-field" style="flex:1">
+          <label>증권사/계좌 <span style="color:var(--text-3)">(선택)</span></label>
+          <input type="text" name="broker_account" placeholder="선택" style="width:100%">
+        </div>
+      </div>
+      <div class="form-field" style="margin-bottom:18px">
+        <label>메모 <span style="color:var(--text-3)">(선택)</span></label>
+        <input type="text" name="memo" placeholder="선택" style="width:100%">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px">등록하기</button>
+    </form>
+  </div>
+</div>
+<script>
+function els_inv_open(id, name) {
+  document.getElementById('invProductId').value = id;
+  document.getElementById('invProdName').textContent = name || '';
+  document.getElementById('invNext').value = location.pathname + location.search;
+  var d = document.getElementById('invDate'); if (!d.value) d.value = new Date().toISOString().slice(0,10);
+  document.getElementById('invModal').style.display = 'flex';
+  document.getElementById('invAmount').focus();
+}
+function els_inv_close() { document.getElementById('invModal').style.display = 'none'; }
+document.getElementById('invModal').addEventListener('click', function(e){ if (e.target === this) els_inv_close(); });
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') els_inv_close(); });
+</script>
+{% endif %}
+
 <script>
 // 체크박스 드롭다운: 전체선택 / 해제
 function els_chk(btn, checked) {
