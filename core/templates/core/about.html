@@ -1,44 +1,45 @@
 {% extends "core/base.html" %}
-{% block title %}왜 지금 ELS인가 — ELS 레이더{% endblock %}
+{% block title %}ELS란? — ELS 레이더{% endblock %}
 
 {% block content %}
 <style>
 .hero { text-align:center; padding: 44px 16px 36px; }
-.hero h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.25; }
+.hero h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.3; }
 .hero h1 .accent { color: var(--blue); }
-.hero p { color: var(--text-2); font-size: 16px; margin-top: 14px; }
+.hero p { color: var(--text-2); font-size: 17px; margin-top: 12px; font-weight: 600; }
 .bigstat { display:grid; grid-template-columns: repeat(3,1fr); gap:14px; margin: 8px 0 30px; }
-.bigstat .card { text-align:center; padding: 26px 16px; margin:0; }
-.bigstat .num { font-size: 34px; font-weight: 800; letter-spacing:-1px; }
+.bigstat .card { text-align:center; padding: 24px 16px; margin:0; }
+.bigstat .num { font-size: 32px; font-weight: 800; letter-spacing:-1px; }
 .bigstat .lbl { font-size: 13px; color: var(--text-3); margin-top: 6px; }
-.sec-title { font-size: 22px; font-weight: 800; letter-spacing:-0.5px; margin: 38px 0 6px; text-align:center; }
-.sec-sub { color: var(--text-3); font-size: 13px; text-align:center; margin-bottom: 18px; }
+.sec-title { font-size: 21px; font-weight: 800; letter-spacing:-0.5px; margin: 36px 0 4px; text-align:center; }
+.sec-sub { color: var(--text-3); font-size: 13px; text-align:center; margin-bottom: 16px; }
 .why3 { display:grid; grid-template-columns: repeat(3,1fr); gap:14px; }
-.why3 .card { margin:0; }
+.why3 .card { margin:0; text-align:center; }
 .why3 .ic { width:44px; height:44px; border-radius: 12px; background: var(--blue-bg); color: var(--blue);
-  display:flex; align-items:center; justify-content:center; font-size: 19px; margin-bottom: 12px; }
+  display:flex; align-items:center; justify-content:center; font-size: 19px; margin: 0 auto 12px; }
 .why3 h3 { font-size: 16px; margin-bottom: 6px; }
-.why3 p { font-size: 13px; color: var(--text-2); line-height: 1.65; }
-.evi { font-size: 12px; color: var(--text-3); border-left: 3px solid var(--border); padding-left: 10px; margin-top: 10px; }
-.cta { text-align:center; padding: 34px 16px 20px; }
+.why3 p { font-size: 13px; color: var(--text-2); line-height: 1.6; }
+.step { display:flex; align-items:flex-start; gap:10px; margin-bottom:14px; font-size:14px; line-height:1.6; }
+.step .n { flex-shrink:0; width:24px; height:24px; border-radius:50%; background:var(--blue); color:#fff;
+  font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+.cta { text-align:center; padding: 32px 16px 16px; }
 .cta .btn-primary { font-size: 15px; padding: 13px 30px; }
-.footnote { font-size: 11px; color: var(--text-3); text-align:center; margin-top: 28px; line-height:1.7; }
-@media (max-width: 800px) { .bigstat, .why3 { grid-template-columns: 1fr; } .hero h1 { font-size: 25px; } }
+.footnote { font-size: 11px; color: var(--text-3); text-align:center; margin-top: 26px; line-height:1.7; }
+@media (max-width: 800px) { .bigstat, .why3 { grid-template-columns: 1fr; } .hero h1 { font-size: 24px; } }
 </style>
 
 <div class="hero">
-  <h1>예금 이자는 너무 낮고,<br>주식은 떨어질까 무섭다면 —<br><span class="accent">그 사이에 ELS가 있습니다</span></h1>
-  <p>주가가 <b>웬만큼 떨어져도</b> 약속된 이자를 받는 투자.<br>22년치 시장 데이터(발행 29만 건·상환 27만 건)로 확인했습니다.</p>
+  <h1>안전한 예금과 고수익 주식,<br><span class="accent">그 사이에 ELS가 있습니다</span></h1>
+  <p>평균 수익률 <b style="color:var(--blue-dark)">연 19%</b> · 손실률 <b style="color:var(--green)">0.4%</b></p>
 </div>
 
-<div class="sec-title">ELS가 뭐냐면요</div>
-<div class="sec-sub">한 문장으로: "주가가 정해진 선 아래로 안 떨어지면, 정해진 이자를 주는 상품"</div>
+<div class="sec-title">ELS란?</div>
+<div class="sec-sub">"주가가 정해진 선 아래로 안 떨어지면, 정해진 이자를 주는 상품"</div>
 
 <div class="card" style="padding:26px 22px">
   <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center" class="sim-grid">
     <div>
       <svg viewBox="0 0 400 230" style="width:100%">
-        <!-- 기준선들 -->
         <line x1="40" y1="40" x2="390" y2="40" stroke="#E5E8EB" stroke-width="1"/>
         <text x="4" y="44" font-size="10" fill="#8B95A1">가입시점</text>
         <text x="36" y="34" font-size="9" fill="#8B95A1">100%</text>
@@ -48,55 +49,49 @@
         <line x1="40" y1="185" x2="390" y2="185" stroke="#E5503C" stroke-width="1.5" stroke-dasharray="6 3"/>
         <text x="8" y="189" font-size="10" fill="#E5503C" font-weight="700">낙인선</text>
         <text x="36" y="180" font-size="9" fill="#E5503C">40%</text>
-        <!-- 안전지대 표시 -->
         <rect x="40" y="76" width="350" height="109" fill="#E8F8F0" opacity="0.45"/>
-        <text x="200" y="136" font-size="11" fill="#12B76A" font-weight="700" text-anchor="middle">이 사이에만 있으면 원금 + 이자</text>
-        <!-- 주가 경로 예시 -->
+        <text x="200" y="136" font-size="11" fill="#12B76A" font-weight="700" text-anchor="middle">이 사이면 원금 + 이자</text>
         <path d="M40 40 C 80 55, 110 90, 150 100 C 190 110, 220 80, 260 70 C 300 62, 340 58, 388 52"
               fill="none" stroke="#4E5968" stroke-width="2.2" stroke-linecap="round"/>
         <circle cx="388" cy="52" r="4" fill="#3182F6"/>
-        <text x="300" y="42" font-size="10" fill="#1B64DA" font-weight="700">상환선 회복 → 원금+이자 지급</text>
-        <!-- 축 -->
+        <text x="310" y="42" font-size="10" fill="#1B64DA" font-weight="700">상환 → 수익 확정</text>
         <text x="45" y="215" font-size="9" fill="#8B95A1">가입</text>
         <text x="150" y="215" font-size="9" fill="#8B95A1">6개월</text>
         <text x="255" y="215" font-size="9" fill="#8B95A1">1년</text>
         <text x="360" y="215" font-size="9" fill="#8B95A1">…3년</text>
       </svg>
     </div>
-    <div style="font-size:14px;line-height:1.9;color:var(--text-2)">
-      <p style="margin-bottom:12px"><b style="color:var(--text)">① 삼성전자·코스피 같은 기준을 하나 정합니다.</b><br>
-      가입 시점 가격을 100%로 봅니다.</p>
-      <p style="margin-bottom:12px"><b style="color:var(--text)">② 6개월마다 가격을 확인합니다.</b><br>
-      <span style="color:var(--blue-dark);font-weight:700">상환선(예: 85%)</span> 위에 있으면 → 그 자리에서 <b>원금 + 약속 이자</b>를 받고 끝. 대부분 여기서 끝납니다.</p>
-      <p style="margin-bottom:12px"><b style="color:var(--text)">③ 떨어져 있어도 괜찮습니다.</b><br>
-      <span style="color:var(--red);font-weight:700">낙인선(예: 40%)</span> — 즉 <b>60% 대폭락</b>만 아니면, 만기까지 기다렸다 원금과 이자를 받습니다.</p>
-      <p style="font-size:12px;color:var(--text-3)">주식은 1% 떨어지면 1% 손해지만, ELS는 "선만 안 깨지면" 수익이 그대로입니다. 그래서 <b>박스권·완만한 하락장에서 특히 강한</b> 상품입니다.</p>
+    <div>
+      <div class="step"><span class="n">1</span><span>삼성전자·코스피 같은 <b>기준</b>을 정합니다 (가입가 = 100%)</span></div>
+      <div class="step"><span class="n">2</span><span>6개월마다 확인 — <b style="color:var(--blue-dark)">상환선 위면 원금+이자</b> 받고 끝</span></div>
+      <div class="step"><span class="n">3</span><span><b style="color:var(--red)">60% 폭락</b>만 아니면 만기에 원금+이자</span></div>
+      <div style="font-size:12px;color:var(--text-3);margin-top:6px">주식과 달리, 떨어져도 "선만 안 깨지면" 수익 그대로.</div>
     </div>
   </div>
 </div>
 
+<div class="sec-title">지금이 10년 중 가장 유리합니다</div>
+<div class="sec-sub">시장 데이터 22년치(발행 29만 건) 직접 분석 결과</div>
+
 <div class="bigstat">
   <div class="card">
-    <div class="num" style="color:var(--blue)">41.9%</div>
-    <div class="lbl">2026년 평균 낙인 배리어<br>10년 전(57%)보다 15%p 깊어진 안전판</div>
+    <div class="num" style="color:var(--blue)">42%</div>
+    <div class="lbl">손실 방어선(낙인)<br>10년 전 57% → 훨씬 안전해짐</div>
   </div>
   <div class="card">
     <div class="num" style="color:var(--green)">99%+</div>
-    <div class="lbl">2025~26년 무손실 상환 비율<br>손실확정 0.4~1.6% — 집계 이래 최저</div>
+    <div class="lbl">무손실 상환 비율<br>2025~26년 역대 최저 손실률</div>
   </div>
   <div class="card">
-    <div class="num" style="color:var(--blue-dark)">연 15~25%</div>
-    <div class="lbl">현재 시장 평균 제시수익률<br>고수익 구간은 30%대 — 역대 최고 수준</div>
+    <div class="num" style="color:var(--blue-dark)">8개월</div>
+    <div class="lbl">평균 상환 기간<br>92%가 1년 내 수익 확정</div>
   </div>
 </div>
-
-<div class="sec-title">시장이 달라졌습니다</div>
-<div class="sec-sub">한국예탁결제원(SEIBro) 공식 데이터 · 표본 8,785건 직접 조사</div>
 
 <div class="card" style="padding:22px">
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px" class="sim-grid">
     <div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px">낙인 배리어는 낮아지고 (안전해지고)</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">방어선은 깊어지고</div>
       <svg viewBox="0 0 320 130" style="width:100%">
         <g font-size="9" fill="#8B95A1">
           <rect x="10"  y="35" width="20" height="85" rx="3" fill="#C9D8F0"/><text x="12" y="30">57%</text><text x="12" y="129">'15</text>
@@ -107,10 +102,10 @@
           <rect x="260" y="58" width="20" height="62" rx="3" fill="#3182F6"/><text x="258" y="53" fill="#1B64DA" font-weight="700">42%</text><text x="260" y="129">'26</text>
         </g>
       </svg>
-      <div style="font-size:11px;color:var(--text-3)">연도별 평균 낙인(KI) — 낮을수록 원금손실 방어선이 깊음</div>
+      <div style="font-size:11px;color:var(--text-3)">연도별 평균 낙인 — 낮을수록 안전</div>
     </div>
     <div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px">실현 손실률은 급감했습니다</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">손실은 사라지고</div>
       <svg viewBox="0 0 320 130" style="width:100%">
         <g font-size="9" fill="#8B95A1">
           <rect x="10"  y="53" width="20" height="67" rx="3" fill="#F3B0A6"/><text x="8" y="48">6.7%</text><text x="12" y="129">'15</text>
@@ -121,66 +116,39 @@
           <rect x="260" y="107" width="20" height="13" rx="3" fill="#12B76A"/><text x="256" y="102" fill="#12B76A" font-weight="700">1.3%</text><text x="260" y="129">'26</text>
         </g>
       </svg>
-      <div style="font-size:11px;color:var(--text-3)">연도별 손실확정 비율(전체 상환 대비) — 2025년 0.37% 역대 최저</div>
+      <div style="font-size:11px;color:var(--text-3)">연도별 손실확정 비율 — 2025년 0.37% 역대 최저</div>
     </div>
   </div>
 </div>
 
-<div class="sec-title">왜 ELS인가</div>
-<div class="sec-sub">학술 연구와 20년 백테스트가 뒷받침하는 세 가지 이유</div>
+<div class="sec-title">ELS 레이더가 대신 골라드립니다</div>
+<div class="sec-sub">매주 300여 개 상품 자동 분석</div>
 
 <div class="why3">
   <div class="card">
-    <div class="ic"><i class="fa-solid fa-shield-halved"></i></div>
-    <h3>지수가 반토막 나도 버티는 구조</h3>
-    <p>낙인 40%란, 기초자산이 <b>60% 폭락하기 전까지는 원금손실이 없다</b>는 뜻입니다.
-    2008 금융위기·2020 코로나 폭락을 포함한 20년 백테스트에서 현재 구조의 손실확률은 <b>평균 0.4%</b>였습니다.</p>
-    <div class="evi">근거: 자체 롤링 백테스트 401만 표본 (2006~2025 실제 시세)</div>
+    <div class="ic"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+    <h3>손실확률</h3>
+    <p>모든 상품을 과거 20년 시세로 검증해 숫자 하나로 표시</p>
   </div>
   <div class="card">
-    <div class="ic"><i class="fa-solid fa-bolt"></i></div>
-    <h3>평균 6~9개월이면 현금화</h3>
-    <p>스텝다운 ELS의 <b>92%가 1년 내 조기상환</b>됩니다. 3년 만기 상품이지만 실제로는
-    반년~1년마다 수익을 확정하고 재투자하는 <b>회전형 투자</b>에 가깝습니다.</p>
-    <div class="evi">근거: SEIBro 상환통계 — 2025~26년 평균 보유 8~9개월</div>
-  </div>
-  <div class="card">
-    <div class="ic"><i class="fa-solid fa-chart-line"></i></div>
-    <h3>예금의 4~7배 수익률</h3>
-    <p>현재 시장 평균 제시수익률은 <b>연 15~25%</b>(고수익 구간 30%대).
-    변동성 큰 우량 종목의 옵션 프리미엄을 수익으로 바꾸는 구조라, 금리가 내려도 매력이 유지됩니다.</p>
-    <div class="evi">근거: 2026년 발행상품 4,077건 전수 집계</div>
-  </div>
-</div>
-
-<div class="sec-title">감이 아니라 데이터로 고르세요</div>
-<div class="sec-sub">ELS 레이더는 모든 상품의 손실확률을 20년 시세로 검증해 보여줍니다</div>
-
-<div class="why3">
-  <div class="card">
-    <div class="ic" style="background:var(--green-bg);color:var(--green)"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-    <h3>상품별 손실확률</h3>
-    <p>매주 쏟아지는 300여 개 상품 전부를 과거 20년 시세로 백테스트해 <b>만기 손실확률</b>을 숫자로 제공합니다. 커버리지 100%.</p>
-  </div>
-  <div class="card">
-    <div class="ic" style="background:var(--green-bg);color:var(--green)"><i class="fa-solid fa-lightbulb"></i></div>
+    <div class="ic"><i class="fa-solid fa-lightbulb"></i></div>
     <h3>이번주 추천 TOP5</h3>
-    <p>수익률×(1−손실확률) 점수로 <b>위험 대비 보상이 가장 좋은 상품</b>을 자동 선별합니다.</p>
+    <p>수익 대비 위험이 가장 좋은 상품 자동 선별</p>
   </div>
   <div class="card">
-    <div class="ic" style="background:var(--green-bg);color:var(--green)"><i class="fa-solid fa-gauge-high"></i></div>
-    <h3>보유상품 낙인 경보</h3>
-    <p>투자 후에도 기초자산을 매일 추적해 낙인 접근 시 알려드립니다. 상환 일정·수익 실적도 자동 관리.</p>
+    <div class="ic"><i class="fa-solid fa-gauge-high"></i></div>
+    <h3>낙인 경보</h3>
+    <p>투자 후에도 매일 추적, 위험해지면 알림</p>
   </div>
 </div>
 
 <div class="cta">
   <a href="{% url 'signup' %}" class="btn btn-primary"><i class="fa-solid fa-rocket"></i> 무료로 시작하기</a>
-  <a href="{% url 'weekly' %}" class="btn" style="margin-left:8px">이번주 상품 둘러보기</a>
+  <a href="{% url 'weekly' %}" class="btn" style="margin-left:8px">이번주 상품 보기</a>
 </div>
 
 <p class="footnote">
-  본 페이지의 수치는 한국예탁결제원(SEIBro) 공개 데이터와 자체 백테스트(Yahoo Finance 시세) 분석 결과이며, 과거 성과가 미래 수익을 보장하지 않습니다.<br>
-  ELS는 예금자보호 대상이 아니며 원금손실이 발생할 수 있는 상품입니다. 투자 전 상품설명서를 확인하세요.
+  수치는 한국예탁결제원(SEIBro) 공개 데이터와 자체 백테스트 분석 결과이며, 과거 성과가 미래 수익을 보장하지 않습니다.<br>
+  ELS는 예금자보호 대상이 아니며 원금손실이 발생할 수 있습니다.
 </p>
 {% endblock %}
