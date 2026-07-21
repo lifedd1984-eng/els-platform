@@ -78,7 +78,12 @@
     {% for r in recommendations %}
     <a href="{% url 'product_detail' r.p.id %}" class="rec-card" style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-decoration:none;color:inherit">
       <div style="font-size:12px;color:var(--text-2)">{{ r.p.issuer }} {{ r.p.product_no }}</div>
-      <div style="font-weight:800;font-size:18px;color:var(--blue-dark)">{{ r.score }}<span style="font-size:11px;color:var(--text-3)"> 점</span></div>
+      <div style="font-weight:800;font-size:18px;color:var(--blue-dark)">{{ r.score }}<span style="font-size:11px;color:var(--text-3)"> 점</span>
+        {% if r.score >= 50 %}<span class="badge badge-blue" style="margin-left:4px">놓치면 아까워요</span>
+        {% elif r.score >= 35 %}<span class="badge badge-green" style="margin-left:4px">적극 검토!</span>
+        {% elif r.score >= 20 %}<span class="badge badge-gray" style="margin-left:4px">무난해요</span>
+        {% else %}<span class="badge badge-orange" style="margin-left:4px">신중히</span>{% endif %}
+      </div>
       <div style="font-size:12px">연 {{ r.p.yield_rate }}% · 손실 {{ r.p.loss_prob }}%</div>
       <div style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)">{{ r.p.assets_raw|asset_short }}</div>
       <div style="font-size:11px;margin-top:4px">
