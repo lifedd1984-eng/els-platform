@@ -1176,12 +1176,83 @@ def market_trend(request):
             "ki_diff": round(ki_pts[-1]["v"] - ki_pts[0]["v"], 1) if len(ki_pts) >= 2 else None,
         }
 
+    # ── 레이더 신호 성과 검증 (verify_radar가 채운 RadarVerdict 집계) ──
+    from core.models import RadarVerdict
+    BADGE_TIERS = ("아주 강한 신호", "강한 신호")
+    verdicts = list(RadarVerdict.objects.select_related("product").all())
+    badges = [v for v in verdicts if v.tier in BADGE_TIERS]
+
+    radar = None
+    if verdicts:
+        evaluated = [v for v in badges if v.met is not None]
+        hit = [v for v in evaluated if v.met]
+        radar_stats = {
+            "total": len(badges),
+            "evaluated": len(evaluated),
+            "hit": len(hit),
+            "hit_rate": round(len(hit) / len(evaluated) * 100, 1) if evaluated else None,
+        }
+
+        # 주차별(최근 12주) 배지 상품 적중/미충족/대기 — 막대 높이는 상품 수 비례
+        wk_map = defaultdict(lambda: {"hit": 0, "miss": 0, "wait": 0})
+        for v in badges:
+            b = wk_map[v.week_monday]
+            if v.met is True:
+                b["hit"] += 1
+            elif v.met is False:
+                b["miss"] += 1
+            else:
+                b["wait"] += 1
+        recent_weeks = sorted(wk_map)[-12:]
+        max_total = max((sum(wk_map[w].values()) for w in recent_weeks), default=0) or 1
+        BAR_MAX = 96
+        radar_weeks = []
+        for w in recent_weeks:
+            b = wk_map[w]
+            total = b["hit"] + b["miss"] + b["wait"]
+            done = b["hit"] + b["miss"]
+            radar_weeks.append({
+                "week": w, "total": total,
+                "hit": b["hit"], "miss": b["miss"], "wait": b["wait"],
+                "hit_h": round(b["hit"] / max_total * BAR_MAX),
+                "miss_h": round(b["miss"] / max_total * BAR_MAX),
+                "wait_h": round(b["wait"] / max_total * BAR_MAX),
+                "rate": round(b["hit"] / done * 100) if done else None,
+            })
+
+        # 등급별 1차 적중률 (배지 2등급 + 대조군 '없음')
+        grade_defs = [
+            ("아주 강한 신호", "아주 강한 신호", "#1B64DA"),
+            ("강한 신호", "강한 신호", "#3182F6"),
+            ("없음", "배지 없음 (대조군)", "#8B95A1"),
+        ]
+        radar_grades = []
+        for tier, label, color in grade_defs:
+            ev = [v for v in verdicts if v.tier == tier and v.met is not None]
+            ht = [v for v in ev if v.met]
+            radar_grades.append({
+                "label": label, "color": color,
+                "total": len(ev), "hit": len(ht),
+                "rate": round(len(ht) / len(ev) * 100, 1) if ev else None,
+            })
+
+        # 최근 판정 내역 10건 (배지 상품, 최근 평가일 순)
+        radar_recent = sorted(badges, key=lambda v: v.eval_date, reverse=True)[:10]
+
+        radar = {
+            "stats": radar_stats,
+            "weeks": radar_weeks,
+            "grades": radar_grades,
+            "recent": radar_recent,
+        }
+
     return render(request, "core/trend.html", {
         "rows": rows,
         "yield_pts": yield_pts, "yield_poly": _polyline(yield_pts),
         "ki_pts": ki_pts, "ki_poly": _polyline(ki_pts),
         "y_lo": y_lo, "y_hi": y_hi, "k_lo": k_lo, "k_hi": k_hi,
         "W": W, "H": H, "trend": trend,
+        "radar": radar,
         "active_nav": "trend",
     })
 

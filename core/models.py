@@ -396,6 +396,34 @@ class Product(models.Model):
         return "기타"
 
 
+def radar_top5(monday=None, sunday=None):
+    """이번주 레이더 추천 TOP5 상품 리스트.
+
+    선정 기준(weekly 뷰·주간요약 공용): 오늘 이후 마감 ~ 해당 주 일요일 사이,
+    레이더 '아주 강한 신호' & 손실확률 0% & 1년내 조기상환 ≥ 90% → 수익률 내림차순 5개.
+    monday/sunday 미지정 시 이번 주 기준. (overlap 등 표시용 계산은 호출부 책임)
+    """
+    today = date.today()
+    if monday is None:
+        monday = today - timedelta(days=today.weekday())
+    if sunday is None:
+        sunday = monday + timedelta(days=6)
+    pool = Product.objects.filter(
+        sub_end__gte=max(monday, today), sub_end__lte=sunday,
+        barriers_raw__isnull=False, yield_rate__isnull=False, loss_prob__isnull=False,
+    )
+    cand = []
+    for p in pool:
+        r = p.radar
+        if not (r and r["tier"] == "아주 강한 신호"):
+            continue
+        if (p.loss_prob or 0) != 0 or _radar_early(p) < 90:
+            continue
+        cand.append(p)
+    cand.sort(key=lambda p: -(p.yield_rate or 0))
+    return cand[:5]
+
+
 class Preset(models.Model):
     """조건 프리셋 — 계정별 소유(7/20 분리). user null=과거 공용(가족)."""
     ASSET_CHOICES = [("전체", "전체"), ("지수형", "지수형"), ("종목형", "종목형")]
@@ -695,6 +723,31 @@ class RedemptionVerdict(models.Model):
             models.UniqueConstraint(
                 fields=["investment", "round_no"], name="uniq_redemption_verdict"
             )
+        ]
+        ordering = ["-eval_date"]
+
+
+class RadarVerdict(models.Model):
+    """레이더 신호 성과 검증 (verify_radar 배치가 기록).
+
+    과거 주차에 배지(아주 강한/강한)를 받은 상품과 대조군(배지 없음)의
+    실제 1차 조기상환 결과를 시세로 판정해 신호 적중률을 산출한다.
+    판정 방식: 1차 평가일 종가 기준 워스트 레벨 >= 1차 배리어 → met=True.
+    """
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="radar_verdicts"
+    )
+    tier = models.CharField("등급", max_length=20)  # 아주 강한 신호 / 강한 신호 / 없음
+    week_monday = models.DateField("청약주차(월)")
+    eval_date = models.DateField("1차 평가일")
+    barrier = models.IntegerField("1차 배리어(%)", null=True, blank=True)
+    worst_level = models.FloatField("워스트 레벨(%)", null=True, blank=True)
+    met = models.BooleanField("충족 여부", null=True)  # None=평가 전 or 시세 미확보
+    computed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["product"], name="uniq_radar_verdict")
         ]
         ordering = ["-eval_date"]
 
