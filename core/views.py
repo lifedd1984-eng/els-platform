@@ -755,7 +755,7 @@ def portfolio(request):
         page_size = int(request.GET.get("psize", 20))
     except (ValueError, TypeError):
         page_size = 20
-    if page_size not in (20, 50, 100):
+    if page_size not in (10, 20, 50, 100):
         page_size = 20
 
     h_page = Paginator(holding, page_size).get_page(request.GET.get("hpage"))
