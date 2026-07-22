@@ -202,6 +202,9 @@ class Command(BaseCommand):
             is_no_ki=product.is_no_ki,
             period_months=product.period_months,
             yield_rate=product.yield_rate,
+            # 표본 구간 = 마지막 유효 발행일 기준 years년
+            # (시세는 years+4년 조회해 상품기간만큼 뒤가 잘려도 20년 확보)
+            sample_years=years,
         )
 
     def _fetch_series(self, ticker, years, throttle=False):
@@ -214,7 +217,9 @@ class Command(BaseCommand):
         backoffs = [2, 5]  # 재시도 전 대기(초); 총 3회 시도
         for attempt in range(3):
             try:
-                h = yf.Ticker(ticker).history(period=f"{years}y")
+                # +4년 여유: 표본 구간(years)이 '마지막 유효 발행일' 기준이라
+                # 상품기간(최대 ~3년+α)만큼 뒤로 밀려도 years년을 채우기 위함
+                h = yf.Ticker(ticker).history(period=f"{years + 4}y")
                 s = h["Close"].dropna()
                 if len(s):
                     s.index = s.index.tz_localize(None)

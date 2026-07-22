@@ -38,7 +38,8 @@ def _add_months(d: date, months: int) -> date:
             day -= 1
 
 
-def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate):
+def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate,
+             sample_years=None):
     """
     Parameters
     ----------
@@ -48,6 +49,9 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate):
     is_no_ki : bool
     period_months : int        조기상환 평가 주기(개월)
     yield_rate : float          연수익률(%)
+    sample_years : int | None  가상 발행일 표본 구간(년). 마지막 유효 발행일
+                               (데이터 끝 − 상품기간)에서 거슬러 이 기간만 표본으로.
+                               None이면 데이터 전 구간 사용.
 
     Returns
     -------
@@ -66,6 +70,15 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate):
     arr = prices.values.astype(float)  # (T, A)
     T = len(arr)
 
+    # 표본 시작 하한: (마지막 유효 발행일 − sample_years년)
+    # 마지막 유효 발행일 = 만기(total_months)가 데이터 끝 안에 들어오는 마지막 날짜.
+    start_i = 0
+    if sample_years:
+        last_end = dates[-1]
+        last_valid_start = _add_months(last_end, -total_months)
+        min_start = _add_months(last_valid_start, -sample_years * 12)
+        start_i = int(np.searchsorted(ordinals, min_start.toordinal(), side="left"))
+
     # 각 회차 평가일까지 필요한 개월수
     eval_months = [period_months * n for n in range(1, n_rounds + 1)]
 
@@ -76,7 +89,7 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate):
     first_start = None
     last_start = None
 
-    for i in range(T):
+    for i in range(start_i, T):
         start_d = dates[i]
         # 만기 평가일이 데이터 범위 안에 있어야 유효 표본
         maturity_target = _add_months(start_d, total_months).toordinal()
