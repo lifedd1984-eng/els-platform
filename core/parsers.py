@@ -37,23 +37,14 @@ def extract_ki(text):
     if not text:
         return None
     text = str(text)
-    # NoKI 판별 (한/영, 대소문자 무관 + 원금지급형 + Digital형 + 하이파이브형)
+    # ① 명시적 '낙인 없음' 선언 + 원금(부분)보장 계열 (최우선, 확정)
+    #    원금지급/하이파이브/원금보장은 손실이 제한/없어 KI 숫자보다 이 성격이 우선.
     if re.search(r'no\s*KI|KI\s*없음|노\s*KI', text, re.IGNORECASE):
         return 'NoKI'
     if re.search(r'하이파이브|Hi-Five|원금지급형|원금추가지급형|원금지급추구형|Digital형|원금보장', text):
         return 'NoKI'
-    # 상승참여형: 낙인 배리어 없이 만기 시 상승/하락 참여율만으로 정산하는 구조
-    if re.search(r'상승참여율', text):
-        return 'NoKI'
-    # 실물상환형: 손실 시 현금이 아닌 주식 실물로 상환 — 낙인(KI) 개념 자체가 없음
-    if re.search(r'실물상환|실물인수|실물결제|실물주식인도', text):
-        return 'NoKI'
-    # Digital Call형: 배리어 도달 여부만으로 이분법 지급 — 스텝다운형 낙인(KI) 구조 자체가 없음
-    if re.search(r'Digital\s*Call|디지털\s*콜', text, re.IGNORECASE):
-        return 'NoKI'
-    # 채권/금리 연계 DLS: 스텝다운 ELS 구조가 아니라 낙인 개념이 적용되지 않음
-    if re.search(r'국고채|KTB|금리\s*연계', text):
-        return 'NoKI'
+
+    # ② 명시적 KI 숫자 (아래 구조 휴리스틱보다 우선 — 예: '실물주식인도'라도 KI25면 낙인 있음)
     patterns = [
         r'/(\d+)KI[\]\)]',           # /25KI]  /40KI)
         r',\s*(\d+)KI\s*\(',         # ,30KI(
@@ -70,6 +61,19 @@ def extract_ki(text):
         if m:
             return m.group(1)
 
+    # ③ 구조적 '낙인 부재' 추론 (명시 KI 숫자가 없을 때만)
+    # 상승참여형: 낙인 배리어 없이 만기 시 상승/하락 참여율만으로 정산하는 구조
+    if re.search(r'상승참여율', text):
+        return 'NoKI'
+    # 실물상환형: 손실 시 현금이 아닌 주식 실물로 상환 (KI 텍스트가 전혀 없는 경우만 낙인 부재)
+    if re.search(r'실물상환|실물인수|실물결제|실물주식인도', text):
+        return 'NoKI'
+    # Digital Call형: 배리어 도달 여부만으로 이분법 지급 — 스텝다운형 낙인(KI) 구조 자체가 없음
+    if re.search(r'Digital\s*Call|디지털\s*콜', text, re.IGNORECASE):
+        return 'NoKI'
+    # 채권/금리 연계 DLS: 스텝다운 ELS 구조가 아니라 낙인 개념이 적용되지 않음
+    if re.search(r'국고채|KTB|금리\s*연계', text):
+        return 'NoKI'
     # 하나증권형: "3y/6m 90-85-85-80-75-65 ..." — 조기상환 배리어는 있으나
     # KI/knock in 관련 텍스트가 전혀 없음(위 패턴 전부 실패) → 낙인 없는 상품으로 판정
     if re.search(r'\d+y/\d+m,?\s+[\d\-]+', text):
