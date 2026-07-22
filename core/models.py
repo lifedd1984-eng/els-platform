@@ -313,11 +313,16 @@ class Product(models.Model):
 
     @property
     def term_months(self):
-        """상품기간(발행일→만기일) 총 개월수. 둘 중 하나라도 없으면 None."""
+        """상품기간(발행일→만기일) 총 개월수. 둘 중 하나라도 없으면 None.
+
+        일 단위까지 반영해 반올림 — 예: 발행 7/31 → 만기 3년 뒤 8/3처럼
+        주말·영업일 사정으로 며칠 넘친 경우 '3년 1개월'이 아니라 '3년'."""
         if not self.issue_date or not self.expiry_date:
             return None
-        return ((self.expiry_date.year - self.issue_date.year) * 12
-                + (self.expiry_date.month - self.issue_date.month))
+        months = ((self.expiry_date.year - self.issue_date.year) * 12
+                  + (self.expiry_date.month - self.issue_date.month))
+        frac = (self.expiry_date.day - self.issue_date.day) / 30
+        return int(months + frac + 0.5)
 
     @property
     def term_display(self):

@@ -196,19 +196,21 @@
 </div>
 {% endif %}
 <script>
-// 별표 토글을 새로고침 없이 그 자리에서 처리
+// 별표 토글을 새로고침 없이 그 자리에서 처리.
+// 실패해도 전체 제출(f.submit)로 폴백하지 않는다 — 페이지가 새로고침되며
+// 스크롤이 최상단으로 튀는 UX가 더 나쁨. 실패 시 별을 잠깐 흔들어 알리고 유지.
 document.querySelectorAll('form.watch-form').forEach(function(f) {
   f.addEventListener('submit', async function(e) {
     e.preventDefault();
+    const btn = f.querySelector('button');
+    const ic = btn.querySelector('i');
     try {
       const r = await fetch(f.action, {
         method: 'POST', body: new FormData(f),
         headers: {'X-Requested-With': 'XMLHttpRequest'}
       });
-      if (!r.ok) { f.submit(); return; }
+      if (!r.ok) throw new Error('HTTP ' + r.status);
       const j = await r.json();
-      const btn = f.querySelector('button');
-      const ic = btn.querySelector('i');
       const act = f.querySelector('input[name=action]');
       if (j.watched) {
         act.value = 'remove'; btn.title = '관심 해제';
@@ -217,7 +219,12 @@ document.querySelectorAll('form.watch-form').forEach(function(f) {
         act.value = 'add'; btn.title = '관심 등록';
         ic.className = 'fa-regular fa-star'; ic.style.color = '';
       }
-    } catch (err) { f.submit(); }
+    } catch (err) {
+      console.warn('별표 토글 실패:', err);
+      ic.style.transition = 'transform .1s';
+      ic.style.transform = 'scale(1.4)';
+      setTimeout(function(){ ic.style.transform = ''; }, 150);
+    }
   });
 });
 </script>
