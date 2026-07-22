@@ -205,7 +205,9 @@ document.querySelectorAll('form.watch-form').forEach(function(f) {
     const btn = f.querySelector('button');
     const ic = btn.querySelector('i');
     try {
-      const r = await fetch(f.action, {
+      // 주의: f.action은 name="action" hidden input에 클로버링돼 엘리먼트를
+      // 반환한다 → getAttribute로 실제 URL을 읽어야 함
+      const r = await fetch(f.getAttribute('action'), {
         method: 'POST', body: new FormData(f),
         headers: {'X-Requested-With': 'XMLHttpRequest'}
       });

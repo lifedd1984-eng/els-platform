@@ -511,7 +511,8 @@ def watchlist(request):
         "sub_end": lambda i: i.product.sub_end or _min_date,
         "confirm": lambda i: i.product.confirm_date or _min_date,
     }
-    w_sort = request.GET.get("wsort", "")
+    # 기본 정렬: 마감 가까운 순 (sub_end 오름차순)
+    w_sort = request.GET.get("wsort", "sub_end")
     w_dir = request.GET.get("wdir", "asc")
     if w_sort in W_SORT:
         items.sort(key=W_SORT[w_sort], reverse=(w_dir == "desc"))
