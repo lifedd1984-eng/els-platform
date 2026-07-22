@@ -38,6 +38,11 @@ RADAR_SCORE_SHIFT = 20         # 점수 = 수익률 − 낙인 + 이 값 (음수
 RADAR_TOP_STRONG = 5    # 1 ~ 이 순위 = 아주 강한 신호
 RADAR_TOP_WEAK = 15     # (상위)+1 ~ 이 순위 = 강한 신호, 그 외 배지 없음
 RADAR_COLORS = {"아주 강한 신호": "#1B64DA", "강한 신호": "#3182F6"}
+# 별점 절대 컷 (★5,★4,★3,★2 경계 — 미달은 ★1). 수익성만 그룹 백분위 상대평가.
+RADAR_STAR_EARLY = (95, 90, 85, 80)                 # 1년내 조기상환 % 이상
+RADAR_STAR_LOSS = (0.0, 0.5, 1.0, 2.0)              # 손실확률 % 이하(0은 =0)
+RADAR_STAR_KI = {"종목형": (20, 25, 30, 35),         # 낙인 % 이하
+                 "지수형": (30, 35, 40, 45)}         # 지수형은 +10 완화
 # ── 튜닝 파라미터 끝 ────────────────────────────────────────────────
 _RADAR_POOL_CACHE = {}   # (monday_iso, asset_type) -> {"day": date|None, "map": {pid: result}}
 
@@ -77,6 +82,35 @@ def _radar_stars(v):
     return max(1, min(5, int(v / 20 + 0.5)))
 
 
+def _stars_early(e):
+    """1년내 조기상환 % → 절대 별점."""
+    for i, cut in enumerate(RADAR_STAR_EARLY):
+        if e >= cut:
+            return 5 - i
+    return 1
+
+
+def _stars_loss(loss):
+    """손실확률 % → 절대 별점 (0%=★5)."""
+    if loss <= RADAR_STAR_LOSS[0]:
+        return 5
+    for i, cut in enumerate(RADAR_STAR_LOSS[1:], start=1):
+        if loss < cut:
+            return 5 - i
+    return 1
+
+
+def _stars_ki(p):
+    """낙인 % → 절대 별점 (지수형 완화 컷)."""
+    if p.is_no_ki or p.ki is None:
+        return 1
+    cuts = RADAR_STAR_KI.get(p.asset_type, RADAR_STAR_KI["종목형"])
+    for i, cut in enumerate(cuts):
+        if p.ki <= cut:
+            return 5 - i
+    return 1
+
+
 def _radar_points(ax):
     """4축 백분위 → SVG 폴리곤 좌표 (viewBox 150x130, 중심 75,64, 반경 38).
     수익성(위)·안전성(오른쪽)·조기상환(아래)·방어력(왼쪽)."""
@@ -88,19 +122,31 @@ def _radar_points(ax):
     return f"{top} {right} {bottom} {left}"
 
 
+def _radar_display_ax(p, yield_pct):
+    """폴리곤·별점용 표시 점수(0~100).
+    안전성·조기상환·방어력은 절대 컷 별점×20(값과 별이 항상 일치),
+    수익성만 그룹 내 백분위 상대평가."""
+    return {
+        "yield": yield_pct,
+        "safe": _stars_loss(p.loss_prob or 0) * 20,
+        "early": _stars_early(_radar_early(p)) * 20,
+        "defense": _stars_ki(p) * 20,
+    }
+
+
 def _radar_axes(p, ax):
     early = _radar_early(p)
     return [
         {"name": "수익성", "val": f"연 {p.yield_rate:g}%" if p.yield_rate else "-",
          "score": ax["yield"], "stars": _radar_stars(ax["yield"])},
         {"name": "안전성", "val": f"손실확률 {p.loss_prob:g}%",
-         "score": ax["safe"], "stars": _radar_stars(ax["safe"])},
+         "score": ax["safe"], "stars": _stars_loss(p.loss_prob or 0)},
         {"name": "조기상환", "val": f"1년내 {early:g}%" if early else "-",
-         "score": ax["early"], "stars": _radar_stars(ax["early"])},
+         "score": ax["early"], "stars": _stars_early(early)},
         {"name": "방어력",
          "val": "노낙인 (배리어 이하 손실)" if p.is_no_ki else
                 (f"낙인 {p.ki}% ({100 - p.ki}% 하락까지 수익상환)" if p.ki is not None else "-"),
-         "score": ax["defense"], "stars": _radar_stars(ax["defense"])},
+         "score": ax["defense"], "stars": _stars_ki(p)},
     ]
 
 
@@ -135,13 +181,8 @@ def _compute_radar_pool(monday, asset_type):
                     reverse=True)
     eligible_n = len(ranked)
 
-    # 4축 백분위 (시각용 — 그룹 전체 기준)
-    cols = {
-        "yield": [p.yield_rate or 0 for p in group],
-        "early": [_radar_early(p) for p in group],
-        "defense": [_radar_defense_metric(p) for p in group],
-        "safe": [-(p.loss_prob or 0) for p in group],
-    }
+    # 수익성 백분위(그룹 전체 기준) — 수익성 축만 상대평가, 나머지는 절대 컷
+    yield_col = [p.yield_rate or 0 for p in group]
 
     result = {}
     for i, p in enumerate(ranked):
@@ -151,9 +192,8 @@ def _compute_radar_pool(monday, asset_type):
             tier = "강한 신호"
         else:
             break   # 16위부터는 배지 없음 → 저장 안 함
-        m = {"yield": p.yield_rate or 0, "early": _radar_early(p),
-             "defense": _radar_defense_metric(p), "safe": -(p.loss_prob or 0)}
-        ax = {k: round(_radar_pct(cols[k], m[k])) for k in ("yield", "early", "defense", "safe")}
+        y_pct = round(_radar_pct(yield_col, p.yield_rate or 0))
+        ax = _radar_display_ax(p, y_pct)
         result[p.id] = {
             "tier": tier, "color": RADAR_COLORS[tier],
             "srank": i + 1, "group_n": eligible_n,
