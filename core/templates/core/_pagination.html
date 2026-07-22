@@ -2,8 +2,10 @@
 {% if page.paginator.num_pages > 1 %}
 <div style="display:flex;justify-content:center;align-items:center;gap:6px;padding:14px 0 6px;font-size:13px">
   {% if page.has_previous %}
+  <a href="?{% qs_set param 1 %}" style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;text-decoration:none;color:var(--text-2)">« 처음</a>
   <a href="?{% qs_set param page.previous_page_number %}" style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;text-decoration:none;color:var(--text-2)">‹ 이전</a>
   {% else %}
+  <span style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;color:var(--text-3);opacity:.5">« 처음</span>
   <span style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;color:var(--text-3);opacity:.5">‹ 이전</span>
   {% endif %}
 
@@ -14,8 +16,10 @@
 
   {% if page.has_next %}
   <a href="?{% qs_set param page.next_page_number %}" style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;text-decoration:none;color:var(--text-2)">다음 ›</a>
+  <a href="?{% qs_set param page.paginator.num_pages %}" style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;text-decoration:none;color:var(--text-2)">마지막 »</a>
   {% else %}
   <span style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;color:var(--text-3);opacity:.5">다음 ›</span>
+  <span style="padding:5px 10px;border:1px solid var(--border);border-radius:7px;color:var(--text-3);opacity:.5">마지막 »</span>
   {% endif %}
 </div>
 {% endif %}
