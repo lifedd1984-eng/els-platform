@@ -99,7 +99,7 @@
       <div style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)">{{ r.p.assets_raw|asset_short }}</div>
       <div style="font-size:11px;margin-top:4px">
         {% if r.overlap_pct is not None %}
-          {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700"><i class="fa-solid fa-triangle-exclamation"></i> 보유 {{ r.overlap_pct }}% 중복</span>
+          {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700">{% if r.p.radar %}<svg width="15" height="15" viewBox="0 0 24 24" style="vertical-align:middle"><circle cx="12" cy="12" r="10" fill="none" stroke="{{ r.p.radar.color }}" stroke-opacity=".2" stroke-width="1"/><polygon points="{{ r.p.radar.mini_points }}" fill="{{ r.p.radar.color }}" fill-opacity=".28" stroke="{{ r.p.radar.color }}" stroke-width="1.4"/></svg>{% endif %} 보유 {{ r.overlap_pct }}% 중복</span>
           {% elif r.overlap_pct > 0 %}<span style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</span>
           {% else %}<span style="color:var(--green)">신규 자산</span>{% endif %}
         {% endif %}
