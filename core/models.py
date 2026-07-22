@@ -13,16 +13,26 @@ FINANCIAL_INCOME_THRESHOLD = 20_000_000
 # ══════════════════════════════════════════════════════════════════
 # 레이더 신호 (v5) — 상품이 속한 "청약 주차 × 유형(지수형/종목형)" 그룹 안에서
 #   ① 자격 게이트로 위험상품을 배지 대상에서 제외
-#      (손실 ≥2% · 낙인 종목>40·지수>45 · 노낙인 · 수익 하위40%)
+#      (손실 ≥N% · 낙인 종목>M1·지수>M2 · 노낙인 · 수익 하위X%)
 #   ② 자격 통과 상품을 4축 백분위 가중합으로 순위 →
-#      상위 5위 = 아주 강한 신호, 6~10위 = 강한 신호, 나머지는 배지 없음.
+#      상위 A위 = 아주 강한 신호, A+1~B위 = 강한 신호, 나머지는 배지 없음.
 # 주차별 상대평가라 과거 주차 결과는 고정 → 지난 상품도 동일하게 배지가 붙는다.
-# ══════════════════════════════════════════════════════════════════
+#
+# ┌────────────────────────────────────────────────────────────────┐
+# │ ⚙️  신호 로직 튜닝 파라미터 — 로직 변경은 아래 상수만 고치면 됨    │
+# │     (계산 흐름은 _compute_radar_pool 함수, 이 상수들만 참조함)     │
+# └────────────────────────────────────────────────────────────────┘
+# 4축 가중치 (합=1.0) — 생존자 순위 산정용
 RADAR_W = {"yield": 0.35, "early": 0.30, "defense": 0.20, "safe": 0.15}
-RADAR_KI_MAX = {"종목형": 40, "지수형": 45}   # 초과 시 배지 자격 실격
-RADAR_TOP_STRONG = 5    # 상위 5위 → 아주 강한 신호
-RADAR_TOP_WEAK = 10     # 6~10위 → 강한 신호, 그 외 배지 없음
+# 배지 자격 게이트 (하나라도 걸리면 실격 = 배지 없음)
+RADAR_LOSS_MAX = 2.0            # 손실확률(%) 이상이면 실격
+RADAR_KI_MAX = {"종목형": 40, "지수형": 45}   # 낙인 초과 시 실격 (노낙인은 항상 실격)
+RADAR_YIELD_BOTTOM_PCT = 0.4   # 그룹 내 수익률 하위 이 비율은 실격 (0.4 = 하위 40%)
+# 등급 컷 (자격 통과 상품의 그룹 내 순위 기준)
+RADAR_TOP_STRONG = 5    # 1 ~ 이 순위 = 아주 강한 신호
+RADAR_TOP_WEAK = 10     # (상위)+1 ~ 이 순위 = 강한 신호, 그 외 배지 없음
 RADAR_COLORS = {"아주 강한 신호": "#1B64DA", "강한 신호": "#3182F6"}
+# ── 튜닝 파라미터 끝 ────────────────────────────────────────────────
 _RADAR_POOL_CACHE = {}   # (monday_iso, asset_type) -> {"day": date|None, "map": {pid: result}}
 
 
@@ -99,7 +109,7 @@ def _compute_radar_pool(monday, asset_type):
         return {}
     ki_max = RADAR_KI_MAX[asset_type]
     yields = [p.yield_rate or 0 for p in group]
-    y_thr = sorted(yields)[int(len(yields) * 0.4)]   # 하위 40% 경계
+    y_thr = sorted(yields)[int(len(yields) * RADAR_YIELD_BOTTOM_PCT)]   # 수익 하위 경계
     cols = {
         "yield": yields,
         "early": [_radar_early(p) for p in group],
@@ -117,7 +127,7 @@ def _compute_radar_pool(monday, asset_type):
         loss = p.loss_prob or 0
         eligible = True
         reasons = []
-        if loss >= 2:
+        if loss >= RADAR_LOSS_MAX:
             eligible = False
             reasons.append(f"손실 {loss:g}%")
         if p.is_no_ki or p.ki is None:
