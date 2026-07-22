@@ -633,6 +633,21 @@ def portfolio(request):
             inv.redeemed_amount = int(amt) if amt else None
             inv.save()
             messages.success(request, "상환 처리했습니다.")
+        elif action == "edit":
+            inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
+            changed = False
+            if "amount" in request.POST:
+                a = request.POST.get("amount", "").replace(",", "").strip()
+                if a.isdigit() and int(a) > 0:
+                    inv.amount = int(a)
+                    changed = True
+            if "redeemed_amount" in request.POST:
+                r = request.POST.get("redeemed_amount", "").replace(",", "").strip()
+                inv.redeemed_amount = int(r) if r.isdigit() else None
+                changed = True
+            if changed:
+                inv.save()
+                messages.success(request, "금액을 수정했습니다.")
         elif action == "delete":
             Investment.objects.filter(pk=request.POST.get("id"), user=request.user).delete()
             messages.success(request, "투자 기록을 삭제했습니다.")

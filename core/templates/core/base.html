@@ -158,6 +158,15 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
 .week-nav { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
 .week-nav .btn { min-width: 36px; justify-content: center; }
 .week-label { font-size: 16px; font-weight: 800; letter-spacing: -0.3px; }
+/* ── 인라인 금액 수정 ── */
+.amt-edit { display: inline-block; }
+.amt-edit input {
+  width: 100px; text-align: right; font: inherit; font-weight: 700;
+  border: 1px solid transparent; border-radius: 6px; padding: 4px 6px;
+  background: transparent; color: inherit; cursor: text;
+}
+.amt-edit input:hover { border-color: var(--border); background: var(--bg); }
+.amt-edit input:focus { border-color: var(--blue); background: #fff; outline: none; box-shadow: 0 0 0 3px rgba(49,130,246,.12); }
 
 /* ── 필터바 ── */
 .filterbar {
@@ -351,6 +360,13 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   </div>
 </div>
 <script>
+// 인라인 금액 입력 실시간 콤마
+function els_comma(el){
+  var c = el.selectionStart, len0 = el.value.length;
+  var raw = el.value.replace(/[^0-9]/g,'');
+  el.value = raw ? Number(raw).toLocaleString() : '';
+  if (c !== null) el.setSelectionRange(Math.max(0, c + el.value.length - len0), Math.max(0, c + el.value.length - len0));
+}
 // 금액 → "1억 5,000만 원" 한글 읽기
 function els_kor_money(n) {
   if (!n) return '';

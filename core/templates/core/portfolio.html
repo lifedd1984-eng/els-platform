@@ -259,7 +259,7 @@
             {% if inv.broker_account %}<div style="font-size:11px;color:var(--text-3)">{{ inv.broker_account }}</div>{% endif %}
           </td>
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw|asset_short }}</td>
-          <td class="num" style="font-weight:700">{{ inv.amount|intcomma }}</td>
+          <td class="num" onclick="event.stopPropagation()">{% include "core/_amount_edit.html" with inv_id=inv.id field="amount" value=inv.amount %}</td>
           <td class="num" style="color:var(--blue-dark);font-weight:700">{{ inv.product.yield_rate|default:"-" }}%</td>
           <td>{% if inv.product.issue_date %}{{ inv.product.issue_date|date:"Y.n.j" }}{% else %}-{% endif %}</td>
           <td>
@@ -373,8 +373,8 @@
           <td>
             <span class="badge {% if inv.status == '낙인후상환' %}badge-red{% else %}badge-green{% endif %}">{{ inv.status }}</span>
           </td>
-          <td class="num">{{ inv.amount|intcomma }}</td>
-          <td class="num">{{ inv.redeemed_amount|intcomma|default:"-" }}</td>
+          <td class="num">{% include "core/_amount_edit.html" with inv_id=inv.id field="amount" value=inv.amount %}</td>
+          <td class="num">{% include "core/_amount_edit.html" with inv_id=inv.id field="redeemed_amount" value=inv.redeemed_amount %}</td>
           <td class="num" style="font-weight:800;color:{% if inv.realized_return_pct >= 0 %}var(--green){% else %}var(--red){% endif %}">
             {% if inv.realized_return_pct is not None %}{{ inv.realized_return_pct }}%{% else %}-{% endif %}
           </td>

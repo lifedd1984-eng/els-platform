@@ -1,0 +1,14 @@
+{% load humanize %}{% comment %}인라인 금액 수정: inv_id, field(amount|redeemed_amount), value{% endcomment %}
+<form method="post" class="amt-edit" style="display:inline">{% csrf_token %}
+  <input type="hidden" name="action" value="edit">
+  <input type="hidden" name="id" value="{{ inv_id }}">
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <input type="text" name="{{ field }}" inputmode="numeric" autocomplete="off"
+         value="{% if value is not None %}{{ value|intcomma }}{% endif %}"
+         placeholder="-"
+         onfocus="this.dataset.orig=this.value"
+         oninput="els_comma(this)"
+         onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}else if(event.key==='Escape'){this.value=this.dataset.orig;this.blur();}"
+         onchange="if(this.value!==this.dataset.orig){this.form.submit();}"
+         title="클릭해 수정 · Enter/포커스아웃 저장 · Esc 취소">
+</form>
