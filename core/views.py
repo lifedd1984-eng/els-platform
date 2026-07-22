@@ -753,11 +753,11 @@ def portfolio(request):
     # ── 페이지네이션 ──
     from django.core.paginator import Paginator
     try:
-        page_size = int(request.GET.get("psize", 20))
+        page_size = int(request.GET.get("psize", 10))
     except (ValueError, TypeError):
-        page_size = 20
+        page_size = 10
     if page_size not in (10, 20, 50, 100):
-        page_size = 20
+        page_size = 10
 
     h_page = Paginator(holding, page_size).get_page(request.GET.get("hpage"))
     d_page = Paginator(done, page_size).get_page(request.GET.get("dpage"))
