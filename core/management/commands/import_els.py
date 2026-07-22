@@ -104,6 +104,10 @@ class Command(BaseCommand):
             issuer = str(row[1] or "").strip()
             if not issuer:
                 continue
+            # 기초자산이 비어 유형(종목형/지수형) 분류가 불가한 결손 행은 버림
+            # (미분류 상품이 목록·포트폴리오 유형 집계를 깨뜨리는 것 원천 차단)
+            if not parsers.classify_asset(str(row[4] or "")):
+                continue
             n_rows += 1
 
             desc = str(row[11] or "")
