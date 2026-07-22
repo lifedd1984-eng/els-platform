@@ -617,7 +617,10 @@ def portfolio(request):
                 user=request.user,
                 product=product,
                 amount=int(request.POST.get("amount", "0").replace(",", "")),
-                invested_at=request.POST.get("invested_at") or date.today(),
+                # 청약일 미입력 시 상품 발행일 기준 — 실현수익 연환산이
+                # 발행일~상환일 실경과일로 계산되므로 발행일이 정확한 기준
+                invested_at=(request.POST.get("invested_at")
+                             or product.issue_date or date.today()),
                 broker_account=request.POST.get("broker_account", ""),
                 memo=request.POST.get("memo", ""),
             )

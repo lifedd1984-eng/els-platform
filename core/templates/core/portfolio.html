@@ -214,14 +214,6 @@
         <input type="text" name="amount" placeholder="10,000,000" required style="width:130px"
                oninput="this.value=this.value.replace(/[^0-9]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')">
       </div>
-      <div class="form-field">
-        <label>청약일</label>
-        <input type="date" name="invested_at" value="{{ today|date:'Y-m-d' }}">
-      </div>
-      <div class="form-field">
-        <label>증권사/계좌 메모</label>
-        <input type="text" name="broker_account" placeholder="선택" style="width:130px">
-      </div>
       <button type="submit" class="btn btn-primary">등록</button>
     </div>
   </form>
