@@ -56,9 +56,10 @@ TICKER_MAP = {
     "Amazon": "AMZN", "AMZN": "AMZN",
     "Apple": "AAPL", "AAPL": "AAPL",
     "Microsoft": "MSFT", "MSFT": "MSFT",
-    "META": "META",
+    "META": "META", "META PLATFORMS": "META", "메타": "META", "메타플랫폼스": "META",
     "Google": "GOOGL", "Oracle": "ORCL", "ORCL": "ORCL",
     "Eli Lilly": "LLY", "일라이릴리": "LLY", "LLY": "LLY",
+    "LS ELECTRIC": "010120.KS", "LS일렉트릭": "010120.KS", "엘에스일렉트릭": "010120.KS",
 }
 
 

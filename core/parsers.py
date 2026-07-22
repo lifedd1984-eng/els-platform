@@ -301,6 +301,51 @@ def extract_barriers(text):
     if m:
         return [m.group(1)]
 
+    # ── 추가 형식 보강 (아래는 모두 위 패턴이 전부 실패한 경우에만 시도) ──
+
+    # 유안타증권: 총 N회(배리어열/CB nn/KI nn) — 괄호 안 배리어열
+    m = re.search(r'\(([\d\-]+)\s*/\s*CB\s*\d+\s*/\s*KI\s*\d+\)', text)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if len(vals) >= 2:
+            return vals
+
+    # 한국투자 등: (Lizard/Power/Safezone…)StepDown형[배리어열] — 대괄호 내용 일반 추출
+    m = re.search(r'StepDown형\[([^\]]+)\]', text)
+    if m:
+        raw = re.sub(r'\(L?\d+\)', '', m.group(1))          # (L50) 리자드 마커 제거
+        vals = [v for v in re.split(r'[-/]', raw) if re.match(r'^\d+$', v.strip())]
+        # 끝에 붙은 KI(예: .../30KI)는 위 split에서 'KI' 때문에 자동 탈락
+        if len(vals) >= 2:
+            return vals
+
+    # KB증권 Ultra Hi-Five: "조기 상환 베리어 배리어열--no KI"
+    m = re.search(r'베리어\s*([\d\-]+)\s*--\s*no\s*ki', text, re.IGNORECASE)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if len(vals) >= 2:
+            return vals
+
+    # 배리어열(2~3자리·(Lxx) 허용·대시/슬래시 구분) + NoKI 계열
+    # (no ki / NO-KI / noki / 노KI / KI없음), 사이 %·콤마·슬래시 허용
+    m = re.search(
+        r'([0-9]{2,3}(?:\(L?\d+\))?(?:[-/][0-9]{2,3}(?:\(L?\d+\))?){2,})'
+        r'\s*%?\s*[,/]?\s*(?:no[\s\-]*ki|노\s*ki|ki\s*없음)',
+        text, re.IGNORECASE,
+    )
+    if m:
+        raw = re.sub(r'\(L?\d+\)', '', m.group(1))
+        vals = [v for v in re.split(r'[-/]', raw) if re.match(r'^\d+$', v.strip())]
+        if len(vals) >= 2:
+            return vals
+
+    # NH 온라인 원금비보장: "원금비보장, 배리어열" (KI 텍스트 없음)
+    m = re.search(r'원금비보장,\s*([0-9]{2,3}(?:-[0-9]{2,3}){2,})', text)
+    if m:
+        vals = [v for v in m.group(1).split('-') if re.match(r'^\d+$', v.strip())]
+        if len(vals) >= 2:
+            return vals
+
     return None
 
 

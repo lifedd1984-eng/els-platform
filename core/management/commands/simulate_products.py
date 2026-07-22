@@ -69,7 +69,9 @@ class Command(BaseCommand):
             reason = result.get("reason", "")
             if reason.startswith("시세 매핑 없음: "):
                 name = reason.split(": ", 1)[1]
-                unmapped[name] = unmapped.get(name, 0) + 1
+                # 'nan'·빈 값은 원본 기초자산 결손 → 티커맵으로 못 고침, 알림 제외
+                if name.strip().lower() not in ("nan", "none", ""):
+                    unmapped[name] = unmapped.get(name, 0) + 1
             if result.get("available"):
                 self._save_ok(p, result)
                 ok += 1
