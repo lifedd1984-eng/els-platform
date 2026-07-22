@@ -21,13 +21,26 @@ class Command(BaseCommand):
     help = "과거 주차 레이더 배지 상품의 1차 조기상환 적중 여부 판정"
 
     def add_arguments(self, parser):
-        parser.add_argument("--weeks", type=int, default=26,
-                            help="현재 주 제외, 과거 몇 주를 검증할지 (기본 26)")
+        parser.add_argument("--weeks", type=int, default=0,
+                            help="현재 주 제외, 과거 몇 주를 검증할지 (0=전체 기간 자동)")
 
     def handle(self, *args, **opts):
         weeks = opts["weeks"]
         today = date.today()
         cur_monday = today - timedelta(days=today.weekday())
+
+        if weeks <= 0:
+            # 전체 기간: 가장 오래된 시뮬 상품의 주차까지 자동 산정.
+            # (고정 주수는 시간이 지나면 옛 주차가 창밖으로 밀려나
+            #  평가일이 늦게 도래하는 대기 건이 영영 판정 안 되는 문제)
+            first = (Product.objects.filter(
+                loss_prob__isnull=False, barriers_raw__isnull=False,
+                sub_end__isnull=False).order_by("sub_end").first())
+            if not first:
+                self.stdout.write("검증 대상 상품 없음")
+                return
+            weeks = max(1, (cur_monday - first.sub_end).days // 7 + 1)
+            self.stdout.write(f"전체 기간 모드: 과거 {weeks}주 검증")
 
         price_cache = {}
 
