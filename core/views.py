@@ -693,6 +693,17 @@ def portfolio(request):
     port_loss_rate = round(weighted_loss / total_invested, 2) if total_invested else None
     loss_coverage_pct = round(loss_weight / total_invested * 100) if total_invested else 0
 
+    # 유형별(종목형/지수형) 보유 분해 — 건수·투자금액
+    holding_by_type = {
+        "종목형": {"count": 0, "amount": 0},
+        "지수형": {"count": 0, "amount": 0},
+        "기타": {"count": 0, "amount": 0},
+    }
+    for i in holding:
+        t = i.product.asset_type if i.product.asset_type in ("종목형", "지수형") else "기타"
+        holding_by_type[t]["count"] += 1
+        holding_by_type[t]["amount"] += i.amount
+
     # ── 리스크 분석 ──────────────────────────────
     risk = _analyze_risk(holding, total_invested)
 
@@ -801,6 +812,7 @@ def portfolio(request):
         "holding_count": len(holding), "done_count": len(done),
         "h_cols": h_cols, "page_size": page_size,
         "total_invested": total_invested,
+        "holding_by_type": holding_by_type,
         "this_month_evals": this_month_evals,
         "total_redeemed_profit": total_redeemed_profit,
         "total_expected_pretax": total_expected_pretax,

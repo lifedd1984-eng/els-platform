@@ -11,10 +11,18 @@
   <div class="stat-card">
     <div class="stat-label">총 투자금액</div>
     <div class="stat-value">{{ total_invested|intcomma }}<small>원</small></div>
+    <div class="type-split">
+      <span><i class="dot" style="background:var(--orange)"></i>종목형 <b>{{ holding_by_type.종목형.amount|intcomma }}</b></span>
+      <span><i class="dot" style="background:var(--blue)"></i>지수형 <b>{{ holding_by_type.지수형.amount|intcomma }}</b></span>
+    </div>
   </div>
   <div class="stat-card">
     <div class="stat-label">보유 상품</div>
     <div class="stat-value">{{ holding_count }}<small>건</small></div>
+    <div class="type-split">
+      <span><i class="dot" style="background:var(--orange)"></i>종목형 <b>{{ holding_by_type.종목형.count }}건</b></span>
+      <span><i class="dot" style="background:var(--blue)"></i>지수형 <b>{{ holding_by_type.지수형.count }}건</b></span>
+    </div>
   </div>
   <div class="stat-card">
     <div class="stat-label">이번 달 평가 예정</div>

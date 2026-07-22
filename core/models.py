@@ -11,26 +11,32 @@ DIVIDEND_TAX_RATE = 0.154
 FINANCIAL_INCOME_THRESHOLD = 20_000_000
 
 # ══════════════════════════════════════════════════════════════════
-# 레이더 신호 (v5) — 상품이 속한 "청약 주차 × 유형(지수형/종목형)" 그룹 안에서
-#   ① 자격 게이트로 위험상품을 배지 대상에서 제외
-#      (손실 ≥N% · 낙인 종목>M1·지수>M2 · 노낙인 · 수익 하위X%)
-#   ② 자격 통과 상품을 4축 백분위 가중합으로 순위 →
-#      상위 A위 = 아주 강한 신호, A+1~B위 = 강한 신호, 나머지는 배지 없음.
+# 레이더 신호 (v6) — 상품이 속한 "청약 주차 × 유형(지수형/종목형)" 그룹 안에서
+#   ① 게이트로 통과 상품을 선별:
+#      1) 낙인 있는 상품만(노낙인·낙인없음 제외)
+#      2) 낙인 < 35(종목)/45(지수)
+#      3) 1년내 조기상환 ≥ 80%
+#      4) 손실확률 < 5%
+#      5) 막차 배리어 ≤ 65(종목)/75(지수)
+#      6) (게이트 통과분 중) 수익률 상위 50%
+#   ② 점수 = 수익률 − 낙인 + 20, 내림차순 순위 →
+#      상위 5위 = 아주 강한 신호, 6~15위 = 강한 신호, 나머지는 배지 없음.
 # 주차별 상대평가라 과거 주차 결과는 고정 → 지난 상품도 동일하게 배지가 붙는다.
 #
 # ┌────────────────────────────────────────────────────────────────┐
 # │ ⚙️  신호 로직 튜닝 파라미터 — 로직 변경은 아래 상수만 고치면 됨    │
 # │     (계산 흐름은 _compute_radar_pool 함수, 이 상수들만 참조함)     │
 # └────────────────────────────────────────────────────────────────┘
-# 4축 가중치 (합=1.0) — 생존자 순위 산정용
-RADAR_W = {"yield": 0.35, "early": 0.30, "defense": 0.20, "safe": 0.15}
-# 배지 자격 게이트 (하나라도 걸리면 실격 = 배지 없음)
-RADAR_LOSS_MAX = 2.0            # 손실확률(%) 이상이면 실격
-RADAR_KI_MAX = {"종목형": 40, "지수형": 45}   # 낙인 초과 시 실격 (노낙인은 항상 실격)
-RADAR_YIELD_BOTTOM_PCT = 0.4   # 그룹 내 수익률 하위 이 비율은 실격 (0.4 = 하위 40%)
-# 등급 컷 (자격 통과 상품의 그룹 내 순위 기준)
+# 게이트 임계값 (그룹별)
+RADAR_KI_EXCL = {"종목형": 35, "지수형": 45}    # 낙인 이 값 '이상'이면 제외
+RADAR_LAST_MAX = {"종목형": 65, "지수형": 75}   # 막차 배리어 이 값 '이하'만 통과
+RADAR_EARLY_MIN = 80           # 1년내 조기상환 % 이상만 통과
+RADAR_LOSS_MAX = 5             # 손실확률 % '이상'이면 제외
+RADAR_YIELD_TOP_PCT = 0.5      # 게이트 통과분 중 수익률 상위 이 비율만 (0.5 = 상위 50%)
+RADAR_SCORE_SHIFT = 20         # 점수 = 수익률 − 낙인 + 이 값 (음수 방지)
+# 등급 컷 (점수 순위 기준)
 RADAR_TOP_STRONG = 5    # 1 ~ 이 순위 = 아주 강한 신호
-RADAR_TOP_WEAK = 10     # (상위)+1 ~ 이 순위 = 강한 신호, 그 외 배지 없음
+RADAR_TOP_WEAK = 15     # (상위)+1 ~ 이 순위 = 강한 신호, 그 외 배지 없음
 RADAR_COLORS = {"아주 강한 신호": "#1B64DA", "강한 신호": "#3182F6"}
 # ── 튜닝 파라미터 끝 ────────────────────────────────────────────────
 _RADAR_POOL_CACHE = {}   # (monday_iso, asset_type) -> {"day": date|None, "map": {pid: result}}
@@ -99,73 +105,60 @@ def _radar_axes(p, ax):
 
 
 def _compute_radar_pool(monday, asset_type):
-    """(주차, 유형) 그룹의 {product_id: radar_result} 계산."""
+    """(주차, 유형) 그룹의 {product_id: radar_result} 계산. 배지 대상만 담는다."""
     sunday = monday + timedelta(days=6)
     group = list(Product.objects.filter(
         sub_end__gte=monday, sub_end__lte=sunday,
         asset_type=asset_type, loss_prob__isnull=False))
-    n = len(group)
-    if n == 0:
+    if not group:
         return {}
-    ki_max = RADAR_KI_MAX[asset_type]
-    yields = [p.yield_rate or 0 for p in group]
-    y_thr = sorted(yields)[int(len(yields) * RADAR_YIELD_BOTTOM_PCT)]   # 수익 하위 경계
+    ki_excl = RADAR_KI_EXCL[asset_type]
+    last_max = RADAR_LAST_MAX[asset_type]
+
+    # ── 게이트 ①~⑤ ──
+    survivors = [p for p in group if (
+        (not p.is_no_ki and p.ki is not None)          # ① 낙인 있음
+        and p.ki < ki_excl                              # ② 낙인 < 임계
+        and (_radar_early(p) or 0) >= RADAR_EARLY_MIN   # ③ 1년내 조기상환
+        and (p.loss_prob or 0) < RADAR_LOSS_MAX         # ④ 손실확률
+        and p.barrier_last is not None
+        and p.barrier_last <= last_max                  # ⑤ 막차 배리어
+    )]
+    # ⑥ 수익률 상위 50% (게이트 통과분 기준)
+    if survivors:
+        ys = sorted(p.yield_rate or 0 for p in survivors)
+        y_med = ys[len(ys) // 2]
+        survivors = [p for p in survivors if (p.yield_rate or 0) >= y_med]
+
+    # 점수 = 수익률 − 낙인 + 상수, 내림차순 순위 → 등급
+    ranked = sorted(survivors, key=lambda p: (p.yield_rate or 0) - p.ki + RADAR_SCORE_SHIFT,
+                    reverse=True)
+    eligible_n = len(ranked)
+
+    # 4축 백분위 (시각용 — 그룹 전체 기준)
     cols = {
-        "yield": yields,
+        "yield": [p.yield_rate or 0 for p in group],
         "early": [_radar_early(p) for p in group],
         "defense": [_radar_defense_metric(p) for p in group],
         "safe": [-(p.loss_prob or 0) for p in group],
     }
-    recs = []
-    for p in group:
-        m = {"yield": p.yield_rate or 0, "early": _radar_early(p),
-             "defense": _radar_defense_metric(p), "safe": -(p.loss_prob or 0)}
-        ax = {k: round(_radar_pct(cols[k], m[k])) for k in RADAR_W}
-        comp = sum(RADAR_W[k] * ax[k] for k in RADAR_W)
-
-        # ── 배지 자격 게이트: 하나라도 걸리면 실격(배지 없음) ──
-        loss = p.loss_prob or 0
-        eligible = True
-        reasons = []
-        if loss >= RADAR_LOSS_MAX:
-            eligible = False
-            reasons.append(f"손실 {loss:g}%")
-        if p.is_no_ki or p.ki is None:
-            eligible = False
-            reasons.append("노낙인")
-        elif p.ki > ki_max:
-            eligible = False
-            reasons.append(f"낙인 {p.ki}")
-        if (p.yield_rate or 0) < y_thr:
-            eligible = False
-            reasons.append("저수익")
-        recs.append({"p": p, "ax": ax, "comp": comp,
-                     "eligible": eligible, "reasons": reasons})
-
-    # 자격 통과 상품 가중순위 → 1~5 아주강한, 6~10 강한, 그 외 배지 없음
-    survivors = sorted([r for r in recs if r["eligible"]],
-                       key=lambda r: r["comp"], reverse=True)
-    for i, r in enumerate(survivors):
-        if i < RADAR_TOP_STRONG:
-            r["tier"] = "아주 강한 신호"
-        elif i < RADAR_TOP_WEAK:
-            r["tier"] = "강한 신호"
-        else:
-            r["tier"] = None
-        r["srank"] = i + 1
-    for r in recs:
-        if not r["eligible"]:
-            r["tier"] = None
-            r["srank"] = None
 
     result = {}
-    for r in recs:
-        p, ax = r["p"], r["ax"]
-        tier = r["tier"]
-        color = RADAR_COLORS.get(tier, "#B0B8C1")
+    for i, p in enumerate(ranked):
+        if i < RADAR_TOP_STRONG:
+            tier = "아주 강한 신호"
+        elif i < RADAR_TOP_WEAK:
+            tier = "강한 신호"
+        else:
+            break   # 16위부터는 배지 없음 → 저장 안 함
+        m = {"yield": p.yield_rate or 0, "early": _radar_early(p),
+             "defense": _radar_defense_metric(p), "safe": -(p.loss_prob or 0)}
+        ax = {k: round(_radar_pct(cols[k], m[k])) for k in ("yield", "early", "defense", "safe")}
         result[p.id] = {
-            "tier": tier, "color": color, "srank": r["srank"], "group_n": n,
-            "reasons": r["reasons"], "eligible": r["eligible"],
+            "tier": tier, "color": RADAR_COLORS[tier],
+            "srank": i + 1, "group_n": eligible_n,
+            "score": round((p.yield_rate or 0) - p.ki + RADAR_SCORE_SHIFT, 1),
+            "reasons": [],
             "points": _radar_points(ax), "mini_points": _radar_mini_points(ax),
             "axes": _radar_axes(p, ax),
         }
@@ -328,15 +321,15 @@ class Product(models.Model):
 
     @property
     def radar(self):
-        """레이더 신호 — 상품이 속한 (청약 주차 × 유형) 그룹에서 상위 5/10위 안에
-        든 경우에만 배지 정보를 반환. 그 외(자격 실격·순위 밖)는 None.
+        """레이더 신호 — 상품이 속한 (청약 주차 × 유형) 그룹에서 상위 15위 안에
+        든 경우에만 배지 정보를 반환. 그 외(게이트 탈락·순위 밖)는 None.
 
-        반환: {tier, color, srank, group_n, reasons, points, mini_points, axes[4]}
+        반환: {tier, color, srank, group_n, score, points, mini_points, axes[4]}
         상세 산식은 모듈 상단 _compute_radar_pool 참고.
         """
         if self.loss_prob is None or not self.sub_end:
             return None
-        if self.asset_type not in RADAR_KI_MAX:
+        if self.asset_type not in RADAR_KI_EXCL:
             return None
         monday = self.sub_end - timedelta(days=self.sub_end.weekday())
         r = _radar_pool(monday, self.asset_type).get(self.id)
