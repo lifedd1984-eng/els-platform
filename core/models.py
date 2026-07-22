@@ -356,8 +356,6 @@ class Product(models.Model):
             return "리자드"
         if self.barriers_raw:
             return None  # 정상 스텝다운 → 별도 라벨 없음
-        if re.search(r"원금지급|원금보장", d) or self.product_type == "ELB":
-            return "원금보장"
         if re.search(r"하이파이브|Hi-Five", d, re.I):
             return "하이파이브"
         if self.is_no_ki:
