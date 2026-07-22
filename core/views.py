@@ -223,17 +223,15 @@ def weekly(request):
     # 아주 강한 신호 상품 중 손실확률 0% & 1년내 조기상환 ≥90% → 수익률 상위 5.
     # (고쿠폰이지만 손실확률이 있는 상품은 '강한 신호'에서 확인)
     # 중복도 = 보유 포트폴리오 중 같은 기초자산을 가진 투자금 비중.
+    # 선정 로직은 models.radar_top5()로 통일(주간요약 텔레그램과 동일 기준).
+    # overlap(보유 중복도) 계산만 뷰에 남긴다.
     recommendations = []
     if offset >= 0:  # 지난 주 조회 시에는 표시 안 함
         from core import market as _mkt
+        from core.models import radar_top5, _radar_early
 
         def _asset_keys(raw):
             return {_mkt.resolve_ticker(a) or a for a in _mkt.split_assets(raw)}
-
-        def _early1y(p):
-            sr = p.sim_result or {}
-            e = sr.get("early_1y_pct")
-            return e if e is not None else (sr.get("early_redemp_pct") or 0)
 
         inv_assets = [
             (inv.amount, _asset_keys(inv.product.assets_raw))
@@ -241,28 +239,17 @@ def weekly(request):
         ]
         total_held = sum(amt for amt, _ in inv_assets)
 
-        pool = Product.objects.filter(
-            sub_end__gte=max(monday, date.today()), sub_end__lte=sunday,
-            barriers_raw__isnull=False, yield_rate__isnull=False,
-            loss_prob__isnull=False,
-        )
         # 중복도는 가족(staff) 계정에만 표시 — 외부인에게 보유 성향 노출 방지
         show_overlap = request.user.is_authenticated and request.user.is_staff
-        cand = []
-        for p in pool:
-            r = p.radar
-            if not (r and r["tier"] == "아주 강한 신호"):
-                continue
-            if (p.loss_prob or 0) != 0 or _early1y(p) < 90:
-                continue
+        for p in radar_top5(monday, sunday):
             overlap_pct = None
             if show_overlap:
                 pkeys = _asset_keys(p.assets_raw)
                 overlap = sum(amt for amt, keys in inv_assets if keys & pkeys)
                 overlap_pct = round(overlap / total_held * 100) if total_held else 0
-            cand.append({"p": p, "overlap_pct": overlap_pct, "early1y": round(_early1y(p))})
-        cand.sort(key=lambda r: -(r["p"].yield_rate or 0))
-        recommendations = cand[:5]
+            recommendations.append(
+                {"p": p, "overlap_pct": overlap_pct, "early1y": round(_radar_early(p))}
+            )
 
     return render(request, "core/weekly.html", {
         "products": products,

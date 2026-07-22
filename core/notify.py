@@ -77,19 +77,20 @@ def notify_weekly_digest(stdout=None):
     weekday = "월화수목금토일"[today.weekday()]
     lines = [f"[주간 요약] {today:%m.%d}({weekday})"]
 
-    # ① 이번주 마감 고수익 TOP5 (스텝다운형만 — 손실확률 있는 것 우선)
-    closing = (
-        Product.objects.filter(sub_end__gte=today, sub_end__lte=week_end,
-                               barriers_raw__isnull=False, yield_rate__isnull=False)
-        .order_by("-yield_rate")
-    )
-    lines.append(f"\n▶ 이번주 마감 청약 {closing.count()}건 — 수익률 TOP5")
-    for p in closing[:5]:
-        loss = f"손실확률 {p.loss_prob}%" if p.loss_prob is not None else "손실확률 -"
-        lines.append(
-            f"- {p.issuer} {p.product_no}: 연 {p.yield_rate}% "
-            f"KI{p.ki_display} {loss} ~{p.sub_end:%m.%d}"
-        )
+    # ① 이번주 레이더 추천 TOP5 (사이트 추천과 동일 기준 — radar_top5 공용)
+    from core.models import radar_top5, _radar_early
+    top = radar_top5()
+    lines.append("\n📡 이번주 레이더 추천 TOP5")
+    lines.append("(아주 강한 신호 · 손실확률 0% · 1년내 상환 90%↑)")
+    if not top:
+        lines.append("이번주 추천 기준 통과 상품 없음")
+    else:
+        for i, p in enumerate(top, 1):
+            early = round(_radar_early(p))
+            lines.append(
+                f"{i}. {p.issuer} {p.product_no} [{p.asset_type}] "
+                f"연 {p.yield_rate:g}% · 1년내 {early}% · ~{p.sub_end.month}/{p.sub_end.day}"
+            )
 
     # ② 향후 7일 보유상품 평가예정
     upcoming = []
