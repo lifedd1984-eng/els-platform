@@ -330,7 +330,9 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
       <input type="hidden" name="next" id="invNext">
       <div class="form-field" style="margin-bottom:12px">
         <label>투자금액 (원)</label>
-        <input type="number" name="amount" id="invAmount" placeholder="10000000" required style="width:100%">
+        <input type="text" inputmode="numeric" name="amount" id="invAmount" placeholder="10,000,000"
+               required style="width:100%" autocomplete="off" oninput="els_fmt_amount(this)">
+        <div id="invAmountHint" style="font-size:12px;color:var(--blue-dark);font-weight:700;margin-top:4px;min-height:16px"></div>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:12px">
         <div class="form-field" style="flex:1">
@@ -351,13 +353,33 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   </div>
 </div>
 <script>
+// 금액 → "1억 5,000만 원" 한글 읽기
+function els_kor_money(n) {
+  if (!n) return '';
+  var eok = Math.floor(n / 100000000);
+  var man = Math.floor((n % 100000000) / 10000);
+  var rest = n % 10000;
+  var parts = [];
+  if (eok) parts.push(eok + '억');
+  if (man) parts.push(man.toLocaleString() + '만');
+  if (rest) parts.push(rest.toLocaleString());
+  return parts.join(' ') + ' 원';
+}
+// 입력 실시간 콤마 포맷 + 읽기 힌트
+function els_fmt_amount(el) {
+  var raw = el.value.replace(/[^0-9]/g, '');
+  el.value = raw ? Number(raw).toLocaleString() : '';
+  var hint = document.getElementById('invAmountHint');
+  if (hint) hint.textContent = raw ? els_kor_money(Number(raw)) : '';
+}
 function els_inv_open(id, name) {
   document.getElementById('invProductId').value = id;
   document.getElementById('invProdName').textContent = name || '';
   document.getElementById('invNext').value = location.pathname + location.search;
   var d = document.getElementById('invDate'); if (!d.value) d.value = new Date().toISOString().slice(0,10);
+  var a = document.getElementById('invAmount'); a.value = ''; document.getElementById('invAmountHint').textContent = '';
   document.getElementById('invModal').style.display = 'flex';
-  document.getElementById('invAmount').focus();
+  a.focus();
 }
 function els_inv_close() { document.getElementById('invModal').style.display = 'none'; }
 document.getElementById('invModal').addEventListener('click', function(e){ if (e.target === this) els_inv_close(); });
