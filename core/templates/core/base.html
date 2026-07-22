@@ -348,16 +348,6 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
                required style="width:100%" autocomplete="off" oninput="els_fmt_amount(this)">
         <div id="invAmountHint" style="font-size:12px;color:var(--blue-dark);font-weight:700;margin-top:4px;min-height:16px"></div>
       </div>
-      <div style="display:flex;gap:10px;margin-bottom:12px">
-        <div class="form-field" style="flex:1">
-          <label>청약일</label>
-          <input type="date" name="invested_at" id="invDate" style="width:100%">
-        </div>
-        <div class="form-field" style="flex:1">
-          <label>증권사/계좌 <span style="color:var(--text-3)">(선택)</span></label>
-          <input type="text" name="broker_account" placeholder="선택" style="width:100%">
-        </div>
-      </div>
       <div class="form-field" style="margin-bottom:18px">
         <label>메모 <span style="color:var(--text-3)">(선택)</span></label>
         <input type="text" name="memo" placeholder="선택" style="width:100%">
@@ -397,7 +387,6 @@ function els_inv_open(id, name) {
   document.getElementById('invProductId').value = id;
   document.getElementById('invProdName').textContent = name || '';
   document.getElementById('invNext').value = location.pathname + location.search;
-  var d = document.getElementById('invDate'); if (!d.value) d.value = new Date().toISOString().slice(0,10);
   var a = document.getElementById('invAmount'); a.value = ''; document.getElementById('invAmountHint').textContent = '';
   document.getElementById('invModal').style.display = 'flex';
   a.focus();
