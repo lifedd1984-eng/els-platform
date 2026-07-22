@@ -37,8 +37,13 @@ def extract_ki(text):
     if not text:
         return None
     text = str(text)
-    # ① 명시적 KI 숫자 — 무조건 최우선. KI가 있으면 원금(부분)보장·실물상환 등
-    #    어떤 구조라도 KI로 본다 (예: '실물주식인도'·'80%원금지급형'이라도 KI25면 낙인 25).
+    # ① 명시적 '낙인 없음' 선언 — 최우선 확정. (NoKI 상품은 KI가 없으므로,
+    #    'NoKI 3년' 같은 표기에서 catch-all이 '3'을 KI로 오인하는 것을 막는다.)
+    if re.search(r'no\s*KI|KI\s*없음|노\s*KI', text, re.IGNORECASE):
+        return 'NoKI'
+
+    # ② 명시적 KI 숫자 — 원금(부분)보장·실물상환 등 어떤 구조추론보다 우선.
+    #    (예: '실물주식인도'·'80%원금지급형'이라도 KI25면 낙인 25.)
     patterns = [
         r'/(\d+)KI[\]\)]',           # /25KI]  /40KI)
         r',\s*(\d+)KI\s*\(',         # ,30KI(
@@ -55,9 +60,7 @@ def extract_ki(text):
         if m:
             return m.group(1)
 
-    # ② KI 숫자가 없을 때만 '낙인 부재' 판정
-    if re.search(r'no\s*KI|KI\s*없음|노\s*KI', text, re.IGNORECASE):
-        return 'NoKI'
+    # ③ KI 숫자가 없을 때만 '낙인 부재' 판정
     if re.search(r'하이파이브|Hi-Five|원금지급형|원금추가지급형|원금지급추구형|Digital형|원금보장', text):
         return 'NoKI'
     # 상승참여형: 낙인 배리어 없이 만기 시 상승/하락 참여율만으로 정산하는 구조
