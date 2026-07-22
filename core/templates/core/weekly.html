@@ -20,6 +20,14 @@
   <span class="week-label">{{ monday|date:"n.j" }} ~ {{ sunday|date:"n.j" }}</span>
   <a href="?{% qs_replace w=offset|add:'1' %}" class="btn"><i class="fa-solid fa-chevron-right"></i></a>
   {% if offset != 0 %}<a href="?{% qs_replace w=0 %}" class="btn btn-sm">이번 주로</a>{% endif %}
+  <form action="{% url 'search' %}" method="get" class="week-search" style="margin-left:auto;display:flex;gap:6px;align-items:center">
+    <span style="position:relative;display:inline-block">
+      <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:12px;pointer-events:none"></i>
+      <input type="text" name="q" placeholder="상품번호·발행사·기초자산 검색" autocomplete="off"
+             style="padding:8px 12px 8px 32px;border:1px solid var(--border);border-radius:9px;font-size:13px;width:230px;max-width:52vw">
+    </span>
+    <button class="btn btn-primary btn-sm" style="white-space:nowrap">검색</button>
+  </form>
 </div>
 
 <div class="filterbar">
