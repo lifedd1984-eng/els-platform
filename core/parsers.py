@@ -211,7 +211,8 @@ def extract_barriers(text):
 
     # 범용 폴백: 접두 문맥과 무관하게 "숫자-숫자-...(선택적 (Lxx))" 가
     # 바로 KI숫자 앞에 오는 모든 경우 (KOFIA 원문 다양한 표기 대응, "KI_30" 언더스코어 포함)
-    m = re.search(r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*/?\s*KI[_\s]*\d+', text)
+    # 배리어열과 KI 사이 구분자로 콤마(유진 "...70-60, KI30")·슬래시 모두 허용
+    m = re.search(r'([0-9]{2}(?:\(L\d+\))?(?:-[0-9]{2}(?:\(L\d+\))?){1,})\s*[,/]?\s*KI[_\s]*\d+', text)
     if m:
         raw = re.sub(r'\(L\d+\)', '', m.group(1))
         vals = [v for v in raw.split('-') if re.match(r'^\d+$', v.strip())]
