@@ -344,23 +344,22 @@ class Product(models.Model):
 
     @property
     def structure_label(self):
-        """상품 구조 라벨. 스텝다운(배리어 있음)은 None(라벨 불필요).
+        """상품 구조 특이사항 라벨. 정상 스텝다운(배리어 있고 특이사항 없음)은 None.
 
-        배리어가 없는 비(非)스텝다운 상품이 왜 배리어·주기·KI 칸이 비는지
-        화면에서 바로 알 수 있도록 구조를 표시한다.
+        - 리자드: 배리어가 있어도 구조 특징이라 표시(스텝다운 + 리자드 조기상환)
+        - 원금보장/하이파이브/기타: 배리어 없는 비스텝다운 상품의 구조 안내
         """
-        if self.barriers_raw:
-            return None  # 정상 스텝다운 → 별도 라벨 없음
         import re
         d = self.description or ""
+        # 리자드는 배리어 유무와 무관하게 표시 (텍스트가 주 신호, (Lxx) 마커는 보조)
+        if re.search(r"Lizard|리자드|리쟈드", d, re.I) or re.search(r"\(L\d+\)", d):
+            return "리자드"
+        if self.barriers_raw:
+            return None  # 정상 스텝다운 → 별도 라벨 없음
         if re.search(r"원금지급|원금보장", d) or self.product_type == "ELB":
             return "원금보장"
-        if re.search(r"digital|디지털", d, re.I):
-            return "디지털"
         if re.search(r"하이파이브|Hi-Five", d, re.I):
             return "하이파이브"
-        if re.search(r"국고채|국채|KTB|금리|환율|USD/KRW|DLS", d, re.I):
-            return "DLS"
         if self.is_no_ki:
             return None   # 노낙인은 낙인 컬럼의 NoKI 배지로 이미 표시 → 유형 중복 제거
         return "기타"

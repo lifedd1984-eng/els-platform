@@ -141,7 +141,7 @@
           </td>
           <td>
             {% if p.asset_type %}<span class="badge {% if p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ p.asset_type }}</span>{% endif %}
-            {% if p.structure_label %}<span class="badge badge-gray" title="스텝다운형이 아니라 조기상환 배리어·주기가 없는 상품입니다">{{ p.structure_label }}</span>{% endif %}
+            {% if p.structure_label %}<span class="badge badge-gray" title="{% if p.structure_label == '리자드' %}리자드 조기상환: 한 번이라도 리자드 배리어를 넘으면 하락해도 조기상환{% else %}스텝다운형이 아니라 조기상환 배리어·주기가 없는 상품입니다{% endif %}">{{ p.structure_label }}</span>{% endif %}
             {% if p.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}
           </td>
           <td class="num" style="white-space:nowrap">
