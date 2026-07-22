@@ -290,16 +290,21 @@ def fetch_current_price(ticker: str):
 
 
 def fetch_price_on(ticker: str, target_date):
-    """target_date 근처(±7일) 종가 조회 → 발행일 기준가. 실패 시 None."""
+    """target_date 당일 종가 (휴장이면 직전 거래일 종가). 실패 시 None.
+
+    주의: 예전엔 (target−3일) 창의 '첫' 거래일 종가를 반환해 발행일보다
+    며칠 前 종가를 기준가로 잡는 버그가 있었음 (급등락 구간에서 낙인
+    레벨·상환판정·신호검증이 모두 어긋남). target 이하 '마지막' 종가가 정답."""
     import yfinance as yf
     from datetime import timedelta
     try:
-        start = (target_date - timedelta(days=3)).strftime("%Y-%m-%d")
-        end = (target_date + timedelta(days=7)).strftime("%Y-%m-%d")
+        start = (target_date - timedelta(days=10)).strftime("%Y-%m-%d")
+        end = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
         h = yf.Ticker(ticker).history(start=start, end=end)
         price = h["Close"].dropna()
+        # end가 배타적이라 창 안은 전부 target 이하 → 마지막 = 당일(또는 직전 거래일)
         if len(price):
-            return float(price.iloc[0])  # 발행일 이후 첫 거래일 종가
+            return float(price.iloc[-1])
     except Exception:
         pass
     return None
