@@ -136,6 +136,68 @@ def shorten_asset_display(assets_raw: str) -> str:
     return "/".join(out)
 
 
+# ── 자동 학습 티커맵 (Yahoo 검색으로 해결한 신규 자산을 영구 저장) ──
+import json as _json
+import os as _os
+
+_LEARNED_PATH = _os.path.abspath(
+    _os.path.join(_os.path.dirname(__file__), "..", "data", "ticker_learned.json"))
+_learned_cache = None
+
+
+def _load_learned():
+    global _learned_cache
+    if _learned_cache is None:
+        try:
+            with open(_LEARNED_PATH, encoding="utf-8") as f:
+                _learned_cache = _json.load(f)
+        except Exception:
+            _learned_cache = {}
+    return _learned_cache
+
+
+def learn_ticker(name, ticker):
+    """이름→티커 매핑을 학습 저장소에 추가(영구)."""
+    m = dict(_load_learned())
+    m[name.strip()] = ticker
+    _os.makedirs(_os.path.dirname(_LEARNED_PATH), exist_ok=True)
+    with open(_LEARNED_PATH, "w", encoding="utf-8") as f:
+        _json.dump(m, f, ensure_ascii=False, indent=0, sort_keys=True)
+    global _learned_cache
+    _learned_cache = m
+
+
+def auto_resolve_ticker(name: str):
+    """영문 종목명을 Yahoo Finance 검색으로 자동 해결. 실패 시 None.
+    한글/비ASCII·인덱스명은 오매핑 위험이 커서 시도하지 않는다(→ 수동 알림 대상).
+    반환된 종목명이 질의와 일치하는지 검증해 엉뚱한 매핑을 막는다."""
+    import urllib.request
+    import urllib.parse
+    q = re.sub(r"\sIndex$", "", (name or "").strip(), flags=re.IGNORECASE).strip()
+    if not q or not q.isascii() or len(q) < 2:
+        return None
+    q_norm = re.sub(r"[^A-Z0-9 ]", "", q.upper()).strip()
+    if not q_norm:
+        return None
+    url = "https://query1.finance.yahoo.com/v1/finance/search?" + urllib.parse.urlencode(
+        {"q": q, "quotesCount": 8, "newsCount": 0, "lang": "en-US", "region": "US"})
+    req = urllib.request.Request(
+        url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
+    try:
+        data = _json.load(urllib.request.urlopen(req, timeout=10))
+    except Exception:
+        return None
+    for x in data.get("quotes", []):
+        if x.get("quoteType") != "EQUITY":
+            continue
+        sym = (x.get("symbol") or "").strip()
+        sn = re.sub(r"[^A-Z0-9 ]", "", (x.get("shortname") or x.get("longname") or "").upper())
+        # 질의 전체가 종목명에 포함되거나, 심볼과 일치해야 채택 (오매핑 방지)
+        if sym and (q_norm in sn or q_norm.replace(" ", "") == sym.upper().replace(".", "")):
+            return sym
+    return None
+
+
 def resolve_ticker(asset_name: str):
     """기초자산명 → 티커. 매핑 실패 시 None."""
     name = asset_name.strip()
@@ -151,7 +213,9 @@ def resolve_ticker(asset_name: str):
     for k, v in TICKER_MAP.items():
         if k.upper() == upper:
             return v
-    return None
+    # 자동 학습 저장소 (Yahoo 검색으로 확정된 신규 자산)
+    learned = _load_learned()
+    return learned.get(name) or learned.get(asset_name.strip())
 
 
 def fetch_current_price(ticker: str):

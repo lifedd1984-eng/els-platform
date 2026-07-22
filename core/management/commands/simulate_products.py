@@ -56,6 +56,9 @@ class Command(BaseCommand):
         products = list(qs)
         self.stdout.write(f"대상 상품: {len(products)}건")
 
+        # ── 미매핑 기초자산 자동 해결 (Yahoo 검색) → 학습 저장 후 아래 시뮬에 반영 ──
+        self._auto_learn_tickers(products)
+
         price_cache = {}  # ticker -> pandas Series (없으면 None)
         years = opts["years"]
 
@@ -137,6 +140,38 @@ class Command(BaseCommand):
         p.sim_result = {"available": False, "reason": result.get("reason", "")}
         p.sim_updated = timezone.now()
         p.save(update_fields=["sim_result", "sim_updated"])
+
+    def _auto_learn_tickers(self, products):
+        """대상 상품의 미매핑 기초자산을 Yahoo 검색으로 자동 해결해 학습 저장.
+        영문명만 자동 해결(한글 등은 오매핑 위험 → 아래 시뮬에서 알림 처리)."""
+        import time
+        pending = {}
+        for p in products:
+            for a in market.split_assets(p.assets_raw):
+                if a.strip().lower() in ("nan", "none", ""):
+                    continue
+                if not market.resolve_ticker(a):
+                    pending[a] = pending.get(a, 0) + 1
+        if not pending:
+            return
+        learned = []
+        for name, cnt in sorted(pending.items(), key=lambda x: -x[1]):
+            tk = market.auto_resolve_ticker(name)
+            if tk:
+                market.learn_ticker(name, tk)
+                learned.append((name, tk, cnt))
+                self.stdout.write(f"  [자동티커] {name!r} → {tk} ({cnt}건)")
+                time.sleep(0.6)
+        if learned:
+            self.stdout.write(f"[자동티커] {len(learned)}종 학습 저장")
+            try:
+                from core import telegram
+                lines = ["[티커 자동추가] 신규 기초자산 자동 해결"]
+                lines += [f"- {n} → {t} ({c}개)" for n, t, c in learned]
+                lines.append("검증 후 필요시 core/market.py TICKER_MAP으로 승격")
+                telegram.send_message("\n".join(lines))
+            except Exception:
+                pass
 
     def _simulate_one(self, product, price_cache, years):
         assets = market.split_assets(product.assets_raw)
