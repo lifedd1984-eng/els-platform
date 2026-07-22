@@ -2,3 +2,4 @@ Django>=5.0
 openpyxl>=3.1
 requests>=2.31
 yfinance>=0.2
+finance-datareader>=0.9  # KRX 종목마스터 (기초자산 티커 자동 해결)

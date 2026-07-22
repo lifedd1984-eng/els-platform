@@ -40,3 +40,4 @@ seibro_raw*/
 
 # 자동 학습 티커맵 (런타임 캐시)
 data/ticker_learned.json
+data/krx_master.json

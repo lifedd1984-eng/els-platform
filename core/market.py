@@ -167,15 +167,72 @@ def learn_ticker(name, ticker):
     _learned_cache = m
 
 
+_KRX_PATH = _os.path.abspath(
+    _os.path.join(_os.path.dirname(__file__), "..", "data", "krx_master.json"))
+_krx_cache = None
+
+
+def _krx_norm(s):
+    return re.sub(r"[^0-9A-Z가-힣]", "", (s or "").upper())
+
+
+def _krx_master():
+    """KRX 상장 종목마스터 {정규화이름: 티커}. 7일 캐시, 실패 시 있으면 스테일 사용."""
+    global _krx_cache
+    if _krx_cache is not None:
+        return _krx_cache
+    from datetime import date
+    # 캐시 로드
+    cached = None
+    try:
+        with open(_KRX_PATH, encoding="utf-8") as f:
+            cached = _json.load(f)
+    except Exception:
+        cached = None
+    fresh = cached and cached.get("date") == date.today().isoformat()
+    if fresh:
+        _krx_cache = cached["map"]
+        return _krx_cache
+    # 갱신 시도 (FinanceDataReader)
+    try:
+        import FinanceDataReader as fdr
+        df = fdr.StockListing("KRX")
+        m = {}
+        for _, r in df.iterrows():
+            code, name, mkt = str(r["Code"]), str(r["Name"]), str(r.get("Market") or "")
+            if not code or not name or name == "nan":
+                continue
+            suffix = ".KQ" if "KOSDAQ" in mkt.upper() else (
+                ".KN" if "KONEX" in mkt.upper() else ".KS")
+            m[_krx_norm(name)] = code.zfill(6) + suffix
+        _os.makedirs(_os.path.dirname(_KRX_PATH), exist_ok=True)
+        with open(_KRX_PATH, "w", encoding="utf-8") as f:
+            _json.dump({"date": date.today().isoformat(), "map": m}, f, ensure_ascii=False)
+        _krx_cache = m
+    except Exception:
+        _krx_cache = cached["map"] if cached else {}   # 스테일 폴백
+    return _krx_cache
+
+
 def auto_resolve_ticker(name: str):
-    """영문 종목명을 Yahoo Finance 검색으로 자동 해결. 실패 시 None.
-    한글/비ASCII·인덱스명은 오매핑 위험이 커서 시도하지 않는다(→ 수동 알림 대상).
-    반환된 종목명이 질의와 일치하는지 검증해 엉뚱한 매핑을 막는다."""
+    """신규 종목명을 자동 해결. 실패 시 None.
+    ① KRX 종목마스터(한글·영문 국내주 정확) → ② 영문명은 Yahoo 검색(해외주).
+    Yahoo는 반환 종목명 일치를 검증해 오매핑을 막고, 한글은 KRX에서만 찾는다."""
+    q = re.sub(r"\sIndex$", "", (name or "").strip(), flags=re.IGNORECASE).strip()
+    if not q or len(q) < 2:
+        return None
+
+    # ① KRX 국내 상장 종목 (한글/영문 모두 정확)
+    krx = _krx_master()
+    tk = krx.get(_krx_norm(q))
+    if tk:
+        return tk
+
+    # ② 해외주: 영문명만 Yahoo 검색 (한글은 오매핑 위험 → 포기)
+    if not q.isascii():
+        return None
     import urllib.request
     import urllib.parse
-    q = re.sub(r"\sIndex$", "", (name or "").strip(), flags=re.IGNORECASE).strip()
-    if not q or not q.isascii() or len(q) < 2:
-        return None
     q_norm = re.sub(r"[^A-Z0-9 ]", "", q.upper()).strip()
     if not q_norm:
         return None
