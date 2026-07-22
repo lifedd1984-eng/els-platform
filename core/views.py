@@ -1190,7 +1190,9 @@ def market_trend(request):
                 b["miss"] += 1
             else:
                 b["wait"] += 1
-        recent_weeks = sorted(wk_map)[-12:]
+        # 전체 주차 표시 — 판정 확정이 몰린 초기(1~5월) 주차가 최근 12주 창에
+        # 잘려 전부 '대기'만 보이던 문제
+        recent_weeks = sorted(wk_map)
         max_total = max((sum(wk_map[w].values()) for w in recent_weeks), default=0) or 1
         BAR_MAX = 96
         radar_weeks = []
@@ -1223,8 +1225,10 @@ def market_trend(request):
                 "rate": round(len(ht) / len(ev) * 100, 1) if ev else None,
             })
 
-        # 최근 판정 내역 10건 (배지 상품, 최근 평가일 순)
-        radar_recent = sorted(badges, key=lambda v: v.eval_date, reverse=True)[:10]
+        # 최근 판정 내역 10건 — 판정 확정건만 (평가 전 대기는 미래 평가일이라 제외)
+        radar_recent = sorted(
+            (v for v in badges if v.met is not None),
+            key=lambda v: v.eval_date, reverse=True)[:10]
 
         radar = {
             "stats": radar_stats,
