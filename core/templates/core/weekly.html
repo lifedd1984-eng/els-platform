@@ -84,19 +84,18 @@
 <div class="card" style="padding:14px 16px;margin-bottom:14px">
   <div style="font-weight:800;margin-bottom:10px">
     <i class="fa-solid fa-lightbulb" style="color:var(--blue-dark)"></i> 이번주 추천 TOP5
-    <span style="font-weight:400;font-size:12px;color:var(--text-3)">추천점수 = 연수익률 × (1 − 손실확률) · 중복 = 같은 기초자산 보유 비중</span>
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">아주 강한 신호 · 손실확률 0% · 1년내 상환 90%↑ 중 수익률 상위 5</span>
   </div>
   <div style="display:flex;gap:10px;flex-wrap:wrap">
     {% for r in recommendations %}
     <a href="{% url 'product_detail' r.p.id %}" class="rec-card" style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-decoration:none;color:inherit">
-      <div style="font-size:12px;color:var(--text-2)">{{ r.p.issuer }} {{ r.p.product_no }}</div>
-      <div style="font-weight:800;font-size:18px;color:var(--blue-dark)">{{ r.score }}<span style="font-size:11px;color:var(--text-3)"> 점</span>
-        {% if r.score >= 50 %}<span class="badge badge-blue" style="margin-left:4px">놓치면 아까워요</span>
-        {% elif r.score >= 35 %}<span class="badge badge-green" style="margin-left:4px">적극 검토!</span>
-        {% elif r.score >= 20 %}<span class="badge badge-gray" style="margin-left:4px">무난해요</span>
-        {% else %}<span class="badge badge-orange" style="margin-left:4px">신중히</span>{% endif %}
+      <div style="font-size:12px;color:var(--text-2)">{{ r.p.issuer }} {{ r.p.product_no }}
+        <span class="badge {% if r.p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}" style="margin-left:2px">{{ r.p.asset_type }}</span>
       </div>
-      <div style="font-size:12px">연 {{ r.p.yield_rate }}% · 손실 {{ r.p.loss_prob }}%</div>
+      <div style="font-weight:800;font-size:20px;color:var(--blue-dark)">연 {{ r.p.yield_rate }}<span style="font-size:12px">%</span>
+        <span class="badge" style="background:#1B64DA;color:#fff;margin-left:4px">아주 강한</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-2)">1년내 상환 {{ r.early1y }}% · 손실 0%</div>
       <div style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)">{{ r.p.assets_raw|asset_short }}</div>
       <div style="font-size:11px;margin-top:4px">
         {% if r.overlap_pct is not None %}
