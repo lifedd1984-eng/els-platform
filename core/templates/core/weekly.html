@@ -31,7 +31,11 @@
 </div>
 
 <div class="filterbar">
+  {% if user.is_authenticated %}
+  <a href="{% url 'presets' %}" title="프리셋 관리" style="font-size:12px;font-weight:700;color:var(--blue-dark);text-decoration:none;white-space:nowrap">프리셋 <i class="fa-solid fa-gear" style="font-size:10px"></i></a>
+  {% else %}
   <span style="font-size:12px;font-weight:700;color:var(--text-3)">프리셋</span>
+  {% endif %}
   <a href="?w={{ offset }}" class="preset-chip {% if not filters.preset %}active{% endif %}">전체</a>
   {% for p in presets %}
   <a href="?w={{ offset }}&preset={{ p.id }}" class="preset-chip {% if filters.preset == p.id|stringformat:'s' %}active{% endif %}">{{ p.name }}</a>
