@@ -24,6 +24,14 @@ python "%~dp0manage.py" simulate_products >> "%LOGFILE%" 2>&1
 set "EC_SIM=%ERRORLEVEL%"
 echo [%date% %time%] simulate_products end exit=%EC_SIM% >> "%LOGFILE%"
 
+python "%~dp0manage.py" verify_radar >> "%LOGFILE%" 2>&1
+set "EC_VERIFY=%ERRORLEVEL%"
+echo [%date% %time%] verify_radar end exit=%EC_VERIFY% >> "%LOGFILE%"
+
+python "%~dp0manage.py" send_deadline_alert >> "%LOGFILE%" 2>&1
+set "EC_DEADLINE=%ERRORLEVEL%"
+echo [%date% %time%] send_deadline_alert end exit=%EC_DEADLINE% >> "%LOGFILE%"
+
 python "%~dp0manage.py" send_digest >> "%LOGFILE%" 2>&1
 set "EC_DIGEST=%ERRORLEVEL%"
 echo [%date% %time%] send_digest end exit=%EC_DIGEST% >> "%LOGFILE%"
@@ -32,4 +40,4 @@ python "%~dp0manage.py" backup_db >> "%LOGFILE%" 2>&1
 set "EC_BACKUP=%ERRORLEVEL%"
 echo [%date% %time%] backup_db end exit=%EC_BACKUP% >> "%LOGFILE%"
 
-python "%~dp0manage.py" notify_batch --results "scrape=%EC_SCRAPE%,prices=%EC_PRICES%,redeem=%EC_REDEEM%,simulate=%EC_SIM%,digest=%EC_DIGEST%,backup=%EC_BACKUP%" >> "%LOGFILE%" 2>&1
+python "%~dp0manage.py" notify_batch --results "scrape=%EC_SCRAPE%,prices=%EC_PRICES%,redeem=%EC_REDEEM%,simulate=%EC_SIM%,verify=%EC_VERIFY%,deadline=%EC_DEADLINE%,digest=%EC_DIGEST%,backup=%EC_BACKUP%" >> "%LOGFILE%" 2>&1

@@ -16,6 +16,8 @@ STEP_LABELS = {
     "prices": "시세/낙인",
     "redeem": "상환판정",
     "simulate": "손실확률",
+    "verify": "신호검증",
+    "deadline": "마감알림",
     "digest": "주간요약",
     "backup": "DB백업",
 }

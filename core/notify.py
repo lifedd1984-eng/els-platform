@@ -7,7 +7,9 @@ from datetime import date, timedelta
 from django.conf import settings
 
 from core import telegram
-from core.models import Investment, NotifiedMatch, Preset, Product, RedemptionAlert
+from core.models import (
+    Investment, NotifiedMatch, Preset, Product, RedemptionAlert, WatchItem,
+)
 
 
 def notify_preset_matches(stdout=None):
@@ -67,6 +69,51 @@ def notify_redemptions(stdout=None):
         )
         if stdout:
             stdout.write(f"[상환알림] {inv} {alert_type}")
+
+
+def notify_watchlist_deadline(stdout=None):
+    """관심상품 중 내일 청약마감 상품 알림 (전 계정 합집합, 상품 중복 제거).
+
+    이미 보유중(Investment status='보유중')인 상품은 제외. 0건이면 발송하지 않는다.
+    숙려대상자(65세+)는 마감 2영업일 전까지 청약해야 하므로 D-1에 안내.
+    """
+    tomorrow = date.today() + timedelta(days=1)
+    held = set(
+        Investment.objects.filter(status="보유중").values_list("product_id", flat=True)
+    )
+    seen = {}
+    for w in WatchItem.objects.filter(product__sub_end=tomorrow).select_related("product"):
+        p = w.product
+        if p.id in held or p.id in seen:
+            continue
+        seen[p.id] = p
+    items = sorted(seen.values(), key=lambda p: -(p.yield_rate or 0))
+    if not items:
+        if stdout:
+            stdout.write("[마감알림] 대상 없음 - 발송 생략")
+        return
+
+    lines = [
+        f"[청약 마감 임박] 관심 상품 {len(items)}건이 내일"
+        f"({tomorrow.month}/{tomorrow.day}) 마감됩니다",
+        "",
+    ]
+    for p in items:
+        badge = ""
+        r = p.radar
+        if r and r["tier"] == "아주 강한 신호":
+            badge = " · \U0001F535아주 강한"
+        elif r and r["tier"] == "강한 신호":
+            badge = " · \U0001F535강한"
+        y = f"{p.yield_rate:g}" if p.yield_rate is not None else "-"
+        lines.append(f"⏰ {p.issuer} {p.product_no} — 연 {y}% · KI{p.ki_display}{badge}")
+    lines.append("")
+    lines.append("숙려대상자(65세+)는 오늘까지 청약해야 합니다.")
+    site = settings.SITE_URL.split("://")[-1]
+    lines.append(f"\U0001F449 {site}/watchlist")
+
+    if telegram.send_message("\n".join(lines)) and stdout:
+        stdout.write(f"[마감알림] {len(items)}건 발송")
 
 
 def notify_weekly_digest(stdout=None):
