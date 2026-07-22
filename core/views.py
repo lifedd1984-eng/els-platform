@@ -1261,6 +1261,10 @@ def upload_excel(request):
             try:
                 call_command("import_els", file=save_path, stdout=out)
                 result = out.getvalue().strip() or "처리 완료"
+                # 새 상품이 들어왔으니 레이더 신호 주차 캐시 무효화
+                # (안 하면 이번 주 배지·추천 TOP5가 다음날까지 옛 데이터 기준)
+                from core.models import _RADAR_POOL_CACHE
+                _RADAR_POOL_CACHE.clear()
                 messages.success(request, f"'{f.name}' 임포트 완료")
             except Exception as e:  # noqa: BLE001
                 messages.error(request, f"임포트 오류: {e}")
