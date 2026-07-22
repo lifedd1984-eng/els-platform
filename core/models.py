@@ -362,7 +362,7 @@ class Product(models.Model):
         if re.search(r"국고채|국채|KTB|금리|환율|USD/KRW|DLS", d, re.I):
             return "DLS"
         if self.is_no_ki:
-            return "노낙인"
+            return None   # 노낙인은 낙인 컬럼의 NoKI 배지로 이미 표시 → 유형 중복 제거
         return "기타"
 
 
