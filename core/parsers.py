@@ -10,6 +10,7 @@ import re
 # ──────────────────────────────────────────────
 INDEX_KEYWORDS = [
     'KOSPI200', 'KOSPI 200', '코스피200', '코스피',
+    'KOSDAQ150', 'KOSDAQ 150', '코스닥150', '코스닥',
     'S&P500', 'S&P 500', 'SP500',
     'Nikkei225', 'Nikkei 225', '니케이225', '니케이',
     'Euro Stoxx 50', 'EuroStoxx50', 'EUROSTOXX50', 'Eurostoxx',
