@@ -219,7 +219,8 @@ def simulate_product(product, period_years=20):
             return {"available": False, "reason": f"시세 없음: {a}"}
         tickers[a] = tk
 
-    prices = _fetch_price_frame(list(tickers.values()), period_years)
+    # +4년 여유 조회 — 표본 구간(period_years)은 마지막 유효 발행일 기준
+    prices = _fetch_price_frame(list(tickers.values()), period_years + 4)
     if prices is None or prices.empty:
         return {"available": False, "reason": "시세 조회 실패"}
 
@@ -230,6 +231,7 @@ def simulate_product(product, period_years=20):
         is_no_ki=product.is_no_ki,
         period_months=product.period_months,
         yield_rate=product.yield_rate,
+        sample_years=period_years,
     )
 
 
