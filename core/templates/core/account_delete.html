@@ -1,0 +1,57 @@
+{% extends "core/base.html" %}
+{% block title %}회원 탈퇴 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title">회원 탈퇴</div>
+<div class="page-sub">{{ user.username }} 계정과 관련 데이터를 모두 삭제합니다.</div>
+
+<div class="card" style="max-width:460px">
+
+  {% if error %}
+  <div style="background:var(--red-bg);color:var(--red);font-size:13px;padding:10px 12px;border-radius:6px;margin-bottom:14px;font-weight:600">
+    {{ error }}
+  </div>
+  {% endif %}
+
+  <div style="background:var(--red-bg);border-left:3px solid var(--red);border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.6;margin-bottom:16px">
+    <b style="color:var(--red)">탈퇴하면 되돌릴 수 없습니다.</b><br>
+    아래 데이터가 <b>지체 없이 완전 삭제</b>되며 복구할 수 없습니다.
+  </div>
+
+  <div style="font-size:13px;color:var(--text-2);margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span>투자 기록</span><b style="color:var(--text)">{{ inv_count }}건</b>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span>관심 상품</span><b style="color:var(--text)">{{ watch_count }}건</b>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+      <span>저장한 필터(프리셋)</span><b style="color:var(--text)">{{ preset_count }}건</b>
+    </div>
+    <div style="display:flex;justify-content:space-between;padding:7px 0">
+      <span>계정 정보(아이디·이메일)</span><b style="color:var(--text)">삭제</b>
+    </div>
+  </div>
+
+  <form method="post">{% csrf_token %}
+    <div class="form-field" style="margin-bottom:14px">
+      <label>비밀번호 확인</label>
+      <input type="password" name="password" autocomplete="current-password" required style="width:100%">
+    </div>
+    <div class="form-field" style="margin-bottom:6px">
+      <label>확인 문구 입력</label>
+      <input type="text" name="confirm" placeholder="탈퇴합니다" required autocomplete="off" style="width:100%">
+    </div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-bottom:18px">
+      실수 방지를 위해 <b style="color:var(--text-2)">탈퇴합니다</b> 를 그대로 입력해 주세요.
+    </div>
+    <button type="submit" class="btn btn-danger" style="width:100%;justify-content:center;padding:11px">
+      <i class="fa-solid fa-user-xmark"></i> 탈퇴하기
+    </button>
+  </form>
+
+  <div style="text-align:center;margin-top:14px">
+    <a href="{% url 'weekly' %}" style="font-size:12.5px;color:var(--text-3)">취소하고 돌아가기</a>
+  </div>
+</div>
+{% endblock %}

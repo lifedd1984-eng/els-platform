@@ -36,6 +36,8 @@ button:hover { background:#1B64DA; }
 .hint { font-size:11px; color:#8B95A1; margin:-10px 0 14px; }
 .alt { text-align:center; font-size:13px; color:#8B95A1; margin-top:18px; }
 .alt a { color:#3182F6; font-weight:700; text-decoration:none; }
+.consent { font-size:11.5px; color:#8B95A1; line-height:1.6; margin-top:14px; text-align:center; }
+.consent a { color:#4E5968; font-weight:600; text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -59,6 +61,12 @@ button:hover { background:#1B64DA; }
     <label>비밀번호 확인</label>
     <input type="password" name="password2" autocomplete="new-password">
     <button type="submit">가입하기</button>
+    <div class="consent">가입하면
+      <a href="{% url 'terms' %}" target="_blank" rel="noopener">이용약관</a> 및
+      <a href="{% url 'privacy' %}" target="_blank" rel="noopener">개인정보처리방침</a>에 동의하는 것으로 봅니다.<br>
+      ELS 레이더는 정보 제공 서비스이며 투자 권유가 아닙니다
+      (<a href="{% url 'disclaimer' %}" target="_blank" rel="noopener">투자 유의사항</a>).
+    </div>
   </form>
   <div class="alt">이미 계정이 있나요? <a href="{% url 'login' %}">로그인</a></div>
 </div>

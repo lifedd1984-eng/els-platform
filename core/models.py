@@ -405,7 +405,7 @@ class Product(models.Model):
 
 
 def radar_top5(monday=None, sunday=None):
-    """이번주 레이더 추천 TOP5 상품 리스트.
+    """이번주 레이더 TOP5 상품 리스트.
 
     선정 기준(weekly 뷰·주간요약 공용): 오늘 이후 마감 ~ 해당 주 일요일 사이,
     레이더 '아주 강한 신호' & 손실확률 0% & 1년내 조기상환 ≥ 90% → 수익률 내림차순 5개.

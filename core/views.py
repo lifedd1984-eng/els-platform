@@ -219,7 +219,7 @@ def weekly(request):
         .values_list("issuer", flat=True)
     ))
 
-    # ── 이번주 추천 TOP5 (현재 주만) ──
+    # ── 이번주 TOP5 (현재 주만) ──
     # 아주 강한 신호 상품 중 손실확률 0% & 1년내 조기상환 ≥90% → 수익률 상위 5.
     # (고쿠폰이지만 손실확률이 있는 상품은 '강한 신호'에서 확인)
     # 중복도 = 보유 포트폴리오 중 같은 기초자산을 가진 투자금 비중.
@@ -1328,7 +1328,7 @@ def upload_excel(request):
                 call_command("import_els", file=save_path, stdout=out)
                 result = out.getvalue().strip() or "처리 완료"
                 # 새 상품이 들어왔으니 레이더 신호 주차 캐시 무효화
-                # (안 하면 이번 주 배지·추천 TOP5가 다음날까지 옛 데이터 기준)
+                # (안 하면 이번 주 배지·TOP5가 다음날까지 옛 데이터 기준)
                 from core.models import _RADAR_POOL_CACHE
                 _RADAR_POOL_CACHE.clear()
                 messages.success(request, f"'{f.name}' 임포트 완료")
@@ -1437,3 +1437,60 @@ def product_search(request):
 # ── 소개 랜딩 (공개) ─────────────────────────────
 def about(request):
     return render(request, "core/about.html", {"active_nav": "about"})
+
+
+# ── 법적 페이지 (공개) ────────────────────────────
+def legal_terms(request):
+    """이용약관."""
+    return render(request, "core/legal_terms.html", {})
+
+
+def legal_privacy(request):
+    """개인정보처리방침."""
+    return render(request, "core/legal_privacy.html", {})
+
+
+def legal_disclaimer(request):
+    """투자 유의사항(면책)."""
+    return render(request, "core/legal_disclaimer.html", {})
+
+
+# ── 회원 탈퇴 ────────────────────────────────────
+@login_required
+def account_delete(request):
+    """계정 및 관련 데이터 완전 삭제.
+
+    Investment / WatchItem / Preset 은 모두 user FK on_delete=CASCADE 이므로
+    user.delete() 한 번으로 함께 삭제된다.
+    실수 방지를 위해 비밀번호 + 확인 문구("탈퇴합니다") 두 가지를 요구한다.
+    """
+    from django.contrib.auth import logout as auth_logout
+
+    user = request.user
+    # 운영자 계정은 이 화면으로 삭제 불가 (실수로 지우면 관리 권한 복구 불가)
+    if user.is_superuser:
+        messages.error(request, "운영자 계정은 이 화면에서 탈퇴할 수 없습니다.")
+        return redirect("weekly")
+
+    ctx = {
+        "inv_count": Investment.objects.filter(user=user).count(),
+        "watch_count": WatchItem.objects.filter(user=user).count(),
+        "preset_count": Preset.objects.filter(user=user).count(),
+    }
+
+    if request.method == "POST":
+        password = request.POST.get("password", "")
+        confirm = (request.POST.get("confirm") or "").strip()
+        if not user.check_password(password):
+            ctx["error"] = "비밀번호가 올바르지 않습니다."
+            return render(request, "core/account_delete.html", ctx)
+        if confirm != "탈퇴합니다":
+            ctx["error"] = "확인 문구가 일치하지 않습니다. '탈퇴합니다' 를 그대로 입력해 주세요."
+            return render(request, "core/account_delete.html", ctx)
+
+        auth_logout(request)          # 세션 먼저 정리
+        user.delete()                 # 계정 + CASCADE 데이터 삭제
+        messages.success(request, "탈퇴가 완료되었습니다")
+        return redirect("weekly")
+
+    return render(request, "core/account_delete.html", ctx)

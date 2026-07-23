@@ -1,0 +1,12 @@
+{# 법적 페이지 상호 링크 — 현재 페이지는 제외하고 나머지 2개 노출 #}
+<div style="max-width:760px;display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+  {% if current != "disclaimer" %}
+  <a href="{% url 'disclaimer' %}" class="btn btn-sm">투자 유의사항</a>
+  {% endif %}
+  {% if current != "terms" %}
+  <a href="{% url 'terms' %}" class="btn btn-sm">이용약관</a>
+  {% endif %}
+  {% if current != "privacy" %}
+  <a href="{% url 'privacy' %}" class="btn btn-sm">개인정보처리방침</a>
+  {% endif %}
+</div>

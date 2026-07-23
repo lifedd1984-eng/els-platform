@@ -1,0 +1,67 @@
+{% extends "core/base.html" %}
+{% block title %}이용약관 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title">이용약관</div>
+<div class="page-sub">ELS 레이더의 이용 조건과 운영자·이용자의 권리·의무를 규정합니다.</div>
+
+<div class="card" style="max-width:760px;line-height:1.7">
+  <div style="font-size:13.5px;color:var(--text-2)">
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제1조 (목적)</h3>
+    <p style="margin-bottom:20px">본 약관은 ELS 레이더(이하 "서비스")의 이용 조건과 운영자·이용자의 권리·의무를 규정합니다.</p>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제2조 (서비스의 내용)</h3>
+    <p style="margin-bottom:20px">서비스는 공개된 금융투자협회 전자공시 자료 등을 수집·가공하여 ELS/DLS 상품 정보,
+      통계적 분석 결과, 개인 투자 기록 관리 기능을 <b style="color:var(--text)">무료로</b> 제공합니다.
+      서비스는 <b style="color:var(--text)">투자자문·투자권유·투자중개를 제공하지 않습니다</b>.</p>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제3조 (베타 서비스 특약)</h3>
+    <p style="margin-bottom:4px">현재 서비스는 <b style="color:var(--text)">베타 단계</b>로, 운영자는 사전 통지 없이 다음을 할 수 있습니다.</p>
+    <ul style="margin:0 0 8px;padding-left:20px">
+      <li style="margin-bottom:3px">기능의 추가·변경·중단</li>
+      <li style="margin-bottom:3px">서비스 점검에 따른 일시 중지</li>
+      <li>중대한 오류 발견 시 데이터 정정</li>
+    </ul>
+    <p style="margin-bottom:20px">베타 기간 중 데이터 유실·오류 가능성이 있으므로, 중요한 정보는 별도 보관을 권장합니다.</p>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제4조 (회원가입 및 계정)</h3>
+    <ul style="margin:0 0 20px;padding-left:20px">
+      <li style="margin-bottom:3px">이용자는 아이디·비밀번호·이메일을 제공하여 가입할 수 있습니다.</li>
+      <li style="margin-bottom:3px">계정 관리 책임은 이용자에게 있으며, 타인에게 양도할 수 없습니다.</li>
+      <li>이용자는 언제든지 <a href="{% url 'account_delete' %}" style="color:var(--blue-dark);font-weight:700">탈퇴</a>할 수 있습니다.</li>
+    </ul>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제5조 (이용자의 의무)</h3>
+    <p style="margin-bottom:4px">이용자는 다음 행위를 해서는 안 됩니다.</p>
+    <ul style="margin:0 0 20px;padding-left:20px">
+      <li style="margin-bottom:3px">서비스 데이터를 <b style="color:var(--text)">자동화된 수단으로 대량 수집</b>하거나 상업적으로 재배포하는 행위</li>
+      <li style="margin-bottom:3px">서비스 운영을 방해하거나 타인의 계정을 도용하는 행위</li>
+      <li>서비스 정보를 <b style="color:var(--text)">투자권유 자료로 가공·유포</b>하는 행위</li>
+    </ul>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제6조 (지식재산권)</h3>
+    <p style="margin-bottom:20px">원천 데이터의 권리는 각 제공기관에 있으며, 서비스가 생성한 분석 결과·화면 구성의
+      권리는 운영자에게 있습니다.</p>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제7조 (면책)</h3>
+    <p style="margin-bottom:20px">운영자는 천재지변, 외부 데이터 제공처의 오류·중단, 이용자의 귀책사유로 인한 손해에 대해
+      책임지지 않습니다. 서비스가 제공하는 정보에 근거한 <b style="color:var(--text)">투자 결과의 책임은 이용자에게 있습니다</b>
+      (상세: <a href="{% url 'disclaimer' %}" style="color:var(--blue-dark);font-weight:700">투자 유의사항</a>).</p>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제8조 (약관의 변경)</h3>
+    <p style="margin-bottom:20px">운영자는 필요 시 약관을 변경할 수 있으며, 변경 시 서비스 내 공지합니다.
+      변경 후에도 서비스를 계속 이용하면 변경에 동의한 것으로 봅니다.</p>
+
+    <h3 style="font-size:15px;font-weight:800;color:var(--text);margin:0 0 6px">제9조 (준거법)</h3>
+    <p style="margin-bottom:0">본 약관은 대한민국 법률에 따르며, 분쟁은 민사소송법상 관할 법원에서 해결합니다.</p>
+
+  </div>
+
+  <div style="border-top:1px solid var(--border);margin-top:24px;padding-top:14px;font-size:12px;color:var(--text-3)">
+    시행일: 2026년 7월 23일
+  </div>
+</div>
+
+{% include "core/_legal_nav.html" with current="terms" %}
+{% endblock %}

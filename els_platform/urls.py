@@ -12,6 +12,7 @@ urlpatterns = [
     path('accounts/password/', auth_views.PasswordChangeView.as_view(
         template_name='core/password_change.html', success_url='/'), name='password_change'),
     path('accounts/find-id/', views.find_id, name='find_id'),
+    path('accounts/delete/', views.account_delete, name='account_delete'),
     path('accounts/password-reset/', auth_views.PasswordResetView.as_view(
         template_name='core/password_reset.html',
         email_template_name='core/password_reset_email.txt',
@@ -38,6 +39,9 @@ urlpatterns = [
     path('manage/members/', views.member_admin, name='member_admin'),
     path('search/', views.product_search, name='search'),
     path('about/', views.about, name='about'),
+    path('terms/', views.legal_terms, name='terms'),
+    path('privacy/', views.legal_privacy, name='privacy'),
+    path('disclaimer/', views.legal_disclaimer, name='disclaimer'),
     path('manifest.json', views.pwa_manifest, name='pwa_manifest'),
     path('icons/icon-<str:size>.png', views.pwa_icon, name='pwa_icon'),
 ]

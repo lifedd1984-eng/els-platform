@@ -278,7 +278,7 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
 
   .cal-table td { height: 52px; }
 
-  /* 추천 TOP5 카드 — 한 줄에 하나씩 */
+  /* TOP5 카드 — 한 줄에 하나씩 */
   .rec-card { min-width: 100% !important; }
 }
 </style>
@@ -410,5 +410,24 @@ document.addEventListener('click', function(e) {
   });
 });
 </script>
+
+<!-- ── 푸터 ── -->
+<footer style="border-top:1px solid var(--border);background:var(--card);margin-top:32px">
+  <div class="container" style="padding-top:22px;padding-bottom:26px">
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+      <a href="{% url 'disclaimer' %}" style="color:var(--blue-dark);font-weight:700;font-size:13px">투자 유의사항</a>
+      <a href="{% url 'terms' %}" style="color:var(--text-2);font-weight:600;font-size:13px">이용약관</a>
+      <a href="{% url 'privacy' %}" style="color:var(--text-2);font-weight:700;font-size:13px">개인정보처리방침</a>
+      <a href="mailto:lifedd1984@gmail.com" style="color:var(--text-2);font-weight:600;font-size:13px">문의하기</a>
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:12px;font-size:12.5px;color:var(--text-3);line-height:1.6">
+      ELS 레이더는 공개된 금융투자협회 전자공시 자료를 가공해 <b>정보를 제공하는 서비스</b>이며,
+      특정 금융상품의 매수·매도를 <b>권유하지 않습니다</b>. 제공되는 손실확률·신호 등급은 과거 데이터
+      기반 통계적 추정치로 미래 수익을 보장하지 않습니다. 투자 판단과 그 결과에 대한 책임은
+      투자자 본인에게 있습니다.
+      <div style="margin-top:8px">&copy; 2026 ELS 레이더</div>
+    </div>
+  </div>
+</footer>
 </body>
 </html>

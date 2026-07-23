@@ -124,13 +124,13 @@ def notify_weekly_digest(stdout=None):
     weekday = "월화수목금토일"[today.weekday()]
     lines = [f"[주간 요약] {today:%m.%d}({weekday})"]
 
-    # ① 이번주 레이더 추천 TOP5 (사이트 추천과 동일 기준 — radar_top5 공용)
+    # ① 이번주 레이더 TOP5 (사이트 추천과 동일 기준 — radar_top5 공용)
     from core.models import radar_top5, _radar_early
     top = radar_top5()
-    lines.append("\n📡 이번주 레이더 추천 TOP5")
+    lines.append("\n📡 이번주 레이더 TOP5")
     lines.append("(아주 강한 신호 · 손실확률 0% · 1년내 상환 90%↑)")
     if not top:
-        lines.append("이번주 추천 기준 통과 상품 없음")
+        lines.append("이번주 TOP5 기준 통과 상품 없음")
     else:
         for i, p in enumerate(top, 1):
             early = round(_radar_early(p))
