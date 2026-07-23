@@ -32,15 +32,22 @@ class Command(BaseCommand):
             self.stderr.write("db.sqlite3 없음")
             return
 
-        dest_dir = PRIMARY_DIR
+        # F: 드라이브는 Windows(PC)에서만 — 리눅스에선 'F:'가 상대경로로
+        # 성립해버려 ~/els/F:/ 같은 엉뚱한 폴더가 생기므로 OS로 판별
+        import os
+        dest_dir = None
         keep = KEEP_PRIMARY
-        try:
-            dest_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
+        if os.name == "nt":
+            try:
+                PRIMARY_DIR.mkdir(parents=True, exist_ok=True)
+                dest_dir = PRIMARY_DIR
+            except OSError:
+                pass
+        if dest_dir is None:
             dest_dir = Path(settings.BASE_DIR) / "backups"
             dest_dir.mkdir(exist_ok=True)
             keep = KEEP_LOCAL
-            self.stdout.write(f"F: 접근 불가 - 로컬 폴백: {dest_dir} (보관 {keep}개)")
+            self.stdout.write(f"로컬 백업: {dest_dir} (보관 {keep}개)")
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M")
         dest = dest_dir / f"db_{stamp}.sqlite3.gz"
