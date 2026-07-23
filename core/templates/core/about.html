@@ -1,173 +1,426 @@
 {% extends "core/base.html" %}
-{% block title %}ELS란? — ELS 레이더{% endblock %}
+{% load els_extras humanize %}
+{% block title %}ELS 레이더 — 이번주 ELS TOP5{% endblock %}
 
 {% block content %}
 <style>
-.hero { text-align:center; padding: 44px 16px 36px; }
-.hero h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.8px; line-height: 1.3; }
-.hero h1 .accent { color: var(--blue); }
-.hero p { color: var(--text-2); font-size: 17px; margin-top: 12px; font-weight: 600; }
-.bigstat { display:grid; grid-template-columns: repeat(3,1fr); gap:14px; margin: 8px 0 30px; }
-.bigstat .card { text-align:center; padding: 24px 16px; margin:0; }
-.bigstat .num { font-size: 32px; font-weight: 800; letter-spacing:-1px; }
-.bigstat .lbl { font-size: 13px; color: var(--text-3); margin-top: 6px; }
-.sec-title { font-size: 21px; font-weight: 800; letter-spacing:-0.5px; margin: 36px 0 4px; text-align:center; }
-.sec-sub { color: var(--text-3); font-size: 13px; text-align:center; margin-bottom: 16px; }
-.why3 { display:grid; grid-template-columns: repeat(3,1fr); gap:14px; }
+/* ══ 랜딩 전용 시스템 — 장(chapter) 단위, 한 화면 한 메시지 ══ */
+
+/* 히어로: 좌 카피 / 우 실제 제품 */
+.lp-hero { display:grid; grid-template-columns: 1.05fr .95fr; gap:44px; align-items:center;
+  min-height: 66vh; padding: 46px 0 30px; }
+.lp-pill { display:inline-flex; align-items:center; gap:6px; background:var(--blue-bg);
+  color:var(--blue-dark); font-size:12.5px; font-weight:800; padding:6px 13px;
+  border-radius:999px; margin-bottom:18px; }
+.lp-h1 { font-size:44px; font-weight:800; letter-spacing:-1.6px; line-height:1.22; text-wrap:balance; }
+.lp-h1 .lp-acc { color:var(--blue); }
+.lp-lead { font-size:16.5px; color:var(--text-2); line-height:1.65; margin-top:16px; }
+.lp-ctas { display:flex; gap:10px; margin-top:28px; flex-wrap:wrap; }
+.lp-btn { font-size:15.5px !important; padding:14px 30px !important; border-radius:11px !important; }
+.lp-micro { font-size:12px; color:var(--text-3); margin-top:13px; }
+
+/* 히어로 우측: 실제 TOP5 패널 */
+.lp-hero-panel { background:var(--card); border:1px solid var(--border); border-radius:16px;
+  padding:18px 18px 14px; box-shadow: 0 14px 40px rgba(25,31,40,.09); }
+.lp-panel-head { display:flex; justify-content:space-between; align-items:center;
+  font-size:14px; font-weight:800; margin-bottom:12px; }
+.lp-live { font-size:11px; font-weight:700; color:var(--green); background:var(--green-bg,#E8F7F0);
+  padding:3px 9px; border-radius:999px; }
+.lp-panel-more { display:block; text-align:center; font-size:13px; font-weight:700;
+  color:var(--blue-dark); padding:11px 0 5px; }
+
+/* 히어로 아래 한 줄 실적 */
+.lp-proof-line { display:flex; justify-content:center; gap:52px; flex-wrap:wrap;
+  font-size:13.5px; color:var(--text-3); padding:30px 0 6px; border-top:1px solid var(--border); }
+.lp-proof-line span { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.lp-proof-line b { color:var(--text); font-weight:800; font-size:30px; letter-spacing:-1.2px;
+  line-height:1; font-variant-numeric:tabular-nums; }
+
+/* 장 공통 */
+.lp-sec { margin-top:130px; text-align:center; }
+.lp-label { display:inline-flex; align-items:center; gap:7px; font-size:14.5px; font-weight:800;
+  color:var(--blue-dark); background:var(--blue-bg); padding:9px 20px; border-radius:999px;
+  margin-bottom:18px; }
+.lp-h2 { font-size:40px; font-weight:800; letter-spacing:-1.4px; line-height:1.25;
+  text-wrap:balance; margin:0 0 14px; }
+.lp-sub { font-size:16.5px; color:var(--text-2); line-height:1.6; margin:0 0 40px; text-wrap:balance; }
+.lp-2col { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+
+/* 손실 사례 카드 (어두운 소형) */
+.lp-loss { background:#191F28; border-radius:14px; padding:26px 20px; text-align:center; }
+.lp-loss b { display:block; font-size:30px; font-weight:800; color:#FF8A80; letter-spacing:-1px; }
+.lp-loss span { display:block; font-size:12.5px; color:#B9C0CC; margin-top:8px; line-height:1.6; }
+
+/* 3단계 카드 */
+.why3 { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
 .why3 .card { margin:0; text-align:center; }
-.why3 .ic { width:44px; height:44px; border-radius: 12px; background: var(--blue-bg); color: var(--blue);
-  display:flex; align-items:center; justify-content:center; font-size: 19px; margin: 0 auto 12px; }
-.why3 h3 { font-size: 16px; margin-bottom: 6px; }
-.why3 p { font-size: 13px; color: var(--text-2); line-height: 1.6; }
-.step { display:flex; align-items:flex-start; gap:10px; margin-bottom:14px; font-size:14px; line-height:1.6; }
-.step .n { flex-shrink:0; width:24px; height:24px; border-radius:50%; background:var(--blue); color:#fff;
-  font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; margin-top:1px; }
-.cta { text-align:center; padding: 32px 16px 16px; }
-.cta .btn-primary { font-size: 15px; padding: 13px 30px; }
-.footnote { font-size: 11px; color: var(--text-3); text-align:center; margin-top: 26px; line-height:1.7; }
-@media (max-width: 800px) { .bigstat, .why3 { grid-template-columns: 1fr; } .hero h1 { font-size: 24px; } }
+.why3 .ic { width:46px; height:46px; border-radius:13px; background:var(--blue-bg); color:var(--blue);
+  display:flex; align-items:center; justify-content:center; font-size:20px; margin:0 auto 12px; }
+.why3 h3 { font-size:16px; margin-bottom:6px; }
+.why3 p { font-size:13px; color:var(--text-2); line-height:1.6; }
+
+/* 증명: 어두운 대형 패널 (클라이맥스) */
+.lp-dark { background:#191F28; border-radius:22px; padding:58px 40px 34px; color:#fff; }
+.acc { display:flex; gap:44px; justify-content:center; align-items:flex-end; height:240px; }
+.acc-col { display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+  height:100%; width:136px; }
+.acc-val { font-size:44px; font-weight:800; letter-spacing:-2px; margin-bottom:9px; line-height:1;
+  font-variant-numeric:tabular-nums; }
+.acc-bar { width:100%; border-radius:8px 8px 0 0; }
+.acc-lbl { font-size:13px; font-weight:700; margin-top:10px; }
+.acc-n { font-size:11.5px; color:#8B95A1; margin-top:3px; }
+.acc-gap { display:inline-flex; align-items:baseline; gap:8px; background:var(--blue);
+  color:#fff; border-radius:999px; padding:10px 22px; }
+.acc-gap b { font-size:30px; font-weight:800; letter-spacing:-1.2px; line-height:1;
+  font-variant-numeric:tabular-nums; }
+.acc-gap span { font-size:13px; font-weight:700; }
+
+/* 대형 스탯 카드 (base .num 충돌 방지 전용 클래스) */
+.lp-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; }
+.lp-stat { border-radius:18px; padding:38px 16px 32px; text-align:center; }
+.lp-stat .v { font-size:54px; font-weight:800; letter-spacing:-2.5px; line-height:1;
+  font-variant-numeric:tabular-nums; }
+.lp-stat .v small { font-size:55%; font-weight:800; letter-spacing:-1px; }
+.lp-stat .l { font-size:13.5px; margin-top:12px; line-height:1.55; font-weight:600; }
+.t-blue { background:#EAF2FE; } .t-blue .v { color:var(--blue-dark); } .t-blue .l { color:#4E5968; }
+.t-green { background:#E8F7F0; } .t-green .v { color:#0BA262; } .t-green .l { color:#4E5968; }
+.t-deep { background:linear-gradient(135deg,#3182F6,#1B64DA); }
+.t-deep .v { color:#fff; } .t-deep .l { color:rgba(255,255,255,.85); }
+
+/* TOP5 목록 카드 */
+.pk-item { display:block; color:inherit; background:var(--bg); border:1px solid var(--border);
+  border-radius:10px; padding:12px 14px; margin-bottom:8px; }
+.pk-top { display:flex; align-items:center; gap:7px; margin-bottom:6px; flex-wrap:wrap; }
+.pk-name { font-size:13.5px; font-weight:700; }
+.pk-row { display:flex; gap:15px; font-size:12px; color:var(--text-2); flex-wrap:wrap; }
+.pk-row b { color:var(--text); font-variant-numeric:tabular-nums; }
+
+/* 기초 설명 */
+.step { display:flex; align-items:flex-start; gap:13px; margin-bottom:20px; font-size:16.5px;
+  line-height:1.65; text-align:left; }
+.step .n { flex-shrink:0; width:30px; height:30px; border-radius:50%; background:var(--blue);
+  color:#fff; font-size:15px; font-weight:700; display:flex; align-items:center;
+  justify-content:center; margin-top:1px; }
+
+/* 최종 CTA: 파란 패널 */
+.lp-final { background:linear-gradient(135deg,#3182F6,#1B64DA); border-radius:22px;
+  padding:60px 40px; color:#fff; }
+.lp-btn-white { display:inline-block; background:#fff; color:var(--blue-dark); font-size:16px;
+  font-weight:800; padding:15px 40px; border-radius:12px; }
+
+.footnote { font-size:11px; color:var(--text-3); text-align:center; margin-top:40px; line-height:1.7; }
+
+@media (max-width: 880px) {
+  .lp-hero { grid-template-columns:1fr; gap:30px; min-height:0; padding-top:30px; text-align:center; }
+  .lp-h1 { font-size:30px; letter-spacing:-1px; }
+  .lp-ctas { justify-content:center; }
+  .lp-sec { margin-top:84px; }
+  .lp-h2 { font-size:28px; }
+  .lp-stat { padding:28px 14px 24px; } .lp-stat .v { font-size:40px; letter-spacing:-1.5px; }
+  .lp-2col, .why3 { grid-template-columns:1fr; }
+  .lp-stats { grid-template-columns:1fr; gap:10px; }
+  .lp-dark { padding:40px 20px 24px; }
+  .acc { gap:22px; height:200px; }
+  .acc-col { width:104px; }
+  .acc-val { font-size:34px; }
+  .lp-final { padding:44px 22px; }
+}
 </style>
 
-<div class="hero">
-  <h1>안전한 예금과 고수익 주식,<br><span class="accent">그 사이에 ELS가 있습니다</span></h1>
-  <p>평균 수익률 <b style="color:var(--blue-dark)">연 19%</b> · 손실률 <b style="color:var(--green)">0.4%</b></p>
+<!-- ══ 1. 히어로: 약속 + 실제 제품 ══ -->
+<div class="lp-hero">
+  <div>
+    <span class="lp-pill"><i class="fa-solid fa-bolt"></i> 베타 기간 무료</span>
+    <h1 class="lp-h1">매주 쏟아지는 ELS 300개,<br><span class="lp-acc">5개</span>면 충분합니다</h1>
+    <p class="lp-lead">발행 29만 건 · 22년치 시세 데이터로 모든 상품의 손실확률을 계산해,
+      조건이 좋은 상품만 남깁니다.</p>
+    <div class="lp-ctas">
+      <a href="{% url 'signup' %}" class="btn btn-primary lp-btn"><i class="fa-solid fa-rocket"></i> 무료로 시작하기</a>
+      <a href="{% url 'weekly' %}" class="btn lp-btn">가입 없이 둘러보기</a>
+    </div>
+    <div class="lp-micro">1분 가입 · 투자권유가 아닌 정보 제공 서비스</div>
+  </div>
+
+  {% if top5 %}
+  <div class="lp-hero-panel">
+    <div class="lp-panel-head">
+      <span><i class="fa-solid fa-satellite-dish" style="color:var(--blue)"></i> 이번주 TOP5</span>
+      <span class="lp-live">실제 데이터</span>
+    </div>
+    {% for p in top5|slice:":3" %}
+    <a class="pk-item" href="{% url 'product_detail' p.id %}">
+      <div class="pk-top">
+        <span style="background:{{ p.radar.color }};color:#fff;font-size:11px;font-weight:800;padding:2.5px 8px;border-radius:5px">{{ p.radar.tier }}</span>
+        <span class="pk-name">{{ p.assets_raw|asset_short }}</span>
+      </div>
+      <div class="pk-row">
+        <span>연 <b>{{ p.yield_rate|floatformat:1 }}%</b></span>
+        <span>낙인 <b>{% if p.is_no_ki %}없음{% else %}{{ p.ki }}%{% endif %}</b></span>
+        <span>손실확률 <b>{{ p.loss_prob|floatformat:1 }}%</b></span>
+        <span>{{ p.issuer }}</span>
+      </div>
+    </a>
+    {% endfor %}
+    <a class="lp-panel-more" href="{% url 'weekly' %}">이번주 전체 상품 보기 <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+  {% endif %}
 </div>
 
-<div class="sec-title">ELS란?</div>
-<div class="sec-sub">"주가가 정해진 선 아래로 안 떨어지면, 정해진 이자를 주는 상품"</div>
+<div class="lp-proof-line">
+  <span><b>{{ stat_total|intcomma }}개</b> 분석 상품</span>
+  <span><b>{{ stat_sim|intcomma }}개</b> 손실확률 계산</span>
+  <span><b>{{ stat_verdict|intcomma }}건</b> 검증 표본</span>
+  <span><b>22년</b> 백테스트</span>
+</div>
 
-<div class="card" style="padding:26px 22px">
-  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center" class="sim-grid">
-    <div>
-      <svg viewBox="0 0 400 230" style="width:100%">
-        <line x1="40" y1="40" x2="390" y2="40" stroke="#E5E8EB" stroke-width="1"/>
-        <text x="4" y="44" font-size="10" fill="#8B95A1">가입시점</text>
-        <text x="36" y="34" font-size="9" fill="#8B95A1">100%</text>
-        <line x1="40" y1="76" x2="390" y2="76" stroke="#3182F6" stroke-width="1.5" stroke-dasharray="6 3"/>
-        <text x="4" y="80" font-size="10" fill="#1B64DA" font-weight="700">상환선</text>
-        <text x="36" y="70" font-size="9" fill="#1B64DA">85%</text>
-        <line x1="40" y1="185" x2="390" y2="185" stroke="#E5503C" stroke-width="1.5" stroke-dasharray="6 3"/>
-        <text x="8" y="189" font-size="10" fill="#E5503C" font-weight="700">낙인선</text>
-        <text x="36" y="180" font-size="9" fill="#E5503C">40%</text>
-        <rect x="40" y="76" width="350" height="109" fill="#E8F8F0" opacity="0.45"/>
-        <text x="200" y="136" font-size="11" fill="#12B76A" font-weight="700" text-anchor="middle">이 사이면 원금 + 이자</text>
-        <path d="M40 40 C 80 55, 110 90, 150 100 C 190 110, 220 80, 260 70 C 300 62, 340 58, 388 52"
-              fill="none" stroke="#4E5968" stroke-width="2.2" stroke-linecap="round"/>
-        <circle cx="388" cy="52" r="4" fill="#3182F6"/>
-        <text x="310" y="42" font-size="10" fill="#1B64DA" font-weight="700">상환 → 수익 확정</text>
-        <text x="45" y="215" font-size="9" fill="#8B95A1">가입</text>
-        <text x="150" y="215" font-size="9" fill="#8B95A1">6개월</text>
-        <text x="255" y="215" font-size="9" fill="#8B95A1">1년</text>
-        <text x="360" y="215" font-size="9" fill="#8B95A1">…3년</text>
+<!-- ══ 2. 문제: 왜 골라야 하는가 ══ -->
+<section class="lp-sec">
+  <span class="lp-label">왜 골라야 하나</span>
+  <h2 class="lp-h2">같은 ELS인데<br>누구는 수익, 누구는 <span style="color:var(--red)">반토막</span></h2>
+  <p class="lp-sub">ELS는 상품마다 조건이 전부 다릅니다. 어떤 것을 고르느냐가 전부입니다.</p>
+  <div class="lp-2col">
+    <div class="lp-loss"><b>손실률 51%</b>
+      <span>2015년 종목형 ELS<br>현대차·조선주 폭락에 절반이 원금손실</span></div>
+    <div class="lp-loss"><b>-50% 확정</b>
+      <span>2024년 홍콩 H지수 ELS 사태<br>10조 원대 손실, 평균 반토막</span></div>
+  </div>
+</section>
+
+<!-- ══ 3. 해결책: 어떻게 고르나 ══ -->
+<section class="lp-sec">
+  <span class="lp-label">어떻게 고르나</span>
+  <h2 class="lp-h2">고르는 눈을<br>데이터로 만들었습니다</h2>
+  <p class="lp-sub">사람의 감이 아니라, 같은 기준을 모든 상품에 똑같이 적용합니다</p>
+  <div class="why3">
+    <div class="card">
+      <div class="ic"><i class="fa-solid fa-satellite-dish"></i></div>
+      <h3>매주 자동 수집</h3>
+      <p>이번 주 청약하는 300여 개 상품을 빠짐없이 모읍니다</p>
+    </div>
+    <div class="card">
+      <div class="ic"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+      <h3>22년 백테스트</h3>
+      <p>과거 시세로 상품마다 손실확률·조기상환확률을 계산합니다</p>
+    </div>
+    <div class="card">
+      <div class="ic"><i class="fa-solid fa-filter"></i></div>
+      <h3>기준 통과만 TOP5</h3>
+      <p>낙인·손실확률·수익률 기준을 모두 통과한 상품만 남깁니다</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 4. 증명: 클라이맥스 ══ -->
+{% if accuracy %}
+<section class="lp-sec">
+  <div class="lp-dark">
+    <span class="lp-label" style="background:rgba(255,255,255,.08);color:#6CA8FF">성과 검증 · 매주 갱신</span>
+    <h2 class="lp-h2" style="color:#fff">신호는 실제로 맞았습니다</h2>
+    <p class="lp-sub" style="color:#8B95A1">배지를 준 상품과 주지 않은 상품의 첫 평가일 통과율</p>
+    <div class="acc">
+      <div class="acc-col">
+        <div class="acc-val" style="color:#fff">{{ accuracy.badge_pct }}%</div>
+        <div class="acc-bar" style="height:{{ accuracy.badge_h }}%;background:linear-gradient(180deg,#4E86FF,#2D5BFF)"></div>
+        <div class="acc-lbl" style="color:#fff">신호 배지 상품</div>
+        <div class="acc-n">{{ accuracy.badge_n }}건 중 {{ accuracy.badge_ok }}건 통과</div>
+      </div>
+      <div class="acc-col">
+        <div class="acc-val" style="color:#6B7684">{{ accuracy.ctrl_pct }}%</div>
+        <div class="acc-bar" style="height:{{ accuracy.ctrl_h }}%;background:#3A414B"></div>
+        <div class="acc-lbl" style="color:#B9C0CC">배지 없는 상품</div>
+        <div class="acc-n">{{ accuracy.ctrl_n }}건 중 {{ accuracy.ctrl_ok }}건 통과</div>
+      </div>
+    </div>
+    <div style="margin-top:26px">
+      <div class="acc-gap">
+        <b>{% if accuracy.delta > 0 %}+{% endif %}{{ accuracy.delta }}%p</b><span>더 높았습니다</span>
+      </div>
+      <div style="font-size:12.5px;color:#8B95A1;margin-top:10px">같은 기간, 같은 기준으로 비교한 결과</div>
+    </div>
+    <div style="display:flex;gap:7px;align-items:flex-start;text-align:left;background:rgba(255,255,255,.06);
+                border-radius:8px;padding:9px 12px;font-size:11.5px;color:#B9C0CC;line-height:1.6;margin-top:22px">
+      <i class="fa-solid fa-circle-info" style="color:#8B95A1;margin-top:2px;flex:0 0 auto"></i>
+      <span>{{ accuracy.start|date:"Y년 n월 j일" }} ~ {{ accuracy.end|date:"Y년 n월 j일" }} 청약분
+        <b style="color:#fff">{{ accuracy.total_n }}건</b>의 첫 평가일 결과이며 매주 갱신됩니다.
+        과거 실적으로 <b style="color:#fff">미래 수익을 보장하지 않으며</b>, 조건에 부합하는 상품을
+        시스템으로 분류한 결과일 뿐 투자 권유가 아닙니다.</span>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ══ 4.5 실전: 운영자도 같은 신호로 투자 ══ -->
+{% if live %}
+<section class="lp-sec">
+  <span class="lp-label">저희가 먼저 씁니다</span>
+  <h2 class="lp-h2">저희도 같은 신호로<br>직접 투자하고 있습니다</h2>
+  <p class="lp-sub">백테스트가 아니라, 실제 계좌의 상환 결과입니다</p>
+  <div class="lp-stats">
+    <div class="lp-stat t-blue">
+      <div class="v">{{ live.win }}/{{ live.n }}<small>건</small></div>
+      <div class="l">상환 완료 전원 수익<br>손실 0건</div>
+    </div>
+    <div class="lp-stat t-green">
+      <div class="v">+{{ live.ann }}<small>%</small></div>
+      <div class="l">평균 연환산 수익률<br>세전 · 실현 기준</div>
+    </div>
+    <div class="lp-stat t-deep">
+      <div class="v">{{ live.avg_m|floatformat:0 }}<small>개월</small></div>
+      <div class="l">평균 상환 기간<br>대부분 첫 평가일 조기상환</div>
+    </div>
+  </div>
+  <div style="font-size:11.5px;color:var(--text-3);text-align:center">
+    저희 계좌의 실현 실적이며 표본이 작습니다. 개인의 결과일 뿐 수익을 보장하지 않습니다.
+  </div>
+</section>
+{% endif %}
+
+<!-- ══ 5. 타이밍: 왜 지금인가 ══ -->
+<section class="lp-sec">
+  <span class="lp-label">왜 지금인가</span>
+  <h2 class="lp-h2">조건은 지금이<br>10년 중 가장 좋습니다</h2>
+  <p class="lp-sub">시장 데이터 22년치(발행 29만 건) 직접 분석 결과</p>
+
+  <div class="lp-stats">
+    <div class="lp-stat t-blue">
+      <div class="v">{% if ki %}{{ ki.last.avg|floatformat:0 }}{% else %}42{% endif %}<small>%</small></div>
+      <div class="l">손실 방어선(낙인)<br>{% if ki %}{{ ki.first.year }}년 {{ ki.first.avg|floatformat:0 }}%{% else %}10년 전 57%{% endif %} → 훨씬 깊어짐</div>
+    </div>
+    <div class="lp-stat t-green">
+      <div class="v">99<small>%+</small></div>
+      <div class="l">무손실 상환 비율<br>2025~26년 역대 최저 손실률</div>
+    </div>
+    <div class="lp-stat t-deep">
+      <div class="v">8<small>개월</small></div>
+      <div class="l">평균 상환 기간<br>92%가 1년 내 수익 확정</div>
+    </div>
+  </div>
+
+  {% if ki %}
+  <div class="card" style="padding:22px;text-align:left">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+      <div style="flex:1 1 200px">
+        <div style="font-size:15px;font-weight:800;letter-spacing:-0.3px">방어선은 깊어지고</div>
+        <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">
+          연도별 평균 낙인 배리어 — 낮을수록 손실 구간까지 거리가 멉니다</div>
+      </div>
+      <div style="background:var(--blue-bg);color:var(--blue-dark);border-radius:8px;padding:7px 13px;
+                  display:flex;align-items:baseline;gap:6px;white-space:nowrap">
+        <b style="font-size:22px;font-weight:800;letter-spacing:-1px">-{{ ki.drop }}%p</b>
+        <span style="font-size:12px;font-weight:700">최고점 대비</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <svg viewBox="0 0 620 190" style="width:100%;min-width:420px;display:block"
+           role="img" aria-label="연도별 평균 낙인 배리어 추이: {{ ki.first.year }}년 {{ ki.first.avg }}%에서 {{ ki.last.year }}년 {{ ki.last.avg }}%로 하락">
+        {% for g in ki.grid %}
+        <line x1="46" y1="{{ g.y }}" x2="596" y2="{{ g.y }}" stroke="var(--border)" stroke-width="1" opacity=".7"/>
+        <text x="40" y="{{ g.y|add:4 }}" text-anchor="end" font-size="10.5" fill="var(--text-3)">{{ g.v }}%</text>
+        {% endfor %}
+        <polyline fill="none" stroke="var(--blue-dark)" stroke-width="2.6"
+                  stroke-linejoin="round" stroke-linecap="round" points="{{ ki.points }}"/>
+        <circle cx="{{ ki.first.x }}" cy="{{ ki.first.y }}" r="3.4" fill="var(--blue-dark)"/>
+        <circle cx="{{ ki.last.x }}" cy="{{ ki.last.y }}" r="9" fill="var(--blue)" opacity=".18"/>
+        <circle cx="{{ ki.last.x }}" cy="{{ ki.last.y }}" r="5" fill="var(--blue-dark)"/>
+        <text x="{{ ki.first.x }}" y="{{ ki.first.y|add:-10 }}" text-anchor="start" font-size="11.5"
+              fill="var(--text-2)" font-weight="800">{{ ki.first.avg }}%</text>
+        <text x="{{ ki.last.x }}" y="{{ ki.last.y|add:-16 }}" text-anchor="end" font-size="19"
+              fill="var(--blue-dark)" font-weight="800" letter-spacing="-0.6">{{ ki.last.avg }}%</text>
+        {% for m in ki.marks %}
+        <text x="{{ m.x }}" y="172" text-anchor="middle" font-size="10.5" fill="var(--text-3)">{{ m.year }}</text>
+        {% endfor %}
       </svg>
     </div>
-    <div>
-      <div class="step"><span class="n">1</span><span>삼성전자·코스피 같은 <b>기준</b>을 정합니다 (가입가 = 100%)</span></div>
-      <div class="step"><span class="n">2</span><span>6개월마다 확인 — <b style="color:var(--blue-dark)">상환선 위면 원금+이자</b> 받고 끝</span></div>
-      <div class="step"><span class="n">3</span><span><b style="color:var(--red)">60% 폭락</b>만 아니면 만기에 원금+이자</span></div>
-      <div style="font-size:12px;color:var(--text-3);margin-top:6px">주식과 달리, 떨어져도 "선만 안 깨지면" 수익 그대로.</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-top:6px">
+      SEIBro(증권정보포탈) 공시 <b style="color:var(--text-2)">{{ ki.sample_n|intcomma }}건</b> 표본 ·
+      연도별 표본 30건 이상만 표시
     </div>
   </div>
-</div>
+  {% endif %}
 
-<div class="sec-title" style="margin-top:44px">그럼 ELS는 무조건 안전할까요?</div>
-<div style="text-align:center;font-size:34px;font-weight:800;letter-spacing:2px;margin:2px 0 14px">&ldquo; NO &rdquo;</div>
-
-<div class="card" style="padding:22px;background:#23272F;border:none;color:#fff">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;text-align:center" class="sim-grid">
-    <div>
-      <div style="font-size:26px;font-weight:800;color:#FF8A80">손실률 51%</div>
-      <div style="font-size:12px;color:#B9C0CC;margin-top:4px">2015년 종목형 ELS<br>현대차·조선주 폭락에 절반이 원금손실</div>
+  <div class="card" style="padding:22px;text-align:left;margin-top:14px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1 1 200px">
+        <div style="font-size:15px;font-weight:800;letter-spacing:-0.3px">손실은 사라지고</div>
+        <div style="font-size:11.5px;color:var(--text-3);margin-top:2px">
+          연도별 손실확정 비율 — 낮을수록 원금손실이 드뭅니다</div>
+      </div>
+      <div style="background:#E8F7F0;color:#0BA262;border-radius:8px;padding:7px 13px;
+                  display:flex;align-items:baseline;gap:6px;white-space:nowrap">
+        <b style="font-size:22px;font-weight:800;letter-spacing:-1px">0.37%</b>
+        <span style="font-size:12px;font-weight:700">2025년 역대 최저</span>
+      </div>
     </div>
-    <div>
-      <div style="font-size:26px;font-weight:800;color:#FF8A80">-50% 확정</div>
-      <div style="font-size:12px;color:#B9C0CC;margin-top:4px">2024년 홍콩H지수 ELS 사태<br>10조 원대 손실, 평균 반토막</div>
-    </div>
+    <svg viewBox="0 0 320 130" style="width:100%;display:block">
+      <g font-size="9" fill="#8B95A1">
+        <rect x="10"  y="53" width="20" height="67" rx="3" fill="#F3B0A6"/><text x="8" y="48">6.7%</text><text x="12" y="129">'15</text>
+        <rect x="60"  y="94" width="20" height="26" rx="3" fill="#F3B0A6"/><text x="58" y="89">2.6%</text><text x="62" y="129">'17</text>
+        <rect x="110" y="110" width="20" height="10" rx="3" fill="#F0C9C9"/><text x="106" y="105">1.0%</text><text x="110" y="129">'21</text>
+        <rect x="160" y="90" width="20" height="30" rx="3" fill="#F3B0A6"/><text x="158" y="85">2.9%</text><text x="160" y="129">'22</text>
+        <rect x="210" y="116" width="20" height="4"  rx="3" fill="#12B76A"/><text x="204" y="111" fill="#12B76A" font-weight="700">0.4%</text><text x="210" y="129">'25</text>
+        <rect x="260" y="107" width="20" height="13" rx="3" fill="#12B76A"/><text x="256" y="102" fill="#12B76A" font-weight="700">1.3%</text><text x="260" y="129">'26</text>
+      </g>
+    </svg>
   </div>
-  <div style="text-align:center;margin-top:16px;font-size:14px;font-weight:700">
-    같은 ELS라도 <span style="color:#FFD54F">어떤 상품을 고르느냐</span>가 전부입니다.
-  </div>
-</div>
+</section>
 
-<div class="sec-title">지금이 10년 중 가장 유리합니다</div>
-<div class="sec-sub">시장 데이터 22년치(발행 29만 건) 직접 분석 결과</div>
+<!-- ══ 6. 기초: ELS가 처음이라면 (맨 뒤) ══ -->
+<section class="lp-sec">
+  <span class="lp-label">ELS가 처음이라면</span>
+  <h2 class="lp-h2">원리는 3분이면 충분합니다</h2>
+  <p class="lp-sub">"주가가 정해진 선 아래로 안 떨어지면, 정해진 이자를 주는 상품"</p>
 
-<div class="bigstat">
-  <div class="card">
-    <div class="num" style="color:var(--blue)">42%</div>
-    <div class="lbl">손실 방어선(낙인)<br>10년 전 57% → 훨씬 안전해짐</div>
-  </div>
-  <div class="card">
-    <div class="num" style="color:var(--green)">99%+</div>
-    <div class="lbl">무손실 상환 비율<br>2025~26년 역대 최저 손실률</div>
-  </div>
-  <div class="card">
-    <div class="num" style="color:var(--blue-dark)">8개월</div>
-    <div class="lbl">평균 상환 기간<br>92%가 1년 내 수익 확정</div>
-  </div>
-</div>
-
-<div class="card" style="padding:22px">
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px" class="sim-grid">
-    <div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px">방어선은 깊어지고</div>
-      <svg viewBox="0 0 320 130" style="width:100%">
-        <g font-size="9" fill="#8B95A1">
-          <rect x="10"  y="35" width="20" height="85" rx="3" fill="#C9D8F0"/><text x="12" y="30">57%</text><text x="12" y="129">'15</text>
-          <rect x="60"  y="32" width="20" height="88" rx="3" fill="#C9D8F0"/><text x="62" y="27">59%</text><text x="62" y="129">'19</text>
-          <rect x="110" y="36" width="20" height="84" rx="3" fill="#C9D8F0"/><text x="112" y="31">57%</text><text x="110" y="129">'22</text>
-          <rect x="160" y="42" width="20" height="78" rx="3" fill="#C9D8F0"/><text x="162" y="37">53%</text><text x="160" y="129">'24</text>
-          <rect x="210" y="49" width="20" height="71" rx="3" fill="#9BB8E8"/><text x="212" y="44">48%</text><text x="210" y="129">'25</text>
-          <rect x="260" y="58" width="20" height="62" rx="3" fill="#3182F6"/><text x="258" y="53" fill="#1B64DA" font-weight="700">42%</text><text x="260" y="129">'26</text>
-        </g>
-      </svg>
-      <div style="font-size:11px;color:var(--text-3)">연도별 평균 낙인 — 낮을수록 안전</div>
-    </div>
-    <div>
-      <div style="font-size:13px;font-weight:700;margin-bottom:10px">손실은 사라지고</div>
-      <svg viewBox="0 0 320 130" style="width:100%">
-        <g font-size="9" fill="#8B95A1">
-          <rect x="10"  y="53" width="20" height="67" rx="3" fill="#F3B0A6"/><text x="8" y="48">6.7%</text><text x="12" y="129">'15</text>
-          <rect x="60"  y="94" width="20" height="26" rx="3" fill="#F3B0A6"/><text x="58" y="89">2.6%</text><text x="62" y="129">'17</text>
-          <rect x="110" y="110" width="20" height="10" rx="3" fill="#F0C9C9"/><text x="106" y="105">1.0%</text><text x="110" y="129">'21</text>
-          <rect x="160" y="90" width="20" height="30" rx="3" fill="#F3B0A6"/><text x="158" y="85">2.9%</text><text x="160" y="129">'22</text>
-          <rect x="210" y="116" width="20" height="4"  rx="3" fill="#12B76A"/><text x="204" y="111" fill="#12B76A" font-weight="700">0.4%</text><text x="210" y="129">'25</text>
-          <rect x="260" y="107" width="20" height="13" rx="3" fill="#12B76A"/><text x="256" y="102" fill="#12B76A" font-weight="700">1.3%</text><text x="260" y="129">'26</text>
-        </g>
-      </svg>
-      <div style="font-size:11px;color:var(--text-3)">연도별 손실확정 비율 — 2025년 0.37% 역대 최저</div>
+  <div class="card" style="padding:26px 22px;text-align:left">
+    <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center" class="sim-grid">
+      <div>
+        <svg viewBox="0 0 400 230" style="width:100%">
+          <line x1="40" y1="40" x2="390" y2="40" stroke="#E5E8EB" stroke-width="1"/>
+          <text x="4" y="44" font-size="10" fill="#8B95A1">가입시점</text>
+          <text x="36" y="34" font-size="9" fill="#8B95A1">100%</text>
+          <line x1="40" y1="76" x2="390" y2="76" stroke="#3182F6" stroke-width="1.5" stroke-dasharray="6 3"/>
+          <text x="4" y="80" font-size="10" fill="#1B64DA" font-weight="700">상환선</text>
+          <text x="36" y="70" font-size="9" fill="#1B64DA">85%</text>
+          <line x1="40" y1="185" x2="390" y2="185" stroke="#E5503C" stroke-width="1.5" stroke-dasharray="6 3"/>
+          <text x="8" y="189" font-size="10" fill="#E5503C" font-weight="700">낙인선</text>
+          <text x="36" y="180" font-size="9" fill="#E5503C">40%</text>
+          <rect x="40" y="76" width="350" height="109" fill="#E8F8F0" opacity="0.45"/>
+          <text x="200" y="136" font-size="11" fill="#12B76A" font-weight="700" text-anchor="middle">이 사이면 원금 + 이자</text>
+          <path d="M40 40 C 80 55, 110 90, 150 100 C 190 110, 220 80, 260 70 C 300 62, 340 58, 388 52"
+                fill="none" stroke="#4E5968" stroke-width="2.2" stroke-linecap="round"/>
+          <circle cx="388" cy="52" r="4" fill="#3182F6"/>
+          <text x="310" y="42" font-size="10" fill="#1B64DA" font-weight="700">상환 → 수익 확정</text>
+          <text x="45" y="215" font-size="9" fill="#8B95A1">가입</text>
+          <text x="150" y="215" font-size="9" fill="#8B95A1">6개월</text>
+          <text x="255" y="215" font-size="9" fill="#8B95A1">1년</text>
+          <text x="360" y="215" font-size="9" fill="#8B95A1">…3년</text>
+        </svg>
+      </div>
+      <div>
+        <div class="step"><span class="n">1</span><span>삼성전자·코스피 같은 <b>기준</b>을 정합니다 (기준가격 = 100%)</span></div>
+        <div class="step"><span class="n">2</span><span>6개월마다 확인 — <b style="color:var(--blue-dark)">상환선 위면 원금+이자</b> 받고 끝</span></div>
+        <div class="step"><span class="n">3</span><span><b style="color:var(--red)">60% 폭락</b>만 아니면 만기에 원금+이자</span></div>
+        <div style="font-size:14px;color:var(--text-3);margin-top:10px">주식과 달리, 떨어져도 "선만 안 깨지면" 수익 그대로.</div>
+      </div>
     </div>
   </div>
-</div>
+</section>
 
-<div class="sec-title">ELS 레이더가 대신 골라드립니다</div>
-<div class="sec-sub">매주 300여 개 상품 자동 분석</div>
-
-<div class="why3">
-  <div class="card">
-    <div class="ic"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-    <h3>손실확률</h3>
-    <p>모든 상품을 과거 20년 시세로 검증해 숫자 하나로 표시</p>
+<!-- ══ 7. 최종 CTA ══ -->
+<section class="lp-sec">
+  <div class="lp-final">
+    <h2 class="lp-h2" style="color:#fff">다음 주 월요일,<br>새로운 TOP5가 나옵니다</h2>
+    <p style="color:rgba(255,255,255,.85);font-size:15.5px;margin:8px 0 28px">
+      이번 주 상품의 청약은 이번 주에 끝납니다.<br>
+      지금 시작하면 이번 주 TOP5를 바로 확인할 수 있어요.</p>
+    <a href="{% url 'signup' %}" class="lp-btn-white">무료로 시작하기</a>
+    <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:14px">1분이면 시작할 수 있어요</div>
   </div>
-  <div class="card">
-    <div class="ic"><i class="fa-solid fa-lightbulb"></i></div>
-    <h3>이번주 TOP5</h3>
-    <p>수익 대비 위험이 가장 좋은 상품 자동 선별</p>
-  </div>
-  <div class="card">
-    <div class="ic"><i class="fa-solid fa-gauge-high"></i></div>
-    <h3>낙인 경보</h3>
-    <p>투자 후에도 매일 추적, 위험해지면 알림</p>
-  </div>
-</div>
-
-<div class="cta">
-  <a href="{% url 'signup' %}" class="btn btn-primary"><i class="fa-solid fa-rocket"></i> 무료로 시작하기</a>
-  <a href="{% url 'weekly' %}" class="btn" style="margin-left:8px">이번주 상품 보기</a>
-</div>
+</section>
 
 <p class="footnote">
-  수치는 한국예탁결제원(SEIBro) 공개 데이터와 자체 백테스트 분석 결과이며, 과거 성과가 미래 수익을 보장하지 않습니다.<br>
+  수치는 한국예탁결제원 <b>SEIBro(증권정보포탈)</b> 공개 데이터{% if ki %}(낙인 표본 {{ ki.sample_n|intcomma }}건){% endif %}와
+  자체 백테스트 분석 결과이며, 과거 성과가 미래 수익을 보장하지 않습니다.<br>
   ELS는 예금자보호 대상이 아니며 원금손실이 발생할 수 있습니다.
+  TOP5는 조건에 부합하는 상품을 시스템으로 분류한 결과이며 투자 권유가 아닙니다.
 </p>
 {% endblock %}

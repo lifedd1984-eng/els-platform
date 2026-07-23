@@ -1435,8 +1435,119 @@ def product_search(request):
 
 
 # ── 소개 랜딩 (공개) ─────────────────────────────
+_ABOUT_CACHE = {"day": None, "ctx": None}
+
+
+def _about_accuracy():
+    """레이더 신호 성과검증 집계 — 배지 상품 vs 배지 없는 상품의 평가일 통과율."""
+    from django.db.models import Count, Max, Min, Q
+
+    from .models import RadarVerdict
+
+    qs = RadarVerdict.objects.filter(met__isnull=False)
+    rows = qs.values("tier").annotate(n=Count("id"), ok=Count("id", filter=Q(met=True)))
+    badge_n = badge_ok = ctrl_n = ctrl_ok = 0
+    for r in rows:
+        if r["tier"] in ("아주 강한 신호", "강한 신호"):
+            badge_n += r["n"]
+            badge_ok += r["ok"]
+        else:
+            ctrl_n += r["n"]
+            ctrl_ok += r["ok"]
+    if not badge_n or not ctrl_n:
+        return None
+    span = qs.aggregate(a=Min("week_monday"), b=Max("week_monday"))
+    badge_pct = badge_ok / badge_n * 100
+    ctrl_pct = ctrl_ok / ctrl_n * 100
+    return {
+        "badge_n": badge_n, "badge_ok": badge_ok, "badge_pct": round(badge_pct, 1),
+        "ctrl_n": ctrl_n, "ctrl_ok": ctrl_ok, "ctrl_pct": round(ctrl_pct, 1),
+        "delta": round(badge_pct - ctrl_pct, 1),
+        "total_n": badge_n + ctrl_n, "start": span["a"], "end": span["b"],
+        # 막대 높이(%) — 60% 기준선 축으로 차이를 시각적으로 벌린다 (값은 라벨에 명시)
+        "badge_h": round(max(8.0, (badge_pct - 60) / 40 * 90), 1),
+        "ctrl_h": round(max(8.0, (ctrl_pct - 60) / 40 * 90), 1),
+    }
+
+
+def _about_ki_series():
+    """SEIBro 표본의 연도별 평균 낙인 배리어 → 꺾은선 좌표(viewBox 620x190)."""
+    from django.db.models import Avg, Count
+    from django.db.models.functions import ExtractYear
+
+    from .models import HistoricalIssue
+
+    rows = list(HistoricalIssue.objects.filter(ki__isnull=False)
+                .annotate(y=ExtractYear("issue_date")).values("y")
+                .annotate(n=Count("id"), avg=Avg("ki")).order_by("y"))
+    rows = [r for r in rows if r["y"] and r["n"] >= 30]   # 표본 30건 미만 연도는 제외
+    if len(rows) < 5:
+        return None
+
+    x0, x1, y_top, y_bot = 46.0, 596.0, 22.0, 150.0      # 그리기 영역
+    lo, hi = 40.0, 62.0                                   # y축 범위(%)
+    step = (x1 - x0) / (len(rows) - 1)
+
+    def _y(v):
+        return round(y_bot - (v - lo) / (hi - lo) * (y_bot - y_top), 1)
+
+    pts = []
+    for i, r in enumerate(rows):
+        pts.append({"x": round(x0 + step * i, 1), "y": _y(r["avg"]),
+                    "year": r["y"], "avg": round(r["avg"], 1), "n": r["n"]})
+    return {
+        "points": " ".join(f"{p['x']},{p['y']}" for p in pts),
+        "first": pts[0], "last": pts[-1], "marks": [pts[0], pts[len(pts) // 2], pts[-1]],
+        "sample_n": sum(r["n"] for r in rows),
+        "grid": [{"v": v, "y": _y(v)} for v in (60, 55, 50, 45)],
+        "drop": round(max(p["avg"] for p in pts) - pts[-1]["avg"], 1),
+    }
+
+
+def _about_live():
+    """운영자 실계좌 상환 실적 집계 — 금액은 노출하지 않고 비율·건수만."""
+    done = [i for i in Investment.objects.filter(
+        status__in=["조기상환", "만기상환", "낙인후상환"],
+        redeemed_amount__isnull=False, redeemed_at__isnull=False)
+        if i.amount and (i.redeemed_at - i.invested_at).days > 0]
+    if not done:
+        return None
+    anns, months, wins = [], [], 0
+    for i in done:
+        days = (i.redeemed_at - i.invested_at).days
+        r = (i.redeemed_amount - i.amount) / i.amount
+        anns.append(r * 365 / days)
+        months.append(days / 30.4)
+        if r > 0:
+            wins += 1
+    n = len(done)
+    return {"n": n, "win": wins,
+            "ann": round(sum(anns) / n * 100, 1),
+            "avg_m": round(sum(months) / n, 1)}
+
+
 def about(request):
-    return render(request, "core/about.html", {"active_nav": "about"})
+    """소개 랜딩 — 실측 숫자는 하루 1회만 계산해 캐시(마케팅 유입 대비)."""
+    today = date.today()
+    if _ABOUT_CACHE["day"] == today and _ABOUT_CACHE["ctx"]:
+        ctx = _ABOUT_CACHE["ctx"]
+    else:
+        from .models import RadarVerdict, radar_top5
+        top5 = radar_top5()
+        if not top5:                       # 마감이 지나 이번주가 비면 지난주 것으로
+            last_mon = today - timedelta(days=today.weekday() + 7)
+            top5 = radar_top5(last_mon, last_mon + timedelta(days=6))
+        ctx = {
+            "stat_total": Product.objects.count(),
+            "stat_sim": Product.objects.filter(loss_prob__isnull=False).count(),
+            "stat_verdict": RadarVerdict.objects.filter(met__isnull=False).count(),
+            "accuracy": _about_accuracy(),
+            "ki": _about_ki_series(),
+            "live": _about_live(),
+            "top5": top5,
+        }
+        _ABOUT_CACHE.update(day=today, ctx=ctx)
+    return render(request, "core/about.html", {"active_nav": "about", **ctx})
 
 
 # ── 법적 페이지 (공개) ────────────────────────────
