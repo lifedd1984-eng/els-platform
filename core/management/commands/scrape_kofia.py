@@ -63,11 +63,23 @@ class Command(BaseCommand):
             return
 
         n_new = 0
+        missing_assets = []   # KOFIA가 기초자산을 빈 값으로 내려준 상품 (경보용)
         for row in rows:
             desc = row["description"]
             ki = parsers.extract_ki(desc)
             barriers = parsers.extract_barriers(desc)
             period = parsers.extract_period(desc, row["issue_date"], row["expiry_date"], barriers)
+
+            # KOFIA 결손 대응: 기초자산이 빈 값이면 기존 DB의 수동 보정값을 보존
+            # (매 배치 upsert가 보정을 빈 값으로 되돌리는 것 방지 — NH 25004 사례)
+            if not (row["assets_raw"] or "").strip():
+                prev = None
+                if row["product_code"]:
+                    prev = Product.objects.filter(product_code=row["product_code"]).first()
+                if prev and (prev.assets_raw or "").strip():
+                    row["assets_raw"] = prev.assets_raw
+                else:
+                    missing_assets.append(f"{row['issuer']} {row['product_no']} (~{row['sub_end']})")
             asset_type = parsers.classify_asset(row["assets_raw"]) or ""
 
             is_no_ki = ki == "NoKI"
@@ -107,6 +119,16 @@ class Command(BaseCommand):
                 n_new += 1
 
         self.stdout.write(f"[자동수집] KOFIA {len(rows)}건 중 신규 {n_new}건")
+
+        # 기초자산 결손 경보 — 보정 전까지 매 배치 상기
+        if missing_assets and should_notify:
+            telegram.send_message(
+                "[기초자산 누락] KOFIA가 기초자산을 빈 값으로 내려준 상품 "
+                f"{len(missing_assets)}건\n"
+                + "\n".join(f"- {m}" for m in missing_assets)
+                + "\nKOFIA 웹에서 실물 확인 후 보정 필요 (유형·손실확률 계산 불가 상태)"
+            )
+            self.stdout.write(f"[기초자산 누락 경보] {len(missing_assets)}건 발송")
         ImportLog.objects.create(
             filename=f"kofia_auto_{timezone_today()}", row_count=len(rows), new_count=n_new
         )
