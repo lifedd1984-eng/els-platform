@@ -11,6 +11,18 @@
   {% elif product.ki %}<span class="badge badge-gray">KI {{ product.ki }}</span>{% endif %}
   {% if product.asset_type %}<span class="badge {% if product.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ product.asset_type }}</span>{% endif %}
   {% if product.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}
+  <span style="margin-left:auto;display:flex;gap:6px">
+    {% if product.prospectus_url %}
+    <a href="{{ product.prospectus_url }}" target="_blank" rel="noopener" class="btn btn-sm"
+       title="KOFIA 등록 간이투자설명서 PDF 다운로드">
+      <i class="fa-solid fa-file-pdf" style="color:var(--red)"></i> 간이투자설명서</a>
+    {% endif %}
+    {% if product.broker_url %}
+    <a href="{{ product.broker_url }}" target="_blank" rel="noopener" class="btn btn-sm"
+       title="발행 증권사의 상품 상세페이지 (새 창)">
+      <i class="fa-solid fa-arrow-up-right-from-square" style="color:var(--blue-dark)"></i> 증권사 페이지</a>
+    {% endif %}
+  </span>
 </div>
 <div class="page-sub">{{ product.assets_raw|asset_short }}</div>
 

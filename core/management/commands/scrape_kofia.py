@@ -112,6 +112,8 @@ class Command(BaseCommand):
                 sub_end=row["sub_end"],
                 currency=currency,
                 description=desc,
+                broker_url=row.get("broker_url", ""),
+                prospectus_url=row.get("prospectus_url", ""),
             )
 
             created = self._upsert_product(row, defaults)

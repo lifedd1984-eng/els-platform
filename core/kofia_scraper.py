@@ -135,6 +135,24 @@ def fetch_subscribing(timeout=25) -> list[dict]:
         assets_raw = _v(el, 8).replace("<br/>", "/").replace("<br>", "/")
         desc = _v(el, 18)
 
+        # 증권사 상품 상세페이지 + 간이투자설명서 PDF (KOFIA 파일서버)
+        broker_url = _v(el, 20)
+        if not broker_url.startswith("http"):
+            broker_url = ""
+        def _t(tag):
+            n = el.find(tag)
+            return (n.text or "").strip() if n is not None and n.text else ""
+        pdf_hash, pdf_path, pdf_name = _t("fileNm"), _t("serverPath"), _t("originalFileNm")
+        prospectus_url = ""
+        if pdf_hash and pdf_path:
+            from urllib.parse import quote
+            prospectus_url = (
+                "https://disdown.kofia.or.kr/COMFSFileDownload.jsp"
+                f"?serverFileNm={quote(pdf_hash)}"
+                f"&serverPath={quote(pdf_path)}"
+                f"&filename={quote(pdf_name or pdf_hash)}"
+            )
+
         rows.append({
             "issuer": issuer,
             "product_no": product_no,
@@ -142,6 +160,8 @@ def fetch_subscribing(timeout=25) -> list[dict]:
             "name": name,
             "assets_raw": assets_raw,
             "description": desc,
+            "broker_url": broker_url,
+            "prospectus_url": prospectus_url,
             "yield_rate": _to_float(_v(el, 15)),
             "max_loss": _to_float(_v(el, 23)),
             # KOFIA 응답에 발행일(issue_date)이 별도로 없음 — 관측상 청약종료일과 동일

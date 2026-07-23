@@ -280,6 +280,9 @@ class Product(models.Model):
 
     currency = models.CharField("통화", max_length=5, default="KRW")
     description = models.TextField("상품설명 원문", blank=True)
+    # KOFIA 응답의 부가 링크 (증권사 상세페이지 · 간이투자설명서 PDF)
+    broker_url = models.TextField("증권사 상품페이지 URL", blank=True, default="")
+    prospectus_url = models.TextField("간이투자설명서 URL", blank=True, default="")
     collected_at = models.DateTimeField("수집일시", auto_now_add=True)
 
     # 수익률 모의실험(백테스트) 캐시 — simulate_products 배치가 채움
