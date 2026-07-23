@@ -1,0 +1,68 @@
+{% extends "core/base.html" %}
+{% load humanize %}
+{% block title %}접속 통계 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title">접속 통계</div>
+<div class="page-sub">{{ start|date:"n월 j일" }} ~ {{ today|date:"n월 j일" }} · 봇 제외 · 방문자는 일 단위 순방문 기준</div>
+
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px" class="sim-grid">
+  <div class="card" style="margin:0;text-align:center;padding:18px 10px">
+    <div style="font-size:24px;font-weight:800;color:var(--blue-dark)">{{ totals.today_uniq|intcomma }}</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-top:3px">오늘 방문자</div>
+  </div>
+  <div class="card" style="margin:0;text-align:center;padding:18px 10px">
+    <div style="font-size:24px;font-weight:800">{{ totals.uniq|intcomma }}</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-top:3px">30일 방문자</div>
+  </div>
+  <div class="card" style="margin:0;text-align:center;padding:18px 10px">
+    <div style="font-size:24px;font-weight:800">{{ totals.views|intcomma }}</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-top:3px">30일 페이지뷰</div>
+  </div>
+  <div class="card" style="margin:0;text-align:center;padding:18px 10px">
+    <div style="font-size:24px;font-weight:800;color:var(--green)">{{ totals.signups|intcomma }}</div>
+    <div style="font-size:11.5px;color:var(--text-3);margin-top:3px">30일 가입</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">일별 방문자</div>
+  <div style="display:flex;align-items:flex-end;gap:3px;height:130px">
+    {% for r in days %}
+    <div title="{{ r.d|date:'n/j' }} · 방문 {{ r.uniq }} · 뷰 {{ r.views }}{% if r.signups %} · 가입 {{ r.signups }}{% endif %}"
+         style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%">
+      <div style="height:{{ r.h }}%;background:{% if r.d == today %}var(--blue-dark){% else %}var(--blue){% endif %};
+                  opacity:{% if r.uniq %}.9{% else %}.15{% endif %};border-radius:3px 3px 0 0;min-height:2px"></div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="display:flex;justify-content:space-between;font-size:10.5px;color:var(--text-3);margin-top:5px">
+    <span>{{ start|date:"n/j" }}</span><span>{{ today|date:"n/j" }}</span>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px" class="sim-grid">
+  <div class="card" style="margin:0">
+    <div class="card-title">많이 본 페이지</div>
+    <table style="width:100%;font-size:12.5px">
+      {% for r in top_paths %}
+      <tr><td style="padding:5px 0;border-bottom:1px solid var(--border)">{{ r.path }}</td>
+          <td class="num" style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:700">{{ r.n|intcomma }}</td></tr>
+      {% empty %}<tr><td style="color:var(--text-3);padding:8px 0">아직 데이터가 없습니다</td></tr>{% endfor %}
+    </table>
+  </div>
+  <div class="card" style="margin:0">
+    <div class="card-title">유입 출처 (외부 도메인)</div>
+    <table style="width:100%;font-size:12.5px">
+      {% for r in top_refs %}
+      <tr><td style="padding:5px 0;border-bottom:1px solid var(--border)">{{ r.ref }}</td>
+          <td class="num" style="padding:5px 0;border-bottom:1px solid var(--border);font-weight:700">{{ r.n|intcomma }}</td></tr>
+      {% empty %}<tr><td style="color:var(--text-3);padding:8px 0">아직 외부 유입이 없습니다 — 직접 접속·북마크만 잡혔어요</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+
+<div style="font-size:11.5px;color:var(--text-3);margin-top:14px">
+  개인 식별이 불가능한 일별 해시로 집계하며 원본 IP는 저장하지 않습니다. 기록은 180일 후 자동 삭제됩니다.
+</div>
+{% endblock %}

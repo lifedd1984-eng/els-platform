@@ -42,6 +42,7 @@ urlpatterns = [
     path('terms/', views.legal_terms, name='terms'),
     path('privacy/', views.legal_privacy, name='privacy'),
     path('disclaimer/', views.legal_disclaimer, name='disclaimer'),
+    path('stats/', views.stats, name='stats'),
     path('manifest.json', views.pwa_manifest, name='pwa_manifest'),
     path('icons/icon-<str:size>.png', views.pwa_icon, name='pwa_icon'),
 ]

@@ -857,3 +857,18 @@ class HistoricalYieldStat(models.Model):
 
     def __str__(self):
         return f"{self.year} {'/'.join(self.assets[:2])} {self.margin_rate}%"
+
+
+class PageView(models.Model):
+    """접속 로그(자체 분석용) — 개인 식별 불가능한 일별 해시만 저장, 180일 보관."""
+    date = models.DateField(db_index=True)
+    path = models.CharField(max_length=120)
+    ref = models.CharField("유입 도메인", max_length=120, blank=True)
+    visitor = models.CharField("방문자 해시(ip+ua+일자)", max_length=16)
+    is_auth = models.BooleanField(default=False)
+
+    class Meta:
+        indexes = [models.Index(fields=["date", "path"])]
+
+    def __str__(self):
+        return f"{self.date} {self.path}"

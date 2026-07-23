@@ -1605,3 +1605,48 @@ def account_delete(request):
         return redirect("weekly")
 
     return render(request, "core/account_delete.html", ctx)
+
+
+# ── 접속 통계 (운영자 전용) ───────────────────────
+@admin_required
+def stats(request):
+    """최근 30일 방문·유입·가입 집계."""
+    from django.contrib.auth import get_user_model
+    from django.db.models import Count
+
+    from .models import PageView
+
+    today = date.today()
+    start = today - timedelta(days=29)
+    qs = PageView.objects.filter(date__gte=start)
+
+    daily = {r["date"]: r for r in qs.values("date").annotate(
+        views=Count("id"), uniq=Count("visitor", distinct=True))}
+    srows = (get_user_model().objects.filter(date_joined__date__gte=start)
+             .values("date_joined__date").annotate(n=Count("id")))
+    signup_map = {r["date_joined__date"]: r["n"] for r in srows}
+
+    days, max_uniq = [], 1
+    for i in range(30):
+        d = start + timedelta(days=i)
+        r = daily.get(d, {})
+        u = r.get("uniq", 0)
+        max_uniq = max(max_uniq, u)
+        days.append({"d": d, "views": r.get("views", 0), "uniq": u,
+                     "signups": signup_map.get(d, 0)})
+    for row in days:
+        row["h"] = round(row["uniq"] / max_uniq * 100, 1)
+
+    ctx = {
+        "days": days, "start": start, "today": today,
+        "top_paths": qs.values("path").annotate(n=Count("id")).order_by("-n")[:12],
+        "top_refs": (qs.exclude(ref="").values("ref")
+                     .annotate(n=Count("visitor", distinct=True)).order_by("-n")[:10]),
+        "totals": {
+            "views": qs.count(),
+            "uniq": qs.values("visitor").distinct().count(),
+            "signups": sum(r["signups"] for r in days),
+            "today_views": days[-1]["views"], "today_uniq": days[-1]["uniq"],
+        },
+    }
+    return render(request, "core/stats.html", ctx)

@@ -70,6 +70,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.PageViewMiddleware',   # 자체 접속 집계 (맨 뒤: user 확정 후)
 ]
 
 ROOT_URLCONF = 'els_platform.urls'
