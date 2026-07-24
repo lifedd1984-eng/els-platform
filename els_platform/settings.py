@@ -150,7 +150,7 @@ if not DEBUG:
 
 # ── ELS 레이더 설정 ──────────────────────────────
 LOGIN_URL = '/accounts/login/'
-LOGIN_REDIRECT_URL = '/'
+LOGIN_REDIRECT_URL = '/weekly/'   # 로그인 직후엔 주간청약 (홈 /는 항상 랜딩)
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # ELS_Curator exe가 엑셀을 생성하는 폴더 (환경변수로 덮어쓰기 가능)

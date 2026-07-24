@@ -1435,10 +1435,8 @@ def product_search(request):
     })
 
 
-# ── 홈 (/) — 비로그인은 랜딩, 로그인은 주간청약 ──
+# ── 홈 (/) — 로그인 여부 무관 랜딩 ──
 def home(request):
-    if request.user.is_authenticated:
-        return weekly(request)
     return about(request)
 
 
