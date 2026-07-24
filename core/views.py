@@ -107,7 +107,8 @@ def weekly(request):
 
     # 빈 URL(메뉴 클릭)로 오면 저장된 필터 복원
     if not request.GET and request.session.get("weekly_filters"):
-        return redirect("/?" + request.session["weekly_filters"])
+        from django.urls import reverse
+        return redirect(reverse("weekly") + "?" + request.session["weekly_filters"])
 
     # 그 외에는 현재 필터 상태를 저장 (주 이동 파라미터 w 제외)
     _saved = request.GET.copy()
@@ -1432,6 +1433,13 @@ def product_search(request):
         "q": q, "results": results, "invested_ids": invested_ids,
         "active_nav": "search",
     })
+
+
+# ── 홈 (/) — 비로그인은 랜딩, 로그인은 주간청약 ──
+def home(request):
+    if request.user.is_authenticated:
+        return weekly(request)
+    return about(request)
 
 
 # ── 소개 랜딩 (공개) ─────────────────────────────

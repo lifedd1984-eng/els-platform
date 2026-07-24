@@ -216,19 +216,19 @@
   <div class="lp-dark">
     <span class="lp-label" style="background:rgba(255,255,255,.08);color:#6CA8FF">성과 검증 · 매주 갱신</span>
     <h2 class="lp-h2" style="color:#fff">신호는 실제로 맞았습니다</h2>
-    <p class="lp-sub" style="color:#8B95A1">배지를 준 상품과 주지 않은 상품의 첫 평가일 통과율</p>
+    <p class="lp-sub" style="color:#8B95A1">레이더가 고른 상품과 나머지 상품이,<br>첫 조기상환 기회에서 수익 확정에 성공한 비율입니다</p>
     <div class="acc">
       <div class="acc-col">
         <div class="acc-val" style="color:#fff">{{ accuracy.badge_pct }}%</div>
         <div class="acc-bar" style="height:{{ accuracy.badge_h }}%;background:linear-gradient(180deg,#4E86FF,#2D5BFF)"></div>
-        <div class="acc-lbl" style="color:#fff">신호 배지 상품</div>
-        <div class="acc-n">{{ accuracy.badge_n }}건 중 {{ accuracy.badge_ok }}건 통과</div>
+        <div class="acc-lbl" style="color:#fff">레이더가 고른 상품</div>
+        <div class="acc-n">{{ accuracy.badge_n }}개 중 {{ accuracy.badge_ok }}개 성공</div>
       </div>
       <div class="acc-col">
         <div class="acc-val" style="color:#6B7684">{{ accuracy.ctrl_pct }}%</div>
         <div class="acc-bar" style="height:{{ accuracy.ctrl_h }}%;background:#3A414B"></div>
-        <div class="acc-lbl" style="color:#B9C0CC">배지 없는 상품</div>
-        <div class="acc-n">{{ accuracy.ctrl_n }}건 중 {{ accuracy.ctrl_ok }}건 통과</div>
+        <div class="acc-lbl" style="color:#B9C0CC">나머지 상품</div>
+        <div class="acc-n">{{ accuracy.ctrl_n }}개 중 {{ accuracy.ctrl_ok }}개 성공</div>
       </div>
     </div>
     <div style="margin-top:26px">
@@ -241,7 +241,7 @@
                 border-radius:8px;padding:9px 12px;font-size:11.5px;color:#B9C0CC;line-height:1.6;margin-top:22px">
       <i class="fa-solid fa-circle-info" style="color:#8B95A1;margin-top:2px;flex:0 0 auto"></i>
       <span>{{ accuracy.start|date:"Y년 n월 j일" }} ~ {{ accuracy.end|date:"Y년 n월 j일" }} 청약분
-        <b style="color:#fff">{{ accuracy.total_n }}건</b>의 첫 평가일 결과이며 매주 갱신됩니다.
+        <b style="color:#fff">{{ accuracy.total_n }}개</b> 상품의 첫 조기상환 평가 결과이며 매주 갱신됩니다.
         과거 실적으로 <b style="color:#fff">미래 수익을 보장하지 않으며</b>, 조건에 부합하는 상품을
         시스템으로 분류한 결과일 뿐 투자 권유가 아닙니다.</span>
     </div>
