@@ -33,6 +33,8 @@ class Command(BaseCommand):
         parser.add_argument("--days", type=int, default=45,
                             help="최근 N일 내 청약마감 상품만 대상 (기본 45)")
         parser.add_argument("--all", action="store_true", help="전체 상품 대상")
+        parser.add_argument("--missing-only", action="store_true",
+                            help="loss_prob 미계산 상품만 — 기존 계산분은 건드리지 않는 백필용")
         parser.add_argument("--years", type=int, default=20, help="과거 데이터 기간(년)")
 
     def handle(self, *args, **opts):
@@ -52,6 +54,8 @@ class Command(BaseCommand):
                 Investment.objects.filter(status="보유중").values_list("product_id", flat=True)
             )
             qs = base.filter(Q(sub_end__gte=cutoff) | Q(id__in=held_ids))
+        if opts["missing_only"]:
+            qs = qs.filter(loss_prob__isnull=True)
 
         products = list(qs)
         self.stdout.write(f"대상 상품: {len(products)}건")
