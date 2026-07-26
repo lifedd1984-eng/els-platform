@@ -219,6 +219,8 @@ def auto_resolve_ticker(name: str):
     ① KRX 종목마스터(한글·영문 국내주 정확) → ② 영문명은 Yahoo 검색(해외주).
     Yahoo는 반환 종목명 일치를 검증해 오매핑을 막고, 한글은 KRX에서만 찾는다."""
     q = re.sub(r"\sIndex$", "", (name or "").strip(), flags=re.IGNORECASE).strip()
+    # 국가 접미사 제거 — "NVIDIA Corporation(US)" 형태 (하나증권 표기)
+    q = re.sub(r"\(\s*(US|USA|JP|HK|KR|미국|일본|홍콩)\s*\)$", "", q, flags=re.IGNORECASE).strip()
     if not q or len(q) < 2:
         return None
 
