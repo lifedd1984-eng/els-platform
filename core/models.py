@@ -788,6 +788,14 @@ class HistoricalIssue(models.Model):
     stepdown_barriers = models.JSONField("스텝다운 배리어", null=True, blank=True)
     detail_fetched = models.BooleanField("상세조회완료", default=False, db_index=True)
 
+    # SEIBro 상세 전수수집(collect_seibro_detail)으로 채우는 상환스케줄·수익률
+    eval_dates = models.JSONField("중간평가일 목록", null=True, blank=True)  # ["2019-06-28", ...]
+    step_yields = models.JSONField("회차별 누적수익률(%)", null=True, blank=True)  # [3.5, 7.0, ...]
+    yield_rate = models.FloatField("연환산 수익률(%)", null=True, blank=True)
+    period_months = models.IntegerField("평가주기(개월, 중앙값)", null=True, blank=True)
+    first_eval_months = models.IntegerField("1차 평가까지(개월)", null=True, blank=True)
+    parse_error = models.CharField("상세 결측사유", max_length=60, blank=True)
+
     collected_at = models.DateTimeField("수집일시", auto_now_add=True)
 
     class Meta:
