@@ -49,7 +49,7 @@
           <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.product.assets_raw|asset_short }}</td>
           <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ item.product.yield_rate|default:"-" }}%</td>
           <td class="num">
-            {% if item.product.is_no_ki %}<span class="badge badge-green">NoKI</span>
+            {% if item.product.is_no_ki %}<span class="badge badge-green">노낙인</span>
             {% elif item.product.ki %}<span class="badge badge-gray">{{ item.product.ki }}</span>
             {% else %}-{% endif %}
           </td>

@@ -263,7 +263,7 @@
       <thead>
         <tr>
           <th>기초자산</th><th class="num">현재가</th><th class="num">기준가</th>
-          <th class="num">1차 상환가</th><th class="num">KI 가격</th>
+          <th class="num">1차 상환가</th><th class="num">낙인 가격</th>
           <th class="num">52주 최고</th><th class="num">52주 최저</th>
         </tr>
       </thead>
@@ -282,7 +282,7 @@
       </tbody>
     </table>
     <div style="font-size:11px;color:var(--text-3);margin-top:4px">
-      괄호 = 기준가 대비 레벨(%). 1차 상환가·KI 가격은 기준가 × 배리어 환산.
+      괄호 = 기준가 대비 레벨(%). 1차 상환가·낙인 가격은 기준가 × 배리어 환산.
       {% if not chart.based_on_issue %}미발행 상품은 1년 전 종가를 기준가로 임시 표시.{% endif %}
     </div>
   </div>
@@ -311,7 +311,7 @@
     <table>
       <thead><tr>
         <th>기초자산</th><th class="num">발행일 기준가</th><th class="num">현재가</th>
-        <th class="num">현재 레벨</th><th class="num">KI배리어</th><th class="num">낙인까지</th>
+        <th class="num">현재 레벨</th><th class="num">낙인 배리어</th><th class="num">낙인까지</th>
       </tr></thead>
       <tbody>
         {% for s in ki_statuses %}
@@ -330,7 +330,7 @@
     </table>
   </div>
   <p style="font-size:11px;color:var(--text-3);margin-top:10px">
-    현재 레벨 = 현재가 ÷ 발행일 기준가 × 100. 낙인까지 = 레벨 − KI배리어. 시세: Yahoo Finance.
+    현재 레벨 = 현재가 ÷ 발행일 기준가 × 100. 낙인까지 = 레벨 − 낙인 배리어. 시세: Yahoo Finance.
   </p>
 </div>
 {% endif %}

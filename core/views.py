@@ -194,7 +194,7 @@ def weekly(request):
     col_defs = [
         ("issuer", "발행사", False), ("product_no", "상품번호", False),
         ("assets", "기초자산", False), ("yield", "수익률", True),
-        ("ki", "KI", True), ("first", "1차", True), ("last", "막차", True),
+        ("ki", "낙인", True), ("first", "1차", True), ("last", "막차", True),
         ("term", "기간", True), ("period", "주기", True), ("loss", "손실확률", True),
         ("type", "유형", False), ("sub_end", "마감", True),
     ]
@@ -528,7 +528,7 @@ def watchlist(request):
         for k, lbl, num in [
             ("issuer", "발행사", False), ("no", "상품번호", False),
             ("assets", "기초자산", False), ("yield", "수익률", True),
-            ("ki", "KI", True), ("first", "1차", True), ("last", "막차", True),
+            ("ki", "낙인", True), ("first", "1차", True), ("last", "막차", True),
             ("term", "기간", True), ("period", "주기", True),
             ("loss", "손실확률", True), ("type", "유형", False),
             ("sub_end", "마감", True), ("confirm", "숙려마감", True),
@@ -888,7 +888,7 @@ def watchlist_export(request):
     import openpyxl
     from django.http import HttpResponse
 
-    cols = ["발행사", "상품번호", "기초자산", "수익률(%)", "KI", "1차", "막차",
+    cols = ["발행사", "상품번호", "기초자산", "수익률(%)", "낙인", "1차", "막차",
             "기간", "주기", "손실확률(%)", "유형", "청약마감", "숙려마감", "메모", "보유"]
 
     wb = openpyxl.Workbook()
@@ -937,7 +937,7 @@ def portfolio_export(request):
     import openpyxl
     from django.http import HttpResponse
 
-    cols = ["발행사", "상품번호", "기초자산", "투자금액(원)", "수익률(%)", "KI",
+    cols = ["발행사", "상품번호", "기초자산", "투자금액(원)", "수익률(%)", "낙인",
             "주기(개월)", "1차까지(개월)", "다음평가일", "예상상환금", "손실확률(%)",
             "발행일", "만기일", "스케줄"]
 

@@ -23,7 +23,7 @@
         <thead>
           <tr>
             <th>발행사</th><th>상품번호</th><th>기초자산</th>
-            <th class="num">수익률</th><th class="num">KI</th>
+            <th class="num">수익률</th><th class="num">낙인</th>
             <th class="num">1차</th><th class="num">막차</th>
             <th class="num">기간</th><th class="num">손실확률</th>
             <th>유형</th><th class="num">마감</th>
@@ -37,7 +37,7 @@
             <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.assets_raw|asset_short }}</td>
             <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ p.yield_rate|default:"-" }}%</td>
             <td class="num">
-              {% if p.is_no_ki %}<span class="badge badge-green">NoKI</span>
+              {% if p.is_no_ki %}<span class="badge badge-green">노낙인</span>
               {% elif p.ki %}<span class="badge badge-gray">{{ p.ki }}</span>
               {% else %}-{% endif %}
             </td>

@@ -49,11 +49,11 @@
         </select>
       </div>
       <div class="form-field">
-        <label>KI 최소</label>
+        <label>낙인 최소</label>
         <input type="number" name="ki_min" value="{{ item.obj.ki_min|default_if_none:'' }}" style="width:80px" placeholder="없음">
       </div>
       <div class="form-field">
-        <label>KI 최대</label>
+        <label>낙인 최대</label>
         <input type="number" name="ki_max" value="{{ item.obj.ki_max|default_if_none:'' }}" style="width:80px" placeholder="없음">
       </div>
       <div class="form-field">
@@ -113,7 +113,7 @@
         <select name="asset_type"><option>전체</option><option>지수형</option><option>종목형</option></select>
       </div>
       <div class="form-field">
-        <label>KI 최대</label>
+        <label>낙인 최대</label>
         <input type="number" name="ki_max" style="width:80px" placeholder="없음">
       </div>
       <div class="form-field">
@@ -121,7 +121,7 @@
         <input type="number" name="yield_min" style="width:100px" step="0.1" placeholder="없음">
       </div>
       <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px">
-        <input type="checkbox" name="include_no_ki" checked> NoKI 포함
+        <input type="checkbox" name="include_no_ki" checked> 노낙인 포함
       </label>
       <label style="display:flex;align-items:center;gap:6px;padding-bottom:8px">
         <input type="checkbox" name="notify" checked> 텔레그램 알림

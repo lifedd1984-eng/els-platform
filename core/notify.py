@@ -27,7 +27,7 @@ def notify_preset_matches(stdout=None):
         for p in new_matches[:10]:
             lines.append(
                 f"- {p.issuer} {p.product_no} ({p.yield_rate}%) "
-                f"KI{p.ki_display} {p.assets_raw[:20]} ~{p.sub_end:%m.%d}"
+                f"낙인{p.ki_display} {p.assets_raw[:20]} ~{p.sub_end:%m.%d}"
             )
         if len(new_matches) > 10:
             lines.append(f"... 외 {len(new_matches)-10}건")
@@ -106,7 +106,7 @@ def notify_watchlist_deadline(stdout=None):
         elif r and r["tier"] == "강한 신호":
             badge = " · \U0001F535강한"
         y = f"{p.yield_rate:g}" if p.yield_rate is not None else "-"
-        lines.append(f"⏰ {p.issuer} {p.product_no} — 연 {y}% · KI{p.ki_display}{badge}")
+        lines.append(f"⏰ {p.issuer} {p.product_no} — 연 {y}% · 낙인{p.ki_display}{badge}")
     lines.append("")
     lines.append("숙려대상자(65세+)는 오늘까지 청약해야 합니다.")
     site = settings.SITE_URL.split("://")[-1]

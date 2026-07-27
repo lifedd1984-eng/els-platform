@@ -14,7 +14,7 @@
     </div>
   </div>
   <div class="stat-card">
-    <div class="stat-label">평균 KI 변화 <small style="color:var(--text-3)">(낮을수록 안전)</small></div>
+    <div class="stat-label">평균 낙인 변화 <small style="color:var(--text-3)">(낮을수록 안전)</small></div>
     <div class="stat-value" style="color:{% if trend.ki_diff <= 0 %}var(--green){% else %}var(--red){% endif %}">
       {% if trend.ki_diff > 0 %}+{% endif %}{{ trend.ki_diff }}<small>%p</small>
     </div>
@@ -47,9 +47,9 @@
 
 <div class="card">
   <div class="card-title">
-    평균 KI 배리어 추이
+    평균 낙인 배리어 추이
     <span style="font-weight:400;font-size:12px;color:var(--text-3)">
-      &nbsp;<i class="fa-solid fa-circle" style="color:var(--orange);font-size:8px"></i> KI(%) — 낮을수록 안전
+      &nbsp;<i class="fa-solid fa-circle" style="color:var(--orange);font-size:8px"></i> 낙인(%) — 낮을수록 안전
     </span>
   </div>
   <div style="overflow-x:auto">
@@ -70,7 +70,7 @@
 <div class="card" style="padding:8px 16px">
   <div class="card-title" style="padding:12px 0 4px">주차별 상세</div>
   <table>
-    <thead><tr><th>주차 (청약마감 기준)</th><th class="num">상품 수</th><th class="num">평균 수익률</th><th class="num">평균 KI</th></tr></thead>
+    <thead><tr><th>주차 (청약마감 기준)</th><th class="num">상품 수</th><th class="num">평균 수익률</th><th class="num">평균 낙인</th></tr></thead>
     <tbody>
       {% for r in rows reversed %}
       <tr>

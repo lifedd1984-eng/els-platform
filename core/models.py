@@ -305,7 +305,7 @@ class Product(models.Model):
     @property
     def ki_display(self):
         if self.is_no_ki:
-            return "NoKI"
+            return "노낙인"
         return str(self.ki) if self.ki is not None else "-"
 
     @property

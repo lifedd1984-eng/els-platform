@@ -64,7 +64,7 @@
       <option value="지수형" {% if filters.asset == '지수형' %}selected{% endif %}>지수형</option>
       <option value="종목형" {% if filters.asset == '종목형' %}selected{% endif %}>종목형</option>
     </select>
-    <input type="number" name="ki_max" placeholder="KI 이하" value="{{ filters.ki_max }}" style="width:80px">
+    <input type="number" name="ki_max" placeholder="낙인 이하" value="{{ filters.ki_max }}" style="width:80px">
     <input type="number" name="yield_min" placeholder="수익률 이상" value="{{ filters.yield_min }}" style="width:95px" step="0.1">
     <select name="currency">
       <option value="">통화</option>
@@ -95,7 +95,7 @@
       <div style="font-weight:800;font-size:20px;color:var(--blue-dark)">연 {{ r.p.yield_rate }}<span style="font-size:12px">%</span>
         <span class="badge" style="background:#1B64DA;color:#fff;margin-left:4px">아주 강한</span>
       </div>
-      <div style="font-size:12px;color:var(--text-2)">1년내 상환 {{ r.early1y }}% · 손실 0%</div>
+      <div style="font-size:12px;color:var(--text-2)">낙인 {% if r.p.is_no_ki %}없음{% else %}{{ r.p.ki }}%{% endif %} · 1년내 상환 {{ r.early1y }}% · 손실 0%</div>
       <div style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)">{{ r.p.assets_raw|asset_short }}</div>
       <div style="font-size:11px;margin-top:4px">
         {% if r.overlap_pct is not None %}
@@ -138,7 +138,7 @@
           <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.assets_raw|asset_short }}</td>
           <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ p.yield_rate|default:"-" }}%</td>
           <td class="num">
-            {% if p.is_no_ki %}<span class="badge badge-green">NoKI</span>
+            {% if p.is_no_ki %}<span class="badge badge-green">노낙인</span>
             {% elif p.ki %}<span class="badge badge-gray">{{ p.ki }}</span>
             {% else %}-{% endif %}
           </td>
