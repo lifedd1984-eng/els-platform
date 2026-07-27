@@ -18,12 +18,13 @@ admin_required = user_passes_test(lambda u: u.is_active and u.is_superuser, logi
 
 
 def _scope(qs, user):
-    """프리셋/관심 소유 범위: 가족(staff)=공용(user=None)+본인, 일반회원=본인 것만."""
-    from django.db.models import Q
+    """프리셋/관심 소유 범위 — 계정별 완전 분리.
+
+    (구버전은 staff끼리 user=None '공용'을 공유했으나, 공개 서비스로 전환하면서
+     운영자 계정끼리 관심목록·프리셋이 섞이는 문제가 있어 개인화로 통일했다.)
+    """
     if not user.is_authenticated:
         return qs.none()
-    if user.is_staff:
-        return qs.filter(Q(user__isnull=True) | Q(user=user))
     return qs.filter(user=user)
 
 
@@ -400,7 +401,7 @@ def product_detail(request, pk):
             chart_lines.append({"label": f"1차 {product.barrier_first:g}",
                                 "y": _y(product.barrier_first), "color": "#e8590c", "dash": "6 3"})
         if product.ki is not None and not product.is_no_ki:
-            chart_lines.append({"label": f"KI {product.ki:g}",
+            chart_lines.append({"label": f"낙인 {product.ki:g}",
                                 "y": _y(product.ki), "color": "#e03131", "dash": "2 3"})
         chart = {"W": W, "H": H, "series": chart_series, "lines": chart_lines,
                  "based_on_issue": bool(product.issue_date)}
@@ -441,9 +442,9 @@ def presets(request):
                 _scope(Preset.objects.filter(id=pid), request.user).update(**data)
                 messages.success(request, "프리셋을 수정했습니다.")
             else:
+                data["user"] = request.user
                 if not request.user.is_staff:
-                    data["user"] = request.user
-                    data["notify"] = False  # 텔레그램은 가족 채널 전용
+                    data["notify"] = False  # 텔레그램은 운영 채널 전용
                 Preset.objects.create(**data)
                 messages.success(request, "프리셋을 추가했습니다.")
         return redirect("presets")
@@ -477,9 +478,7 @@ def watchlist(request):
         product = get_object_or_404(Product, pk=request.POST.get("product_id"))
         is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
         if action == "add":
-            WatchItem.objects.get_or_create(
-                product=product,
-                user=None if request.user.is_staff else request.user)
+            WatchItem.objects.get_or_create(product=product, user=request.user)
             if not is_ajax:
                 messages.success(request, "관심 목록에 등록했습니다.")
         elif action == "remove":

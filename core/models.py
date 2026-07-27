@@ -257,8 +257,8 @@ class Product(models.Model):
     yield_rate = models.FloatField("연수익률(%)", null=True, blank=True)
     max_loss = models.FloatField("최대손실률(%)", null=True, blank=True)
 
-    ki = models.IntegerField("KI배리어(%)", null=True, blank=True)
-    is_no_ki = models.BooleanField("NoKI 여부", default=False)
+    ki = models.IntegerField("낙인 배리어(%)", null=True, blank=True)
+    is_no_ki = models.BooleanField("노낙인 여부", default=False)
     barrier_first = models.IntegerField("1차 조기상환(%)", null=True, blank=True)
     barrier_last = models.IntegerField("마지막 조기상환(%)", null=True, blank=True)
     barriers_raw = models.JSONField("배리어 전체", null=True, blank=True)
@@ -443,9 +443,9 @@ class Preset(models.Model):
     is_default = models.BooleanField("기본 프리셋", default=False)
 
     issuers = models.JSONField("발행사 목록", default=list, blank=True)  # 빈 리스트=전체
-    ki_min = models.IntegerField("KI 최소", null=True, blank=True)
-    ki_max = models.IntegerField("KI 최대", null=True, blank=True)
-    include_no_ki = models.BooleanField("NoKI 포함", default=True)
+    ki_min = models.IntegerField("낙인 최소", null=True, blank=True)
+    ki_max = models.IntegerField("낙인 최대", null=True, blank=True)
+    include_no_ki = models.BooleanField("노낙인 포함", default=True)
     asset_type = models.CharField("자산유형", max_length=5, choices=ASSET_CHOICES, default="전체")
     yield_min = models.FloatField("최소 수익률(%)", null=True, blank=True)
     period_max = models.IntegerField("최대 주기(개월)", null=True, blank=True)

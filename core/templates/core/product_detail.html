@@ -7,8 +7,8 @@
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
   <a href="{% url 'weekly' %}" class="btn btn-icon"><i class="fa-solid fa-arrow-left"></i></a>
   <div class="page-title" style="margin:0">{{ product.issuer }} {{ product.product_no }}</div>
-  {% if product.is_no_ki %}<span class="badge badge-green">NoKI</span>
-  {% elif product.ki %}<span class="badge badge-gray">KI {{ product.ki }}</span>{% endif %}
+  {% if product.is_no_ki %}<span class="badge badge-green">노낙인</span>
+  {% elif product.ki %}<span class="badge badge-gray">낙인 {{ product.ki }}%</span>{% endif %}
   {% if product.asset_type %}<span class="badge {% if product.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ product.asset_type }}</span>{% endif %}
   {% if product.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}
   <span style="margin-left:auto;display:flex;gap:6px">
@@ -101,7 +101,7 @@
     <line x1="30" y1="{{ svg.ki_y }}" x2="{{ svg.w }}" y2="{{ svg.ki_y }}"
           stroke="#E5503C" stroke-width="1.5" stroke-dasharray="6 4"/>
     <text x="{{ svg.w|add:'-4' }}" y="{{ svg.ki_y|add:'-6' }}" text-anchor="end"
-          font-size="11" fill="#E5503C" font-weight="700">KI {{ product.ki }}</text>
+          font-size="11" fill="#E5503C" font-weight="700">낙인 {{ product.ki }}</text>
     {% endif %}
     {% for s in svg.steps %}
     <line x1="{{ s.x }}" y1="{{ s.y }}" x2="{{ s.x2 }}" y2="{{ s.y }}"
@@ -320,7 +320,7 @@
           <td class="num" style="color:var(--text-3)">{{ s.ref_price|floatformat:0|default:"-" }}</td>
           <td class="num">{{ s.current_price|floatformat:0|default:"-" }}</td>
           <td class="num" style="font-weight:700">{% if s.level_pct != None %}{{ s.level_pct }}%{% else %}-{% endif %}</td>
-          <td class="num">{% if product.is_no_ki %}NoKI{% else %}{{ product.ki }}%{% endif %}</td>
+          <td class="num">{% if product.is_no_ki %}노낙인{% else %}{{ product.ki }}%{% endif %}</td>
           <td class="num" style="font-weight:800;color:{% if s.buffer == None %}var(--text-3){% elif s.buffer <= 5 %}var(--red){% elif s.buffer <= 15 %}var(--orange){% else %}var(--green){% endif %}">
             {% if s.buffer != None %}{{ s.buffer }}%p{% else %}-{% endif %}
           </td>
