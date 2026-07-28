@@ -805,6 +805,18 @@ class HistoricalIssue(models.Model):
     first_eval_months = models.IntegerField("1차 평가까지(개월)", null=True, blank=True)
     parse_error = models.CharField("상세 결측사유", max_length=60, blank=True)
 
+    # ── 과거 레이더 재현·성과검증 파이프라인 (simulate_historical / verify_historical) ──
+    # 백테스트는 배지 후보에만 필요 → 값싼 사전 게이트를 통과한 건만 채워진다.
+    sim_loss_prob = models.FloatField("시뮬 손실확률(%)", null=True, blank=True)
+    sim_early_1y = models.FloatField("시뮬 1년내 조기상환(%)", null=True, blank=True)
+    sim_skip = models.CharField("시뮬 불가 사유", max_length=40, blank=True)
+    # 발행일 주차×유형 그룹 안에서 재현한 당시 레이더 결과
+    radar_tier = models.CharField("레이더 등급", max_length=12, blank=True)  # 빈값=배지없음
+    radar_rank = models.IntegerField("레이더 점수순위", null=True, blank=True)
+    # 1차 평가일 실제 결과 (null=미판정/평가일 미도래/시세 미확보)
+    verdict_met = models.BooleanField("1차 조기상환 충족", null=True)
+    verdict_level = models.FloatField("1차 평가일 워스트 레벨(%)", null=True, blank=True)
+
     collected_at = models.DateTimeField("수집일시", auto_now_add=True)
 
     class Meta:
