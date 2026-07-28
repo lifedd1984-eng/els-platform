@@ -129,7 +129,7 @@
 <details class="card fold-card" id="ktFold" data-fold="ktFold" open style="padding:14px 16px;margin-bottom:14px">
   <summary>
     <i class="fa-solid fa-layer-group" style="color:var(--blue)"></i> 낙인대별 최고 수익
-    <span style="font-weight:400;font-size:12px;color:var(--text-3)">청약 가능 상품 · 낙인 값별 수익률 상위 5</span>
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">이 주 청약 상품 · 낙인 값별 수익률 상위 5</span>
     <span style="display:flex;gap:6px;margin-left:auto">
       {% for g in ki_top5 %}
       <button type="button" class="btn btn-sm kt-tabbtn {% if forloop.first %}kt-on{% endif %}" data-pane="kt-pane-{{ forloop.counter }}">{{ g.type }}</button>

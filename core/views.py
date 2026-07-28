@@ -253,31 +253,31 @@ def weekly(request):
                 {"p": p, "overlap_pct": overlap_pct, "early1y": round(_radar_early(p))}
             )
 
-    # ── 낙인대별 최고 수익 (청약 가능 상품 · 유형 탭 × 낙인 값별 수익률 top5) ──
+    # ── 낙인대별 최고 수익 (선택한 주차 상품 · 유형 탭 × 낙인 값별 수익률 top5) ──
     # 대상 낙인 값은 태훈님 지정: 종목형 15~30, 지수형 25~40. 노낙인 제외.
-    ki_top5 = None
-    if offset >= 0:
-        KI_BUCKETS = {"종목형": (15, 20, 25, 30), "지수형": (25, 30, 35, 40)}
-        from collections import defaultdict
-        _buckets = defaultdict(list)
-        for p in Product.objects.filter(
-                sub_end__gte=date.today(), is_no_ki=False, ki__isnull=False):
-            t = p.asset_type
-            if t in KI_BUCKETS and p.ki in KI_BUCKETS[t]:
-                _buckets[(t, int(p.ki))].append(p)
-        ki_top5 = []
-        for t, kis in KI_BUCKETS.items():
-            cols = []
-            for k in kis:
-                lst = _buckets.get((t, k), [])
-                if not lst:
-                    continue
-                top = sorted(lst, key=lambda p: p.yield_rate or 0, reverse=True)[:5]
-                cols.append({"ki": k, "count": len(lst), "top": top})
-            if cols:
-                ki_top5.append({"type": t, "cols": cols})
-        if not ki_top5:
-            ki_top5 = None
+    # TOP5처럼 주차를 따라간다 (주 이동 시 그 주의 분포로 갱신, 필터바 무관).
+    KI_BUCKETS = {"종목형": (15, 20, 25, 30), "지수형": (25, 30, 35, 40)}
+    from collections import defaultdict
+    _buckets = defaultdict(list)
+    for p in Product.objects.filter(
+            sub_end__gte=monday, sub_end__lte=sunday,
+            is_no_ki=False, ki__isnull=False):
+        t = p.asset_type
+        if t in KI_BUCKETS and p.ki in KI_BUCKETS[t]:
+            _buckets[(t, int(p.ki))].append(p)
+    ki_top5 = []
+    for t, kis in KI_BUCKETS.items():
+        cols = []
+        for k in kis:
+            lst = _buckets.get((t, k), [])
+            if not lst:
+                continue
+            top = sorted(lst, key=lambda p: p.yield_rate or 0, reverse=True)[:5]
+            cols.append({"ki": k, "count": len(lst), "top": top})
+        if cols:
+            ki_top5.append({"type": t, "cols": cols})
+    if not ki_top5:
+        ki_top5 = None
 
     return render(request, "core/weekly.html", {
         "products": products,
