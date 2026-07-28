@@ -2,11 +2,22 @@
 과거 ELS 전수분(HistoricalIssue)에 백테스트를 돌려 손실확률·1년내 조기상환률을 채운다.
 — "당시 레이더가 있었다면 어떤 상품에 배지를 줬을지" 재현(verify_historical)의 입력.
 
-■ 최적화: 시뮬은 '배지 후보'에만 돌린다
-  레이더 배지는 낙인·막차배리어 게이트를 반드시 통과해야 나온다(core.models 상수).
-  이 두 조건은 DB 값만으로 즉시 판정되므로, 먼저 걸러 탈락분은 sim_skip="게이트미달"만
-  남기고 백테스트를 **생략**한다. 배지 없는 대조군은 시뮬값 없이도 실제 결과 판정만으로
-  검증되므로 정보 손실이 없다. (전수 77,500건 → 시뮬 대상은 그 일부만 남는다)
+■ 최적화: 시뮬은 '배지 후보'에만 돌린다 — 단 컷은 넉넉하게
+  레이더 배지는 낙인·막차배리어 게이트를 반드시 통과해야 나온다. 이 두 조건은 DB 값만으로
+  즉시 판정되므로 먼저 걸러 탈락분은 sim_skip="게이트미달"만 남기고 백테스트를 **생략**한다.
+  배지 없는 대조군은 시뮬값 없이도 실제 결과 판정만으로 검증되므로 정보 손실이 없다.
+
+  ⚠ 여기서 쓰는 컷은 서비스 고정 상수가 아니라 **느슨한 상한**
+    (hist_radar.PRE_KI_MAX = 지수형 60 / 종목형 65, PRE_LAST_MAX = 80)이다.
+    실제 배지 컷은 verify_historical이 시대적응형(트레일링 퍼센타일)으로 정하는데
+    과거엔 컷이 더 관대해지므로(실효 낙인 컷 지수형 ~50, 종목형 ~60),
+    2026년 상수(45/35)로 미리 자르면 '당시라면 배지였을' 후보를 통째로 놓친다.
+    상한을 넘는 상품은 어떤 시대 컷으로도 통과 못 하므로 생략해도 안전하다.
+
+■ 기준이 바뀌었을 때 — --redo-gated
+  이전 실행이 옛(더 엄격한) 기준으로 "게이트미달"을 찍어놨다면 이 옵션으로 그 행들의
+  sim_skip을 비워 새 상한으로 재검토한다. 이미 시뮬이 끝난 행(sim_loss_prob 보유)은
+  건드리지 않으므로 낭비가 없다.
 
 ■ 선견 편향(lookahead) 차단
   시세 DataFrame을 **발행일 이전**으로 잘라서 백테스트한다(hist_radar.build_price_frame).
@@ -23,6 +34,7 @@
 사용:
   python manage.py simulate_historical --limit 300            (시범)
   python manage.py simulate_historical                        (전수)
+  python manage.py simulate_historical --redo-gated           (옛 기준 게이트미달분 재검토)
   python manage.py simulate_historical --start-year 2018 --end-year 2020
 """
 
@@ -54,17 +66,31 @@ class Command(BaseCommand):
         parser.add_argument("--years", type=int, default=20, help="백테스트 표본 구간(년)")
         parser.add_argument("--delay", type=float, default=0.4,
                             help="신규 티커 조회 간격(초), rate-limit 완화용")
+        parser.add_argument("--redo-gated", action="store_true",
+                            help="옛 기준으로 '게이트미달' 처리된 행을 새 상한으로 재검토")
 
     # ------------------------------------------------------------------ main
     def handle(self, *args, **opts):
         years = opts["years"]
 
-        qs = HistoricalIssue.objects.filter(
+        base = dict(
             product_type="ELS", recu_whcd="공모",
             detail_fetched=True, parse_error="",
             issue_date__year__range=(opts["start_year"], opts["end_year"]),
+        )
+        if opts["redo_gated"]:
+            # 게이트 기준이 완화됐으므로 옛 탈락분만 미처리 상태로 되돌린다
+            # (시뮬이 이미 끝난 행·티커/시세 문제로 빠진 행은 그대로 둔다)
+            n = HistoricalIssue.objects.filter(
+                sim_skip=SKIP_GATE, sim_loss_prob__isnull=True, **base).update(sim_skip="")
+            self.stdout.write(f"[재검토] 게이트미달 {n}건을 미처리로 되돌림 "
+                              f"(상한 낙인 {hist_radar.PRE_KI_MAX}, 막차 "
+                              f"{hist_radar.PRE_LAST_MAX})")
+            self._log(f"[재검토] 게이트미달 {n}건 초기화")
+
+        qs = HistoricalIssue.objects.filter(
             # 재개: 아직 손도 안 댄 건만 (성공분·스킵분은 건너뛴다)
-            sim_loss_prob__isnull=True, sim_skip="",
+            sim_loss_prob__isnull=True, sim_skip="", **base
         )
         ids = list(qs.order_by("issue_date").values_list("id", flat=True))
         if opts["limit"]:

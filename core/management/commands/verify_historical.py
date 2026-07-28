@@ -10,11 +10,17 @@
   SEIBro엔 청약일이 없어 발행일 주차를 청약주차의 근사로 쓴다.
   레이더는 그룹 내 상대평가이므로 기준이 일관되기만 하면 된다.
 
-■ 배지 재현
-  core.models의 레이더 상수를 그대로 import해 _compute_radar_pool과 같은 순서로 판정
-  (hist_radar.reproduce_radar). 상수를 바꾸면 재현 결과도 따라간다.
+■ 배지 재현 — 시대적응형 게이트(트레일링 퍼센타일)
+  core.models의 레이더 상수를 import해 _compute_radar_pool과 같은 순서로 판정하되,
+  **낙인·막차배리어 컷만은 그 시점의 직전 발행 분포에서 퍼센타일로 산출**한다
+  (hist_radar.AdaptiveGate). 고정 상수(지수형 낙인<45)는 2026년 시장 산물이라
+  과거 빈티지에 그대로 대면 통과율 0~10%로 표본이 전멸하기 때문이다.
+    · 앵커 P_ki/P_last = 최신 연도 발행분에서 현 상수의 통과 비율(런타임 실측)
+    · 각 (주차,유형) 컷 = 그 주 월요일 **이전** 52주 발행분의 P 퍼센타일
+      (표본<100 → 확장 윈도우 → 그래도 미달이면 그 그룹은 배지 산출 제외)
+    · 조기상환>=RADAR_EARLY_MIN, 손실<RADAR_LOSS_MAX는 백테스트 기반 절대지표라 그대로
   시뮬값(sim_loss_prob/sim_early_1y)이 없는 건은 자동으로 배지 후보에서 빠진다
-  — simulate_historical이 값싼 게이트로 미리 떨어뜨린 건들이라 원래 배지를 못 받는다.
+  — simulate_historical이 느슨한 상한 게이트로 미리 떨어뜨린 건들이다.
 
 ■ 결과 판정 (배지군 + 대조군 전체)
   1차 평가일 = eval_dates[0]. 오늘보다 3일 이상 지난 건만 판정(시세 확정 대기).
@@ -64,6 +70,8 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=0, help="N건만 처리(시범용, 0=전체)")
         parser.add_argument("--delay", type=float, default=0.4,
                             help="신규 티커 조회 간격(초)")
+        parser.add_argument("--anchor-year", type=int, default=0,
+                            help="앵커 퍼센타일을 잴 연도(0=데이터 최신 연도 자동)")
 
     # ------------------------------------------------------------------ main
     def handle(self, *args, **opts):
@@ -71,6 +79,10 @@ class Command(BaseCommand):
         self.store = hist_radar.PriceStore(throttle=opts["delay"], logger=self._log)
         self.base_fallback = 0    # 공시 기준가 → 발행일 종가로 대체한 자산 수
         self.base_disclosed = 0   # 공시 기준가를 그대로 쓴 자산 수
+        self.cut_log = defaultdict(list)   # (연도, 유형) → [(eff_ki, eff_last), ...]
+        self.cut_over_ceiling = 0          # 컷이 시뮬 사전게이트 상한을 넘은 그룹 수
+
+        self._build_gate(opts)
 
         qs = HistoricalIssue.objects.filter(
             product_type="ELS", recu_whcd="공모",
@@ -90,7 +102,8 @@ class Command(BaseCommand):
 
         # 집계 버킷: (스코프, 등급) → [건수, 적중]
         self.agg = defaultdict(lambda: [0, 0])
-        stats = {"groups": 0, "badge": 0, "judged": 0, "wait": 0, "noprice": 0}
+        stats = {"groups": 0, "badge": 0, "judged": 0, "wait": 0, "noprice": 0,
+                 "nocut": 0}
         started = time.time()
         status = "완료"
         done = 0
@@ -119,6 +132,7 @@ class Command(BaseCommand):
             f"{status}: 처리 {done}/{total} / 주차그룹 {stats['groups']} "
             f"/ 배지 {stats['badge']} / 판정확정 {stats['judged']} "
             f"/ 평가일미도래 {stats['wait']} / 시세미확보 {stats['noprice']} "
+            f"/ 컷산출불가 {stats['nocut']}그룹 "
             f"/ 기준가대체 {self.base_fallback}(공시사용 {self.base_disclosed}) "
             f"/ 경과 {elapsed:.0f}m"
         )
@@ -126,6 +140,40 @@ class Command(BaseCommand):
         self._log(summary)
 
         self._report(opts)
+
+    # ------------------------------------------------------------------ 적응형 게이트
+    def _build_gate(self, opts):
+        """전 기간(연도범위와 무관) 발행 분포를 한 번에 읽어 AdaptiveGate 구성.
+
+        ⚠ --start-year와 상관없이 **전 기간**을 싣는다.
+          2016년 첫 주의 컷도 2015년 52주 발행분을 봐야 나오기 때문이다
+          (트레일링 윈도우는 언제나 과거만 본다 — 미래 데이터는 들어갈 수 없다).
+        """
+        rows = []
+        qs = HistoricalIssue.objects.filter(
+            product_type="ELS", recu_whcd="공모",
+            detail_fetched=True, parse_error="", issue_date__isnull=False,
+            ki__isnull=False,
+        ).values_list("issue_date", "basset_sort", "ki", "stepdown_barriers")
+        for d, sort, ki, bars in qs.iterator(chunk_size=2000):
+            at = "지수형" if (sort or "").strip() == "지수" else "종목형"
+            last = None
+            if bars and isinstance(bars[-1], (int, float)):
+                last = bars[-1]
+            rows.append((d, at, ki, last))
+
+        self.gate = hist_radar.AdaptiveGate(rows, anchor_year=opts["anchor_year"] or None)
+        self.stdout.write(
+            f"적응형 게이트: 분포표본 {len(rows)}건 / 앵커 {self.gate.anchor_year}년")
+        for at, a in sorted(self.gate.anchor.items()):
+            line = (f"  앵커 {at}: 낙인<{a['ref_ki']} 통과 "
+                    f"{a['P_ki']:.1f}% (n={a['n_ki']}) → P_ki, "
+                    f"막차<={a['ref_last']} 통과 "
+                    f"{a['P_last']:.1f}% (n={a['n_last']}) → P_last"
+                    if a["P_ki"] is not None and a["P_last"] is not None
+                    else f"  앵커 {at}: 표본 부족 — 이 유형은 배지 산출 불가")
+            self.stdout.write(line)
+            self._log(line)
 
     # ------------------------------------------------------------------ 주차 처리
     def _flush_week(self, issues, monday, stats):
@@ -138,7 +186,22 @@ class Command(BaseCommand):
 
         for asset_type, members in by_type.items():
             stats["groups"] += 1
-            tiers = hist_radar.reproduce_radar(members, asset_type)
+            # ── 그 시점 분포로 컷 산출 (윈도우는 monday '이전'만 본다) ──
+            cuts = self.gate.cuts(monday, asset_type)
+            if cuts is None:
+                # 컷 산출 불가(초기 구간 표본 부족) → 배지는 없음, 대조군 판정은 정상 수행
+                stats["nocut"] += 1
+                tiers = {}
+            else:
+                tiers = hist_radar.reproduce_radar(
+                    members, asset_type, cut_ki=cuts["cut_ki"], cut_last=cuts["cut_last"])
+                self.cut_log[(monday.year, asset_type)].append(
+                    (cuts["eff_ki"], cuts["eff_last"]))
+                if (cuts["cut_ki"] > hist_radar.PRE_KI_MAX[asset_type]
+                        or cuts["cut_last"] > hist_radar.PRE_LAST_MAX):
+                    # 시뮬 사전게이트 상한을 넘는 컷 — 그 구간 후보 일부가 시뮬 없이 빠졌을 수 있다
+                    self.cut_over_ceiling += 1
+
             for p in members:
                 tier, rank = tiers.get(p.isin, ("", None))
                 p.radar_tier = tier
@@ -241,14 +304,50 @@ class Command(BaseCommand):
             lines.append("-" * 72)
             out[scope] = entry
 
+        # ── 연도별 실효 컷 ("그 시절엔 낙인 50이 컷이었다") ──
+        cuts_out = {}
+        lines += ["", "=" * 72,
+                  "연도별 실효 컷 (그 시점 분포에서 산출된 적응형 게이트)", "=" * 72,
+                  f"{'연도':<8}{'유형':<10}{'주차수':>7}{'낙인컷(평균)':>14}{'막차컷(평균)':>14}"]
+        for (year, at) in sorted(self.cut_log):
+            rows = self.cut_log[(year, at)]
+            kis = [k for k, _ in rows if k is not None]
+            lasts = [v for _, v in rows if v is not None]
+            avg_ki = round(sum(kis) / len(kis), 1) if kis else None
+            avg_last = round(sum(lasts) / len(lasts), 1) if lasts else None
+            cuts_out.setdefault(str(year), {})[at] = {
+                "weeks": len(rows), "eff_ki_avg": avg_ki, "eff_last_avg": avg_last}
+            lines.append(f"{year:<8}{at:<10}{len(rows):>7}"
+                         f"{(f'낙인 {avg_ki:g} 이하' if avg_ki is not None else '-'):>14}"
+                         f"{(f'{avg_last:g} 이하' if avg_last is not None else '-'):>14}")
+        lines.append("-" * 72)
+        if self.cut_over_ceiling:
+            lines.append(
+                f"[경고] 적응형 컷이 시뮬 사전게이트 상한(PRE_KI_MAX {hist_radar.PRE_KI_MAX} / "
+                f"PRE_LAST_MAX {hist_radar.PRE_LAST_MAX})을 넘은 그룹 {self.cut_over_ceiling}개 "
+                f"— 그 구간 후보 일부가 시뮬 없이 빠졌을 수 있습니다. "
+                f"hist_radar의 상한을 올린 뒤 simulate_historical --redo-gated 재실행 권장.")
+
         for line in lines:
             self.stdout.write(line)
             self._log(line)
 
+        anchor = {at: {k: v for k, v in a.items()}
+                  for at, a in self.gate.anchor.items()}
         payload = {
             "generated_at": datetime.now().isoformat(timespec="seconds"),
             "range": [opts["start_year"], opts["end_year"]],
             "settle_days": SETTLE_DAYS,
+            "gate": {
+                "mode": "적응형(트레일링 퍼센타일)",
+                "anchor_year": self.gate.anchor_year,
+                "anchor": anchor,
+                "window_weeks": hist_radar.GATE_WINDOW_WEEKS,
+                "min_sample": hist_radar.GATE_MIN_SAMPLE,
+                "no_cut_groups": self.gate.no_cut_groups,
+                "cut_over_ceiling_groups": self.cut_over_ceiling,
+                "effective_cuts_by_year": cuts_out,
+            },
             "base_price": {"공시값사용": self.base_disclosed,
                            "발행일종가대체": self.base_fallback},
             "scopes": out,

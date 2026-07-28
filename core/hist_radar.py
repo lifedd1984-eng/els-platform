@@ -13,12 +13,16 @@ SEIBro 전수수집분(HistoricalIssue)은 현 서비스(Product)와 표기 체�
   2) PriceStore: 티커별 전 기간 시세를 **딱 한 번** 받아 메모리에 두고
      여러 상품이 공유한다(지수형이 87%라 티커 종류가 적어 효율이 매우 높다).
      auto_adjust=False — 증권사 고시 종가와 맞추기 위함(core.market과 동일 정책).
-  3) reproduce_radar(): 현 서비스 _compute_radar_pool과 **같은 순서·같은 상수**로
-     그룹 내 상대평가를 재현한다. 상수를 바꾸면 재현 결과도 따라간다.
+  3) reproduce_radar(): 현 서비스 _compute_radar_pool과 **같은 순서**로 그룹 내 상대평가를
+     재현한다. 단 낙인·막차배리어 컷만은 AdaptiveGate가 준 **시대적응형 컷**으로 갈아끼운다
+     (고정 상수는 2026년 시장 기준이라 과거 빈티지에선 통과율이 0~10%로 전멸한다).
+     조기상환·손실확률·수익률 상위비율·점수식·등급컷은 서비스 상수 그대로.
+     현 서비스 로직(core.models)은 절대 건드리지 않는다 — 이 모듈은 과거 재현 전용.
 """
 
 import re
 import time
+from bisect import bisect_left
 from datetime import date, timedelta
 
 from core import market
@@ -35,6 +39,27 @@ SKIP_COND = "조건부족"        # 배리어·평가주기 결측 → 애초에
 
 # 공통 시세 구간이 이 연수를 밑돌면 백테스트 표본이 못 미더워 스킵
 MIN_COMMON_YEARS = 8
+
+# ── 시뮬 사전 게이트 상한 (simulate_historical 전용) ──────────────────
+# 배지 컷은 verify_historical이 **시대적응형**(트레일링 퍼센타일)으로 정하므로
+# 시뮬 단계에서 2026년 기준 고정 상수(지수형 45/종목형 35)로 자르면 과거 후보를 놓친다.
+#
+# 근거 — AdaptiveGate로 2010~2026년 전 주차의 컷을 실제로 산출해 본 최대값:
+#     지수형  cut_ki 최대 60.33 (2022-07-11 주차) / cut_last 최대 85.0 (2015-07-20 주차)
+#     종목형  cut_ki 최대 55.00 (2024-03-18 주차) / cut_last 최대 75.0 (2024-03-18 주차)
+#   여기에 여유를 얹은 값이 아래 상한이다(전수 수집이 끝나면 분포 꼬리가 더 벌어질 수 있어
+#   지수형도 종목형과 같은 65로 맞췄다 — 상한은 느슨할수록 안전하다).
+# → 이 상한을 넘는 상품은 어떤 시대 컷으로도 통과 못 하므로 백테스트를 생략해도 안전하다.
+# → 반대로 상한이 빡빡하면 '당시라면 배지였을' 후보가 시뮬 없이 사라진다(=조용한 누락).
+#   그래서 verify_historical은 적응형 컷이 이 상한을 넘는 그룹을 세어 경고한다.
+# 실측 통과율(2016년 이후 로컬 표본): 낙인 상한 63.6% (옛 고정상수는 8.7%),
+#   막차 상한 99.6% — 막차 쪽은 사실상 비구속이며 극단값만 걸러낸다.
+PRE_KI_MAX = {"지수형": 65, "종목형": 65}
+PRE_LAST_MAX = 90
+
+# ── 시대적응형 컷 파라미터 ────────────────────────────────────────────
+GATE_WINDOW_WEEKS = 52    # 트레일링 윈도우 길이(주). 그 주 월요일 '이전' 발행분만.
+GATE_MIN_SAMPLE = 100     # 윈도우 표본이 이 미만이면 확장 윈도우 → 그래도 미만이면 컷 산출 불가
 
 
 # ──────────────────────────────────────────────────────────────
@@ -273,8 +298,11 @@ def asset_type_of(issue):
 def prefilter(issue, asset_type):
     """시뮬 전 값싼 게이트. 통과면 "", 아니면 sim_skip에 넣을 사유코드.
 
-    레이더 배지는 ① 낙인 < 임계 ② 막차 배리어 <= 임계 를 **반드시** 통과해야 하므로,
-    여기서 걸리는 상품은 시뮬을 돌려도 배지를 못 받는다 → 백테스트를 아예 생략한다.
+    ⚠ 여기 쓰는 컷은 **느슨한 상한**(PRE_KI_MAX/PRE_LAST_MAX)이다.
+    실제 배지 컷은 verify_historical이 그 시점 분포에서 적응형으로 정하는데,
+    과거엔 컷이 더 관대해지므로(지수형 ~50, 종목형 ~60) 2026년 고정 상수로 미리 자르면
+    당시엔 배지를 받았을 후보를 통째로 놓친다.
+    상한을 넘는 상품은 어떤 시대 컷으로도 통과 못 하므로 백테스트를 생략해도 안전하다.
     (배지 없는 대조군은 시뮬값 없이도 실제 결과 판정만으로 검증 가능하다.)
     """
     bars = issue.stepdown_barriers or []
@@ -284,9 +312,9 @@ def prefilter(issue, asset_type):
         return SKIP_COND   # 배리어 파싱 결손(None 섞임) → 판정식이 성립 안 함
     if issue.ki is None or issue.yield_rate is None:
         return SKIP_GATE
-    if issue.ki >= RADAR_KI_EXCL[asset_type]:
+    if issue.ki >= PRE_KI_MAX[asset_type]:
         return SKIP_GATE
-    if bars[-1] is None or bars[-1] > RADAR_LAST_MAX[asset_type]:
+    if bars[-1] is None or bars[-1] > PRE_LAST_MAX:
         return SKIP_GATE
     return ""
 
@@ -299,18 +327,21 @@ def week_monday(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
-def reproduce_radar(issues, asset_type):
+def reproduce_radar(issues, asset_type, cut_ki=None, cut_last=None):
     """(주차, 유형) 그룹의 배지를 재현한다 → {isin: (tier, rank)}.
 
-    현 서비스 core.models._compute_radar_pool과 **같은 순서·같은 상수**를 쓴다.
-      게이트 ① 낙인 있음 ② 낙인 < 임계 ③ 1년내 조기상환 >= 임계
-             ④ 손실확률 < 임계 ⑤ 막차 배리어 <= 임계
+    현 서비스 core.models._compute_radar_pool과 **같은 순서**로 판정한다.
+      게이트 ① 낙인 있음 ② 낙인 < 컷 ③ 1년내 조기상환 >= RADAR_EARLY_MIN
+             ④ 손실확률 < RADAR_LOSS_MAX ⑤ 막차 배리어 <= 컷
       ⑥ 통과분 중 수익률 상위 RADAR_YIELD_TOP_PCT
       점수 = 수익률 − 낙인 + RADAR_SCORE_SHIFT, 내림차순 순위 → 등급
+
+    cut_ki/cut_last를 주면 그 값(시대적응형 컷)을 쓰고, 안 주면 서비스 고정 상수를 쓴다.
+    ③④는 백테스트 기반 절대 지표라 시대 보정 없이 서비스 상수 그대로다.
     배지 없는 상품도 (tier="", rank=순위 or None)로 반환해 '처리됨'을 남긴다.
     """
-    ki_excl = RADAR_KI_EXCL[asset_type]
-    last_max = RADAR_LAST_MAX[asset_type]
+    ki_excl = RADAR_KI_EXCL[asset_type] if cut_ki is None else cut_ki
+    last_max = RADAR_LAST_MAX[asset_type] if cut_last is None else cut_last
 
     survivors = []
     for p in issues:
@@ -350,3 +381,135 @@ def reproduce_radar(issues, asset_type):
             tier = ""
         out[p.isin] = (tier, i + 1)
     return out
+
+
+# ──────────────────────────────────────────────────────────────
+# 5. 시대적응형 게이트 (트레일링 퍼센타일)
+# ──────────────────────────────────────────────────────────────
+class AdaptiveGate:
+    """낙인·막차배리어 컷을 '그 시점의 직전 발행 분포'에서 퍼센타일로 산출한다.
+
+    왜 필요한가
+      현 서비스 상수(지수형 낙인<45, 종목형<35)는 2026년 시장에 맞춰 튜닝됐다.
+      과거 지수형 ELS는 낙인이 통상 50~65였으므로 같은 절대컷을 들이대면
+      2016~2022년 빈티지는 통과율 0~10%로 사실상 전멸해 검증 표본이 안 나온다.
+      '그 시절 기준으로 상위 몇 %인가'로 바꾸면 시대별 선별력이 유지된다.
+
+    어떻게
+      ① 앵커: 최신 연도(기본 = 데이터 최대 연도) 발행분에서 현 상수의 통과 비율을 잰다.
+         P_ki   = 그 해 발행분 중 ki < RADAR_KI_EXCL[유형] 인 비율(%)
+         P_last = 그 해 발행분 중 last <= RADAR_LAST_MAX[유형] 인 비율(%)
+         → "현 레이더는 그 시장에서 상위 P%를 고른다"는 선별 강도를 숫자로 고정.
+      ② 각 (주차, 유형)마다 그 주 월요일 **이전** 52주 발행분에서
+         cut_ki = percentile(윈도우 ki, P_ki), cut_last = percentile(윈도우 last, P_last).
+      ③ 표본 < GATE_MIN_SAMPLE이면 데이터 시작부터의 확장 윈도우로 폴백,
+         그래도 미달이면 컷 산출 불가(그 그룹은 배지 없음, 대조군 판정은 정상 수행).
+
+    ⚠ 선견 편향 차단: 윈도우는 항상 `issue_date < monday` — 같은 주도, 미래도 안 본다.
+      (앵커 퍼센타일만은 전 기간을 본다. 이건 '현 서비스의 선별 강도'라는 튜닝 상수를
+       읽어오는 것이지 개별 시점의 시장 정보가 아니다 — 상수 자체가 이미 2026년 산물.)
+    """
+
+    def __init__(self, rows, anchor_year=None):
+        """rows: [(issue_date, asset_type, ki|None, last_barrier|None)] — 전 기간 전량."""
+        self.by_type = {}       # 유형 → {"ki": (ords, vals), "last": (ords, vals)}
+        self.anchor_year = anchor_year
+        self.anchor = {}        # 유형 → {"P_ki": %, "P_last": %, "n_ki":, "n_last":}
+        self.no_cut_groups = 0  # 표본 부족으로 컷을 못 낸 그룹 수
+        self._cache = {}        # (monday, 유형) → cuts dict | None
+
+        buckets = {}
+        years = set()
+        for d, at, ki, last in rows:
+            if d is None:
+                continue
+            years.add(d.year)
+            b = buckets.setdefault(at, {"ki": [], "last": []})
+            if ki is not None:
+                b["ki"].append((d.toordinal(), float(ki)))
+            if last is not None:
+                b["last"].append((d.toordinal(), float(last)))
+        if not years:
+            return
+        if not self.anchor_year:
+            self.anchor_year = max(years)
+
+        for at, b in buckets.items():
+            store = {}
+            for kind in ("ki", "last"):
+                pairs = sorted(b[kind])
+                store[kind] = ([o for o, _ in pairs], [v for _, v in pairs])
+            self.by_type[at] = store
+            self.anchor[at] = self._anchor_pcts(at, b)
+
+    def _anchor_pcts(self, asset_type, bucket):
+        """앵커 연도 발행분에서 현 상수의 통과 비율(%)을 실측 — 하드코딩 없음."""
+        y0 = date(self.anchor_year, 1, 1).toordinal()
+        y1 = date(self.anchor_year, 12, 31).toordinal()
+        ki_v = [v for o, v in bucket["ki"] if y0 <= o <= y1]
+        last_v = [v for o, v in bucket["last"] if y0 <= o <= y1]
+        ki_excl = RADAR_KI_EXCL.get(asset_type, RADAR_KI_EXCL["종목형"])
+        last_max = RADAR_LAST_MAX.get(asset_type, RADAR_LAST_MAX["종목형"])
+        return {
+            "P_ki": (100.0 * sum(1 for v in ki_v if v < ki_excl) / len(ki_v)) if ki_v else None,
+            "P_last": (100.0 * sum(1 for v in last_v if v <= last_max) / len(last_v))
+                      if last_v else None,
+            "n_ki": len(ki_v), "n_last": len(last_v),
+            "ref_ki": ki_excl, "ref_last": last_max,
+        }
+
+    def _window(self, asset_type, kind, monday):
+        """[monday-52주, monday) 구간 값들. 부족하면 데이터 시작~monday로 확장.
+        반환 (값리스트, 윈도우종류)."""
+        store = self.by_type.get(asset_type)
+        if not store:
+            return [], "없음"
+        ords, vals = store[kind]
+        hi = bisect_left(ords, monday.toordinal())        # monday 당일·이후는 제외(선견 차단)
+        lo = bisect_left(ords, (monday - timedelta(weeks=GATE_WINDOW_WEEKS)).toordinal())
+        win = vals[lo:hi]
+        if len(win) >= GATE_MIN_SAMPLE:
+            return win, "52주"
+        win = vals[:hi]                                    # 확장 윈도우(데이터 시작부터)
+        if len(win) >= GATE_MIN_SAMPLE:
+            return win, "확장"
+        return win, "부족"
+
+    def cuts(self, monday, asset_type):
+        """(주차, 유형)의 컷. 산출 불가면 None.
+
+        반환: {cut_ki, cut_last, eff_ki, eff_last, n_ki, n_last, window}
+          eff_* = **실효 컷** — 윈도우 안에서 실제로 통과하는 최대 낙인/막차 레벨.
+          낙인은 5단위 이산값이라 컷을 반올림할 필요가 없고, 대신 사람이 읽을 땐
+          "그 시절엔 낙인 50이 컷이었다"가 와닿으므로 실효값을 따로 보여준다.
+        """
+        key = (monday, asset_type)
+        if key in self._cache:
+            return self._cache[key]
+
+        import numpy as np
+
+        res = None
+        anc = self.anchor.get(asset_type) or {}
+        p_ki, p_last = anc.get("P_ki"), anc.get("P_last")
+        ki_win, ki_kind = self._window(asset_type, "ki", monday)
+        last_win, last_kind = self._window(asset_type, "last", monday)
+
+        if (p_ki is not None and p_last is not None
+                and ki_kind != "부족" and last_kind != "부족"):
+            cut_ki = float(np.percentile(ki_win, p_ki))
+            cut_last = float(np.percentile(last_win, p_last))
+            passed_ki = [v for v in ki_win if v < cut_ki]
+            passed_last = [v for v in last_win if v <= cut_last]
+            res = {
+                "cut_ki": round(cut_ki, 2), "cut_last": round(cut_last, 2),
+                "eff_ki": max(passed_ki) if passed_ki else None,
+                "eff_last": max(passed_last) if passed_last else None,
+                "n_ki": len(ki_win), "n_last": len(last_win),
+                "window": ki_kind if ki_kind == last_kind else f"{ki_kind}/{last_kind}",
+            }
+        else:
+            self.no_cut_groups += 1
+
+        self._cache[key] = res
+        return res
