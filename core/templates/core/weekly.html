@@ -192,7 +192,57 @@
 {% endif %}
 
 {% if products %}
-  <div class="card" style="padding:8px 16px">
+  {# ── 모바일(≤800px) 2줄 리스트 — PC는 아래 테이블 그대로 ── #}
+  <style>
+    .m-list{display:none}
+    @media (max-width:800px){
+      .m-list{display:block}
+      .pc-table{display:none}
+    }
+    .m-row{display:flex;align-items:center;gap:10px;padding:11px 13px;border-bottom:1px solid var(--border);cursor:pointer}
+    .m-row:last-child{border-bottom:none}
+    .m-left{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+    .m-l1{display:flex;align-items:center;gap:5px;font-size:13.5px;font-weight:700;white-space:nowrap;overflow:hidden}
+    .m-l1 .m-no{color:var(--text-3);font-weight:600;font-size:12px}
+    .m-l2{font-size:11.5px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.65}
+    .m-l2 b{color:var(--text-2);font-weight:700}
+    .m-right{flex:none;text-align:right;display:flex;flex-direction:column;gap:1px}
+    .m-yield{font-size:18px;font-weight:800;color:var(--blue-dark);font-variant-numeric:tabular-nums}
+    .m-yield small{font-size:11px}
+    .m-dday{font-size:11px;font-weight:700;color:var(--red)}
+    .m-dday.done{color:var(--text-3);font-weight:600}
+  </style>
+  <div class="m-list card" style="padding:8px 4px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-2);padding:6px 12px 8px">
+      {{ products|length }}건
+      <select style="margin-left:auto;border:1px solid var(--border);border-radius:7px;background:var(--card);color:var(--text);padding:5px 10px;font-size:12px;font-weight:700"
+              onchange="if(this.value)location.href=this.value" aria-label="정렬">
+        {% for c in columns %}
+          {% if c.label == '수익률' or c.label == '낙인' or c.label == '손실확률' or c.label == '마감' %}
+          <option value="{{ c.url }}" {% if c.active %}selected{% endif %}>{{ c.label }}{% if c.active %} {% if c.dir == 'asc' %}오름차순{% else %}내림차순{% endif %}{% endif %}</option>
+          {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    {% for p in products %}
+    <div class="m-row" onclick="location.href='{% url 'product_detail' p.id %}'">
+      <div class="m-left">
+        <div class="m-l1">{{ p.issuer }} <span class="m-no">{{ p.product_no }}</span>
+          {% if p.radar %}<span class="badge" style="background:{{ p.radar.color }};color:#fff;font-size:9.5px">{{ p.radar.tier }}</span>{% endif %}
+          {% if p.id in invested_ids %}<span class="badge badge-green" style="font-size:9.5px"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}
+        </div>
+        <div class="m-l2">{{ p.assets_raw|asset_short }} · 낙인 <b>{% if p.is_no_ki %}없음{% else %}{{ p.ki|default:"-" }}{% endif %}</b> · 1차 <b>{{ p.barrier_first|default:"-" }}</b> · 손실 <b style="color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}{{ p.loss_prob }}%{% else %}-{% endif %}</b></div>
+      </div>
+      <div class="m-right">
+        <span class="m-yield">{{ p.yield_rate|default:"-" }}<small>%</small></span>
+        {% if p.d_day is not None and p.d_day >= 0 %}<span class="m-dday">D-{{ p.d_day }}</span>
+        {% elif p.sub_end %}<span class="m-dday done">마감</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card pc-table" style="padding:8px 16px">
     <table>
       <thead>
         <tr>
