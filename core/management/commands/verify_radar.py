@@ -2,8 +2,10 @@
 레이더 신호 성과 검증: 과거 주차의 배지 상품(및 대조군)의 실제 1차 조기상환
 결과를 시세로 판정해 RadarVerdict에 기록한다.
 
-판정 로직은 check_redemptions와 동일 — 발행일 기준가 대비 1차 평가일 종가 비율(%)의
-최소값(워스트) vs 1차 배리어. 시세는 커맨드 내 캐시로 중복 조회를 막는다.
+판정 로직은 check_redemptions와 동일 — 최초기준가 대비 1차 평가일 종가 비율(%)의
+최소값(워스트) vs 1차 배리어. 기준가 산정일은 market.base_price_date()가 정한다
+(설명서 파싱값 base_eval_date 우선, 없으면 issue_date + 발행사별 오프셋).
+시세는 커맨드 내 캐시로 중복 조회를 막는다.
 평가일이 아직 안 왔거나 시세 미확보면 met=None으로 저장하고 다음 실행 때 재시도한다.
 """
 
@@ -44,10 +46,11 @@ class Command(BaseCommand):
 
         price_cache = {}
 
-        def price_on(ticker, d):
-            key = (ticker, d)
+        def price_on(ticker, d, back=0):
+            """d 시점 종가. back은 기준가 조회에만 쓴다(평가일 시세는 항상 back=0)."""
+            key = (ticker, d, back)
             if key not in price_cache:
-                price_cache[key] = market.fetch_price_on(ticker, d)
+                price_cache[key] = market.fetch_price_on(ticker, d, back=back)
             return price_cache[key]
 
         collected = judged = met_cnt = skipped = 0
@@ -86,10 +89,12 @@ class Command(BaseCommand):
                     worst_level = None
                     met = None
                     if eval_date <= today and barrier is not None:
-                        base = p.issue_date
+                        # 기준가 산정일 + 거래일 오프셋 (설명서 평가일 우선)
+                        base, base_back = market.base_price_date(p)
                         for asset in market.split_assets(p.assets_raw):
                             ticker = market.resolve_ticker(asset)
-                            ref = price_on(ticker, base) if ticker else None
+                            ref = price_on(ticker, base, back=base_back) if ticker else None
+                            # 평가일 시세는 오프셋 없이 당일 종가 그대로
                             ev = price_on(ticker, eval_date) if ticker else None
                             if not (ref and ev):
                                 worst_level = None

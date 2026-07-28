@@ -291,8 +291,16 @@ def fetch_current_price(ticker: str):
     return None
 
 
-def fetch_price_on(ticker: str, target_date):
+def fetch_price_on(ticker: str, target_date, back: int = 0):
     """target_date 당일 종가 (휴장이면 직전 거래일 종가). 실패 시 None.
+
+    back=N 이면 그보다 N 거래일 더 거슬러 올라간 종가를 준다
+    (해외 자산 시차 보정용 — 증권사는 현지 거래일 종가를 기준가로 쓴다).
+
+    auto_adjust=False 필수: 기본값은 배당·분할을 소급 반영한 '조정 종가'라
+    증권사가 고시하는 실제 종가와 어긋난다. 배당주는 시간이 지날수록
+    과거 가격이 계속 낮아져 오차가 누적된다.
+    (실측: 브로드컴 2026-04-23 조정 419.28 vs 실제 419.94 = 증권사 고시값)
 
     주의: 예전엔 (target−3일) 창의 '첫' 거래일 종가를 반환해 발행일보다
     며칠 前 종가를 기준가로 잡는 버그가 있었음 (급등락 구간에서 낙인
@@ -300,16 +308,75 @@ def fetch_price_on(ticker: str, target_date):
     import yfinance as yf
     from datetime import timedelta
     try:
-        start = (target_date - timedelta(days=10)).strftime("%Y-%m-%d")
+        start = (target_date - timedelta(days=10 + back * 5)).strftime("%Y-%m-%d")
         end = (target_date + timedelta(days=1)).strftime("%Y-%m-%d")
-        h = yf.Ticker(ticker).history(start=start, end=end)
+        h = yf.Ticker(ticker).history(start=start, end=end, auto_adjust=False)
         price = h["Close"].dropna()
         # end가 배타적이라 창 안은 전부 target 이하 → 마지막 = 당일(또는 직전 거래일)
-        if len(price):
-            return float(price.iloc[-1])
+        if len(price) > back:
+            return float(price.iloc[-1 - back])
     except Exception:
         pass
     return None
+
+
+# ── 최초기준가격 산정일 ──────────────────────────────────────────────
+# 간이투자설명서 전수조사(18개사 72건) 결과: 최초기준가격평가일은 발행사별로 일관되며
+# 16개사는 '발행일 당일', 삼성증권·키움증권만 '발행일 −1영업일'(납입·배정일 종가)이다.
+# Product.base_eval_date(설명서에서 파싱)가 있으면 그 날짜가 정답이고,
+# 없을 때만 issue_date + 발행사 규칙으로 근사한다.
+#
+# ⚠ issue_date는 이름과 달리 **청약종료일**이다(kofia_scraper가 같은 필드를 양쪽에 넣음).
+#   아래 일수는 18개사 76건의 간이투자설명서를 실제 파싱해 측정한 값이며,
+#   "발행일 기준" 관행(삼성·키움 = 발행일 −1영업일)과는 기준점이 달라 결과가 다르다.
+#   삼성·키움은 발행일이 청약종료일의 익영업일이라, 둘을 합치면 평가일 = 청약종료일(+0)이 된다.
+#   → 파생 추론 말고 이 실측표를 쓸 것.
+BASE_EVAL_OFFSET_DAYS = {          # issue_date(청약종료일) + N일 = 최초기준가격평가일
+    "NH투자증권": 1,
+    "미래에셋증권": 1,
+    "한화투자증권": 1,
+    "현대차증권": 1,
+}                                   # 그 외 12개사는 +0일
+# 상품마다 값이 달라 규칙화 불가 — 반드시 설명서를 파싱해야 하는 발행사
+BASE_EVAL_UNSTABLE_ISSUERS = {"유안타증권", "유진투자증권"}
+
+
+def base_price_date(product):
+    """상품의 최초기준가격 산정에 쓸 (기준일, 거래일 오프셋) 반환.
+
+    반환값을 그대로 fetch_price_on(ticker, 기준일, back=오프셋)에 넘기면 된다.
+    기준일이 없으면 (None, 0).
+
+    ⚠ 오프셋은 '기준가'에만 적용한다. 조기상환 평가일 시세 조회에는 절대 쓰지 말 것
+      (평가일 종가는 지금도 증권사 고시값과 일치한다).
+    """
+    from datetime import timedelta
+
+    base = getattr(product, "base_eval_date", None)
+    if base:
+        return base, 0
+    base = getattr(product, "issue_date", None)
+    if not base:
+        return None, 0
+    days = BASE_EVAL_OFFSET_DAYS.get(getattr(product, "issuer", ""), 0)
+    # +N일 뒤가 휴장이면 fetch_price_on이 직전 거래일로 자동 보정한다
+    return base + timedelta(days=days), 0
+
+
+# 기준가로 쓸 수 없는 정규화 공시값 — SEIBro가 일부 상품의 최초기준가격을
+# 실제 가격이 아니라 지수화 기준점(1·100·1000·10000 등)으로 공시한다.
+# 그대로 쓰면 낙인·배리어 계산이 통째로 어긋나므로 걸러야 한다.
+# (실측: 포스코홀딩스·기아 = 1.00, NIKKEI = 100 또는 1000, 네이버 = 10000)
+def is_normalized_std_price(std_price, market_price, tol: float = 0.2):
+    """공시 기준가가 실제 시세와 동떨어진 정규화 값인지 판정."""
+    try:
+        sp, mp = float(std_price), float(market_price)
+    except (TypeError, ValueError):
+        return True
+    if sp <= 0 or mp <= 0:
+        return True
+    ratio = sp / mp
+    return not (1 - tol <= ratio <= 1 + tol)
 
 
 _history_cache = {}  # (ticker, date.today()) → [(date, close), ...]

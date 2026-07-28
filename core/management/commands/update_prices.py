@@ -2,7 +2,9 @@
 보유 투자의 기초자산 시세를 조회해 낙인 거리(KnockInStatus)를 갱신하고,
 위험 구간 진입 시 텔레그램 경보를 발송한다.
 
-레벨(%) = 현재가 / 발행일 기준가 × 100
+레벨(%) = 현재가 / 최초기준가 × 100
+  기준가 산정일은 market.base_price_date()가 정한다
+  (설명서 파싱값 base_eval_date 우선, 없으면 issue_date + 발행사별 오프셋).
 버퍼(%p) = 레벨 - KI배리어  (워스트오브 = 가장 낮은 자산 기준)
 
 위험 구간:
@@ -35,11 +37,14 @@ class Command(BaseCommand):
 
         # 티커별 시세 캐시 (같은 티커 반복 조회 방지)
         current_cache = {}
-        ref_cache = {}  # (ticker, issue_date) → 기준가
+        ref_cache = {}  # (ticker, 기준일, 오프셋) → 기준가
 
         for inv in holdings:
             p = inv.product
-            base_date = p.issue_date or inv.invested_at
+            # 기준가 산정일 + 거래일 오프셋 (발행사별 −1영업일 규칙 반영)
+            base_date, back = market.base_price_date(p)
+            if not base_date:
+                base_date, back = inv.invested_at, 0
             for asset in market.split_assets(p.assets_raw):
                 ticker = market.resolve_ticker(asset)
                 cur = ref = None
@@ -48,9 +53,9 @@ class Command(BaseCommand):
                         current_cache[ticker] = market.fetch_current_price(ticker)
                     cur = current_cache[ticker]
                     if base_date:
-                        key = (ticker, base_date)
+                        key = (ticker, base_date, back)
                         if key not in ref_cache:
-                            ref_cache[key] = market.fetch_price_on(ticker, base_date)
+                            ref_cache[key] = market.fetch_price_on(ticker, base_date, back=back)
                         ref = ref_cache[key]
 
                 level = round(cur / ref * 100, 1) if (cur and ref) else None

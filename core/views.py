@@ -331,6 +331,8 @@ def product_detail(request, pk):
     chart = None
     assets = _mkt.split_assets(product.assets_raw)
     series_list = []
+    # 기준가 산정일 + 거래일 오프셋 (설명서 평가일 우선, 없으면 발행사별 규칙)
+    base_date, base_back = _mkt.base_price_date(product)
     for asset in assets[:4]:
         t = _mkt.resolve_ticker(asset)
         if not t:
@@ -339,9 +341,9 @@ def product_detail(request, pk):
         if len(hist) < 10:
             continue
         ref = None
-        if product.issue_date:
-            past = [c for d, c in hist if d <= product.issue_date]
-            ref = past[-1] if past else None
+        if base_date:
+            past = [c for d, c in hist if d <= base_date]
+            ref = past[-1 - base_back] if len(past) > base_back else None
         if ref is None:
             ref = hist[0][1]  # 미발행 상품은 1년 전 시점=100
         hi_d, hi_c = max(hist, key=lambda x: x[1])
@@ -404,7 +406,7 @@ def product_detail(request, pk):
             chart_lines.append({"label": f"낙인 {product.ki:g}",
                                 "y": _y(product.ki), "color": "#e03131", "dash": "2 3"})
         chart = {"W": W, "H": H, "series": chart_series, "lines": chart_lines,
-                 "based_on_issue": bool(product.issue_date)}
+                 "based_on_issue": bool(base_date)}
 
     return render(request, "core/product_detail.html", {
         "product": product, "is_watched": is_watched, "svg": svg,

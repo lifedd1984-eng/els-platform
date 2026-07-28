@@ -273,10 +273,19 @@ class Product(models.Model):
     asset_type = models.CharField("기초자산유형", max_length=5, choices=ASSET_TYPES, blank=True)
     assets_raw = models.CharField("기초자산", max_length=200, blank=True)
 
+    # 주의: issue_date는 이름과 달리 실제로는 '청약종료일'이다.
+    # KOFIA 응답에 발행일 필드가 없어 sub_end와 같은 값(index 17)을 넣어 왔고,
+    # 기존 코드가 대량으로 이 필드에 의존하므로 이름은 바꾸지 않는다.
+    # 진짜 발행일·최초기준가격평가일은 아래 real_issue_date / base_eval_date를 쓴다
+    # (parse_prospectus_dates 커맨드가 간이투자설명서 PDF에서 채운다).
     issue_date = models.DateField("발행일", null=True, blank=True)
     expiry_date = models.DateField("만기일", null=True, blank=True)
     sub_start = models.DateField("청약시작일", null=True, blank=True)
     sub_end = models.DateField("청약마감일", null=True, blank=True)
+
+    # 간이투자설명서에서 추출한 정확한 날짜 (없으면 None → issue_date 폴백)
+    base_eval_date = models.DateField("최초기준가격평가일", null=True, blank=True)
+    real_issue_date = models.DateField("실제 발행일", null=True, blank=True)
 
     currency = models.CharField("통화", max_length=5, default="KRW")
     description = models.TextField("상품설명 원문", blank=True)

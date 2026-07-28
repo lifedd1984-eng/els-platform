@@ -29,10 +29,11 @@ class Command(BaseCommand):
         checked = met_cnt = 0
         price_cache = {}
 
-        def price_on(ticker, d):
-            key = (ticker, d)
+        def price_on(ticker, d, back=0):
+            """d 시점 종가. back은 기준가 조회에만 쓴다(평가일 시세는 항상 back=0)."""
+            key = (ticker, d, back)
             if key not in price_cache:
-                price_cache[key] = market.fetch_price_on(ticker, d)
+                price_cache[key] = market.fetch_price_on(ticker, d, back=back)
             return price_cache[key]
 
         for inv in Investment.objects.filter(status="보유중").select_related("product"):
@@ -48,14 +49,18 @@ class Command(BaseCommand):
                 continue
 
             p = inv.product
-            base = p.issue_date or inv.invested_at
+            # 기준가 산정일 + 거래일 오프셋 (설명서 평가일 우선, 없으면 발행사 규칙)
+            base, base_back = market.base_price_date(p)
+            if not base:
+                base, base_back = inv.invested_at, 0
             worst_level = None
             worst_asset = ""
             judgeable = base is not None and row["barrier"] is not None
             if judgeable:
                 for asset in market.split_assets(p.assets_raw):
                     ticker = market.resolve_ticker(asset)
-                    ref = price_on(ticker, base) if ticker else None
+                    ref = price_on(ticker, base, back=base_back) if ticker else None
+                    # 평가일 시세는 오프셋 없이 당일 종가 그대로
                     ev = price_on(ticker, row["date"]) if ticker else None
                     if not (ref and ev):
                         worst_level = None

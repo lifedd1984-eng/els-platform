@@ -164,7 +164,11 @@ def fetch_subscribing(timeout=25) -> list[dict]:
             "prospectus_url": prospectus_url,
             "yield_rate": _to_float(_v(el, 15)),
             "max_loss": _to_float(_v(el, 23)),
-            # KOFIA 응답에 발행일(issue_date)이 별도로 없음 — 관측상 청약종료일과 동일
+            # ⚠ KOFIA 응답에 발행일 필드가 없다. 아래 issue_date는 sub_end와 **같은 값**
+            #   (index 17 = 청약종료일)이라 이름과 달리 실제 발행일이 아니다.
+            #   기준가 산정에 그대로 쓰면 안 되고, 정확한 날짜는
+            #   parse_prospectus_dates 커맨드가 설명서 PDF에서 읽어
+            #   Product.base_eval_date / real_issue_date에 채운다.
             "issue_date": _to_date(_v(el, 17)),
             "expiry_date": _to_date(_v(el, 14)),
             "sub_start": _to_date(_v(el, 16)),
