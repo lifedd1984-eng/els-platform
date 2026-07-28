@@ -93,6 +93,20 @@
   </div>
 </div>
 
+{# ── "ㅓ"자 분할: 왼쪽(배리어 구조/상품 정보) + 오른쪽(수익률 모의실험 전체 높이) ── #}
+<style>
+  .detail-cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; margin-bottom:16px; }
+  .detail-left { display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .detail-right { min-width:0; }
+  .detail-cols .card { margin-bottom:0; }
+  .detail-right .sim-grid { grid-template-columns:1fr; }  /* 반폭 컬럼에선 회차표/분포를 세로로 */
+  @media (max-width: 800px) {
+    .detail-cols { grid-template-columns:1fr; }  /* 모바일: 기존처럼 세로 스택 */
+  }
+</style>
+<div class="detail-cols">
+<div class="detail-left">
+
 {% if svg %}
 <div class="card">
   <div class="card-title">조기상환 배리어 구조</div>
@@ -119,7 +133,15 @@
   <div class="card-title">상품 정보</div>
   <table>
     <tr><td style="width:140px;color:var(--text-3);font-weight:600">발행사</td><td>{{ product.issuer }}</td></tr>
-    <tr><td style="color:var(--text-3);font-weight:600">상품유형</td><td>{{ product.product_type }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">상품유형/상품번호</td><td>{{ product.product_type }} / <strong>{{ product.product_no }}</strong></td></tr>
+    {% if my_inv %}
+    <tr style="background:var(--blue-bg)">
+      <td style="color:var(--blue-dark);font-weight:700">내 투자금액</td>
+      <td><strong>{{ my_inv.amount|intcomma }}원</strong>
+        <span style="font-size:11px;color:var(--text-3)">(보유 중{% if my_inv.invested_at %} · {{ my_inv.invested_at|date:"Y-m-d" }} 청약{% endif %})</span>
+      </td>
+    </tr>
+    {% endif %}
     <tr><td style="color:var(--text-3);font-weight:600">기초자산</td><td>{{ product.assets_raw|asset_short }}</td></tr>
     <tr><td style="color:var(--text-3);font-weight:600">발행일</td><td>{{ product.issue_date|date:"Y-m-d"|default:"-" }}</td></tr>
     <tr><td style="color:var(--text-3);font-weight:600">만기일</td><td>{{ product.expiry_date|date:"Y-m-d"|default:"-" }}</td></tr>
@@ -130,6 +152,9 @@
     </td></tr>
   </table>
 </div>
+
+</div>{# /detail-left #}
+<div class="detail-right">
 
 <div class="card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
@@ -224,6 +249,9 @@
   {% endif %}
 </div>
 
+</div>{# /detail-right #}
+</div>{# /detail-cols #}
+
 {% if chart %}
 <div class="card">
   <div class="card-title">
@@ -317,8 +345,8 @@
         {% for s in ki_statuses %}
         <tr>
           <td style="font-weight:600">{{ s.asset_name|asset_short }}</td>
-          <td class="num" style="color:var(--text-3)">{{ s.ref_price|floatformat:0|default:"-" }}</td>
-          <td class="num">{{ s.current_price|floatformat:0|default:"-" }}</td>
+          <td class="num" style="color:var(--text-3)">{{ s.ref_price|floatformat:0|intcomma|default:"-" }}</td>
+          <td class="num">{{ s.current_price|floatformat:0|intcomma|default:"-" }}</td>
           <td class="num" style="font-weight:700">{% if s.level_pct != None %}{{ s.level_pct }}%{% else %}-{% endif %}</td>
           <td class="num">{% if product.is_no_ki %}노낙인{% else %}{{ product.ki }}%{% endif %}</td>
           <td class="num" style="font-weight:800;color:{% if s.buffer == None %}var(--text-3){% elif s.buffer <= 5 %}var(--red){% elif s.buffer <= 15 %}var(--orange){% else %}var(--green){% endif %}">

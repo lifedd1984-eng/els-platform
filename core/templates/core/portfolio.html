@@ -168,7 +168,7 @@
             <a href="{% url 'product_detail' a.inv.product.id %}" style="color:var(--blue-dark)">
               {{ a.inv.product.issuer }} {{ a.inv.product.product_no }}</a>
           </td>
-          <td>{{ a.worst.asset_name|asset_short }} <small style="color:var(--text-3)">{{ a.worst.level_pct }}% ({{ a.worst.current_price|floatformat:0 }})</small></td>
+          <td>{{ a.worst.asset_name|asset_short }} <small style="color:var(--text-3)">{{ a.worst.level_pct }}% ({{ a.worst.current_price|floatformat:0|intcomma }})</small></td>
           <td class="num" style="font-weight:700">{{ a.worst.level_pct }}%</td>
           <td class="num">{{ a.inv.product.ki }}%</td>
           <td class="num" style="font-weight:800;color:{% if a.buffer <= 5 %}var(--red){% else %}var(--orange){% endif %}">{{ a.buffer }}%p</td>

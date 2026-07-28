@@ -414,6 +414,7 @@ def product_detail(request, pk):
         "ki_statuses": ki_statuses, "ki_worst_buffer": ki_worst_buffer,
         "ki_updated_at": ki_updated_at,
         "chart": chart,
+        "my_inv": inv,  # 보유 중이면 상품 정보에 내 투자금액 표시
         "active_nav": "weekly",
     })
 
