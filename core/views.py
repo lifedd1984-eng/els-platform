@@ -1449,6 +1449,20 @@ def pwa_icon(request, size):
     return resp
 
 
+def og_image(request):
+    """링크 공유 미리보기 이미지 (1200x630, base.html og:image가 참조)."""
+    from pathlib import Path
+
+    from django.conf import settings as _s
+    from django.http import FileResponse, Http404
+    path = Path(_s.BASE_DIR) / "core" / "assets" / "og.png"
+    if not path.exists():
+        raise Http404
+    resp = FileResponse(open(path, "rb"), content_type="image/png")
+    resp["Cache-Control"] = "public, max-age=86400"
+    return resp
+
+
 # ── 상품 검색 (공개) ─────────────────────────────
 def product_search(request):
     from django.db.models import Q

@@ -46,4 +46,5 @@ urlpatterns = [
     path('stats/', views.stats, name='stats'),
     path('manifest.json', views.pwa_manifest, name='pwa_manifest'),
     path('icons/icon-<str:size>.png', views.pwa_icon, name='pwa_icon'),
+    path('og.png', views.og_image, name='og_image'),
 ]
