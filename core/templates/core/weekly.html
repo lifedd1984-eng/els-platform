@@ -81,12 +81,13 @@
 </div>
 
 {% if recommendations %}
-<div class="card" style="padding:14px 16px;margin-bottom:14px">
-  <div style="font-weight:800;margin-bottom:10px">
+<details class="card fold-card" data-fold="top5Fold" open style="padding:14px 16px;margin-bottom:14px">
+  <summary>
     <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-3px"><circle cx="12" cy="12" r="10" fill="none" stroke="#1B64DA" stroke-opacity=".25" stroke-width="1"/><polygon points="12,3 20,12 12,21 5,12" fill="#1B64DA" fill-opacity=".28" stroke="#1B64DA" stroke-width="1.6"/></svg> 이번주 TOP5
     <span style="font-weight:400;font-size:12px;color:var(--text-3)">아주 강한 신호 · 손실확률 0% · 1년내 상환 90%↑ 중 수익률 상위 5</span>
-  </div>
-  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
+  </summary>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
     {% for r in recommendations %}
     <a href="{% url 'product_detail' r.p.id %}" class="rec-card" style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-decoration:none;color:inherit">
       <div style="font-size:12px;color:var(--text-2)">{{ r.p.issuer }} {{ r.p.product_no }}
@@ -109,35 +110,35 @@
     {% endfor %}
   </div>
   {% include "core/_disclaimer_inline.html" %}
-</div>
+</details>
 {% endif %}
 
 {# ── 낙인대별 최고 수익 — 기본 펼침, 접기 상태는 localStorage에 저장 ── #}
 {% if ki_top5 %}
 <style>
-  #ktFold summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:800}
-  #ktFold summary::-webkit-details-marker{display:none}
-  #ktFold summary .kt-chev{margin-left:auto;color:var(--text-3);transition:transform .15s}
-  #ktFold[open] summary .kt-chev{transform:rotate(180deg)}
+  .fold-card summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:800;flex-wrap:wrap}
+  .fold-card summary::-webkit-details-marker{display:none}
+  .fold-chev{color:var(--text-3);transition:transform .15s}
+  details.fold-card[open] .fold-chev{transform:rotate(180deg)}
   .kt-tabbtn.kt-on{background:var(--blue);border-color:var(--blue);color:#fff}
   .kt-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
-  .kt-col{flex:0 0 200px;display:flex;flex-direction:column;gap:6px}
+  .kt-col{flex:1 1 200px;min-width:196px;display:flex;flex-direction:column;gap:6px}
   .kt-card{text-decoration:none;color:inherit;border:1px solid var(--border);border-radius:7px;padding:7px 9px;display:block}
   .kt-card:hover{border-color:var(--blue)}
 </style>
-<details class="card" id="ktFold" open style="padding:14px 16px;margin-bottom:14px">
+<details class="card fold-card" id="ktFold" data-fold="ktFold" open style="padding:14px 16px;margin-bottom:14px">
   <summary>
     <i class="fa-solid fa-layer-group" style="color:var(--blue)"></i> 낙인대별 최고 수익
     <span style="font-weight:400;font-size:12px;color:var(--text-3)">청약 가능 상품 · 낙인 값별 수익률 상위 5</span>
-    <i class="fa-solid fa-chevron-down kt-chev"></i>
+    <span style="display:flex;gap:6px;margin-left:auto">
+      {% for g in ki_top5 %}
+      <button type="button" class="btn btn-sm kt-tabbtn {% if forloop.first %}kt-on{% endif %}" data-pane="kt-pane-{{ forloop.counter }}">{{ g.type }}</button>
+      {% endfor %}
+    </span>
+    <i class="fa-solid fa-chevron-down fold-chev"></i>
   </summary>
-  <div style="display:flex;gap:6px;margin:10px 0">
-    {% for g in ki_top5 %}
-    <button type="button" class="btn btn-sm kt-tabbtn {% if forloop.first %}kt-on{% endif %}" data-pane="kt-pane-{{ forloop.counter }}">{{ g.type }}</button>
-    {% endfor %}
-  </div>
   {% for g in ki_top5 %}
-  <div id="kt-pane-{{ forloop.counter }}" class="kt-pane" {% if not forloop.first %}style="display:none"{% endif %}>
+  <div id="kt-pane-{{ forloop.counter }}" class="kt-pane" style="margin-top:10px;{% if not forloop.first %}display:none{% endif %}">
     <div class="kt-strip">
       {% for c in g.cols %}
       <div class="kt-col">
@@ -167,14 +168,19 @@
 </details>
 <script>
 (function(){
-  var d = document.getElementById('ktFold');
-  if (!d) return;
-  try { if (localStorage.getItem('ktFold') === 'closed') d.removeAttribute('open'); } catch(e){}
-  d.addEventListener('toggle', function(){
-    try { localStorage.setItem('ktFold', d.open ? 'open' : 'closed'); } catch(e){}
+  // 접기 상태 저장 — TOP5·낙인대별 공용 (data-fold 키로 localStorage)
+  document.querySelectorAll('details.fold-card[data-fold]').forEach(function(d){
+    var key = 'fold:' + d.dataset.fold;
+    try { if (localStorage.getItem(key) === 'closed') d.removeAttribute('open'); } catch(e){}
+    d.addEventListener('toggle', function(){
+      try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch(e){}
+    });
   });
+  // 유형 탭 — summary 안에 있으므로 접힘 토글을 막는다
   document.querySelectorAll('.kt-tabbtn').forEach(function(b){
-    b.addEventListener('click', function(){
+    b.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
       document.querySelectorAll('.kt-tabbtn').forEach(function(x){ x.classList.remove('kt-on'); });
       document.querySelectorAll('.kt-pane').forEach(function(p){ p.style.display = 'none'; });
       b.classList.add('kt-on');
