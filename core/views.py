@@ -1425,6 +1425,9 @@ def pwa_icon(request, size):
 # ── 상품 검색 (공개) ─────────────────────────────
 def product_search(request):
     from django.db.models import Q
+    from django.conf import settings as dj_settings
+    from . import ai_research
+
     q = request.GET.get("q", "").strip()
     results = []
     if q:
@@ -1434,12 +1437,26 @@ def product_search(request):
                 | Q(assets_raw__icontains=q) | Q(name__icontains=q)
             ).order_by("-sub_end")[:200]
         )
+
+    # ── AI 검색: 자연어 → 필터 → 기존 쿼리 실행 (답변 생성 없음) ──
+    aiq = request.GET.get("aiq", "").strip()
+    ai = None
+    if aiq:
+        flt, err = ai_research.ask(aiq)
+        if err:
+            ai = {"q": aiq, "error": err}
+        else:
+            rows, err = ai_research.run_filter(flt, request.user)
+            ai = {"q": aiq, "error": err,
+                  "results": rows or [], "chips": ai_research.describe(flt)}
+
     invested_ids = set()
     if request.user.is_authenticated:
         invested_ids = set(Investment.objects.filter(
             user=request.user, status="보유중").values_list("product_id", flat=True))
     return render(request, "core/search.html", {
         "q": q, "results": results, "invested_ids": invested_ids,
+        "ai": ai, "ai_enabled": bool(dj_settings.ANTHROPIC_API_KEY),
         "active_nav": "search",
     })
 

@@ -163,6 +163,9 @@ ELS_DOWNLOADS_DIR = os.environ.get(
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+# AI 리서치 (Claude Haiku — 자연어 → 검색 필터 변환 전용)
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+
 # 알림 메시지에 넣을 사이트 주소 (배포 시 실제 도메인으로)
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 

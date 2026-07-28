@@ -71,4 +71,81 @@
   </div>
   {% endif %}
 {% endif %}
+
+{# ── AI 검색: 자연어 조건 → 필터 변환 → DB 조회 (AI가 답을 만들지 않음) ── #}
+{% if ai_enabled %}
+<div class="card" style="padding:14px 16px;border-left:3px solid var(--blue)">
+  <div class="card-title" style="padding:0 0 8px">
+    <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--blue)"></i> AI 조건 검색
+    <small style="font-weight:400;color:var(--text-3)">말로 조건을 쓰면 필터로 바꿔 검색합니다</small>
+  </div>
+  <form method="get" class="form-row">
+    <input type="search" name="aiq" value="{{ ai.q|default:'' }}"
+           placeholder='예: 낙인 40 이하 지수형 중에 수익률 제일 좋은 거 3개'
+           style="flex:1;min-width:200px;font-size:14px;padding:10px 12px">
+    <button class="btn btn-primary" type="submit"><i class="fa-solid fa-wand-magic-sparkles"></i> 검색</button>
+  </form>
+  <div style="font-size:11px;color:var(--text-3);margin-top:6px">
+    조건 검색 전용입니다. 추천·의견은 제공하지 않으며, 결과는 항상 실제 데이터베이스 조회값입니다.
+  </div>
+</div>
+
+{% if ai %}
+  {% if ai.error %}
+  <div class="card" style="padding:16px;color:var(--text-2)">
+    <i class="fa-solid fa-circle-info" style="color:var(--orange)"></i> {{ ai.error }}
+  </div>
+  {% else %}
+  <div class="card" style="padding:8px 16px">
+    <div class="card-title" style="padding:10px 4px 4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span>"{{ ai.q }}" — {{ ai.results|length }}건</span>
+      {% for c in ai.chips %}
+      <span class="badge" style="background:var(--blue-bg);color:var(--blue-dark);font-weight:600">{{ c }}</span>
+      {% endfor %}
+    </div>
+    {% if ai.results %}
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>발행사</th><th>상품번호</th><th>기초자산</th>
+            <th class="num">수익률</th><th class="num">낙인</th>
+            <th class="num">손실확률</th><th>유형</th><th class="num">마감</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in ai.results %}
+          <tr class="clickable" onclick="location.href='{% url 'product_detail' p.id %}'">
+            <td style="font-weight:700">{{ p.issuer }}</td>
+            <td>{{ p.product_no }}{% if p.id in invested_ids %} <span class="badge badge-green"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}</td>
+            <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ p.assets_raw|asset_short }}</td>
+            <td class="num" style="font-weight:800;color:var(--blue-dark)">{{ p.yield_rate|default:"-" }}%</td>
+            <td class="num">
+              {% if p.is_no_ki %}<span class="badge badge-green">노낙인</span>
+              {% elif p.ki %}<span class="badge badge-gray">{{ p.ki }}</span>
+              {% else %}-{% endif %}
+            </td>
+            <td class="num">
+              {% if p.loss_prob is not None %}
+                <span style="font-weight:700;color:{% if p.loss_prob > 5 %}var(--red){% elif p.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ p.loss_prob }}%</span>
+              {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
+            </td>
+            <td>{% if p.asset_type %}<span class="badge {% if p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ p.asset_type }}</span>{% endif %}</td>
+            <td class="num" style="white-space:nowrap">
+              {{ p.sub_end|date:"y.n.j"|default:"-" }}
+              {% if p.d_day is not None and p.d_day >= 0 %}<span class="dday-normal">D-{{ p.d_day }}</span>
+              {% elif p.sub_end %}<span class="badge badge-gray">마감</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty" style="padding:18px 0;text-align:center;color:var(--text-3)">조건에 맞는 상품이 없습니다</div>
+    {% endif %}
+  </div>
+  {% endif %}
+{% endif %}
+{% endif %}
 {% endblock %}
