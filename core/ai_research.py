@@ -69,7 +69,10 @@ SYSTEM = (
     "사용자 질문을 product_filter 도구 호출 하나로 변환한다. "
     "질문에 명시되지 않은 조건은 절대 추가하지 않는다. "
     "'추천해줘', '어때?', '살까?' 같은 의견·판단 요구는 unanswerable=true로 표시한다. "
-    "'안전한'은 loss_prob_max=1, '고수익'은 sort=yield/desc 로 해석한다."
+    "'안전한'은 loss_prob_max=1, '고수익'은 sort=yield/desc 로 해석한다. "
+    "asset_contains: 해외 종목·지수는 DB에 영문으로 저장돼 있으니 영문 원명으로 변환한다 "
+    "(테슬라→Tesla, 엔비디아→NVIDIA, 마이크론→Micron, 에스앤피→S&P). "
+    "국내 종목(삼성전자, SK하이닉스 등)과 코스피는 한글 그대로 둔다."
 )
 
 
