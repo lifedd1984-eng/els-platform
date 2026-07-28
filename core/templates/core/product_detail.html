@@ -186,7 +186,7 @@
 
   <p class="page-sub" style="margin-top:-6px;margin-bottom:14px">
     <i class="fa-solid fa-circle-info" style="color:var(--text-3)"></i>
-    표본기간 {{ sim.period_start }} ~ {{ sim.period_end }}. 과거 기초자산 종가로 매 영업일을 발행일로 가정한 워스트오브 백테스트.
+    표본기간 {{ sim.period_start }} ~ {{ sim.period_end }}. 과거 기초자산 종가로 매 영업일을 발행일로 가정한, 가장 부진한 자산 기준 과거 모의실험.
     {% if sim.low_confidence %}<b style="color:var(--orange)"> ※ 표본이 적어 참고용.</b>{% endif %}
     과거 성과가 미래를 보장하지 않습니다.
   </p>
@@ -206,7 +206,7 @@
           </tr>
           {% endfor %}
           <tr style="border-top:2px solid var(--border)">
-            <td>만기 무손실</td><td class="num">최대쿠폰</td>
+            <td>만기 무손실</td><td class="num">약정 수익률 전액</td>
             <td class="num">{{ sim.maturity_noki_count }}</td><td class="num">{{ sim.maturity_noki_pct }}%</td>
           </tr>
         </tbody>
@@ -310,7 +310,7 @@
       </tbody>
     </table>
     <div style="font-size:11px;color:var(--text-3);margin-top:4px">
-      괄호 = 기준가 대비 레벨(%). 1차 상환가·낙인 가격은 기준가 × 배리어 환산.
+      괄호 = 기준가 대비 %. 1차 상환가·낙인 가격은 기준가 × 배리어 환산.
       {% if not chart.based_on_issue %}미발행 상품은 1년 전 종가를 기준가로 임시 표시.{% endif %}
     </div>
   </div>
@@ -331,7 +331,7 @@
     <span style="font-size:13px;font-weight:700;color:{% if ki_worst_buffer <= 5 %}var(--red){% elif ki_worst_buffer <= 15 %}var(--orange){% else %}var(--green){% endif %}">
       {% if ki_worst_buffer <= 5 %}<i class="fa-solid fa-triangle-exclamation"></i> 위험 — 낙인 임박{% elif ki_worst_buffer <= 15 %}<i class="fa-solid fa-circle-exclamation"></i> 경고 — 낙인 주의{% else %}<i class="fa-solid fa-circle-check"></i> 안전{% endif %}
     </span>
-    <span style="font-size:13px;color:var(--text-2)"> · 워스트오브 기준 낙인까지 <b>{{ ki_worst_buffer }}%p</b> 남음</span>
+    <span style="font-size:13px;color:var(--text-2)"> · 가장 부진한 자산 기준 낙인까지 <b>{{ ki_worst_buffer }}%p</b> 남음</span>
   </div>
   {% endif %}
 
@@ -339,7 +339,7 @@
     <table>
       <thead><tr>
         <th>기초자산</th><th class="num">발행일 기준가</th><th class="num">현재가</th>
-        <th class="num">현재 레벨</th><th class="num">낙인 배리어</th><th class="num">낙인까지</th>
+        <th class="num">기준가 대비</th><th class="num" title="이 수준 밑으로 내려간 적이 있으면 손실 가능 구간">낙인 배리어</th><th class="num">낙인까지</th>
       </tr></thead>
       <tbody>
         {% for s in ki_statuses %}
@@ -358,7 +358,7 @@
     </table>
   </div>
   <p style="font-size:11px;color:var(--text-3);margin-top:10px">
-    현재 레벨 = 현재가 ÷ 발행일 기준가 × 100. 낙인까지 = 레벨 − 낙인 배리어. 시세: Yahoo Finance.
+    기준가 대비 = 현재가 ÷ 발행일 기준가 × 100. 낙인까지 = 기준가 대비 % − 낙인 배리어. 시세: Yahoo Finance.
   </p>
 </div>
 {% endif %}

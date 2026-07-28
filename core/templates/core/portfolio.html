@@ -109,7 +109,7 @@
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">기초자산 집중도 <small style="color:var(--text-3);font-weight:400">(금액기준 · 워스트오브 노출)</small></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">기초자산 집중도 <small style="color:var(--text-3);font-weight:400">(금액기준 · 가장 부진한 자산 기준)</small></div>
       {% for a in risk.assets %}
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
@@ -158,7 +158,7 @@
   <div style="overflow-x:auto">
     <table>
       <thead><tr>
-        <th>상품</th><th>워스트 기초자산</th><th class="num">현재 레벨</th>
+        <th>상품</th><th>가장 부진한 자산</th><th class="num">기준가 대비</th>
         <th class="num">낙인 배리어</th><th class="num">낙인까지</th><th></th>
       </tr></thead>
       <tbody>
@@ -182,7 +182,7 @@
     </table>
   </div>
   <p style="font-size:11px;color:var(--text-3);margin-top:10px">
-    낙인까지 = 현재 워스트오브 레벨 − 낙인 배리어. 위험 ≤ 5%p / 경고 ≤ 15%p. 상품 클릭 시 상세 낙인 현황.
+    낙인까지 = 가장 부진한 자산의 기준가 대비 % − 낙인 배리어. 위험 ≤ 5%p / 경고 ≤ 15%p. 상품 클릭 시 상세 낙인 현황.
   </p>
   {% else %}
   <div style="text-align:center;padding:18px 0;color:var(--green);font-weight:600;font-size:14px">
@@ -289,7 +289,7 @@
               {{ inv.product.issuer }} {{ inv.product.product_no }}
             </a>
             {% with rp=inv.redemption_pending %}
-            {% if rp %}<span class="badge" style="background:var(--green);color:#fff" title="{{ rp.round_no }}회차({{ rp.eval_date|date:'m.d' }}) 배리어 {{ rp.barrier }}% 충족 — 워스트 {{ rp.worst_level }}%. 증권사 확인 후 상환 처리하세요.">상환예정</span>{% endif %}
+            {% if rp %}<span class="badge" style="background:var(--green);color:#fff" title="{{ rp.round_no }}회차({{ rp.eval_date|date:'m.d' }}) 배리어 {{ rp.barrier }}% 충족 — 가장 부진한 자산 {{ rp.worst_level }}%. 증권사 확인 후 상환 처리하세요.">상환예정</span>{% endif %}
             {% endwith %}
             {% if inv.broker_account %}<div style="font-size:11px;color:var(--text-3)">{{ inv.broker_account }}</div>{% endif %}
           </td>
@@ -365,7 +365,7 @@
       <thead>
         <tr>
           <th>상품</th><th>기초자산</th><th class="num">투자금액</th>
-          <th>놓친 회차</th><th class="num">배리어 / 워스트</th><th>다음 평가</th><th class="num">낙인 여유</th>
+          <th>놓친 회차</th><th class="num" title="조기상환 조건선 / 평가일의 가장 부진한 자산 수준">배리어 / 가장 부진한 자산</th><th>다음 평가</th><th class="num">낙인 여유</th>
         </tr>
       </thead>
       <tbody>
