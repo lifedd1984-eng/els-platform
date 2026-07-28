@@ -89,9 +89,13 @@
   </summary>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
     {% for r in recommendations %}
-    <a href="{% url 'product_detail' r.p.id %}" class="rec-card" style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-decoration:none;color:inherit">
-      <div style="font-size:12px;color:var(--text-2)">{{ r.p.issuer }} {{ r.p.product_no }}
-        <span class="badge {% if r.p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}" style="margin-left:2px">{{ r.p.asset_type }}</span>
+    <div class="rec-card" onclick="location.href='{% url 'product_detail' r.p.id %}'" style="flex:1;min-width:170px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:inherit;cursor:pointer">
+      <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-2)">
+        <span>{{ r.p.issuer }} {{ r.p.product_no }}</span>
+        <span class="badge {% if r.p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ r.p.asset_type }}</span>
+        {% if user.is_authenticated %}
+        <span style="margin-left:auto" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=r.p.id %}</span>
+        {% endif %}
       </div>
       <div style="font-weight:800;font-size:20px;color:var(--blue-dark)">연 {{ r.p.yield_rate }}<span style="font-size:12px">%</span>
         <span class="badge" style="background:#1B64DA;color:#fff;margin-left:4px">아주 강한</span>
@@ -106,7 +110,7 @@
         {% endif %}
         <span style="color:var(--text-3)">~{{ r.p.sub_end|date:"m.d" }} 마감</span>
       </div>
-    </a>
+    </div>
     {% endfor %}
   </div>
   {% include "core/_disclaimer_inline.html" %}
@@ -123,8 +127,11 @@
   .kt-tabbtn.kt-on{background:var(--blue);border-color:var(--blue);color:#fff}
   .kt-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
   .kt-col{flex:1 1 200px;min-width:196px;display:flex;flex-direction:column;gap:6px}
-  .kt-card{text-decoration:none;color:inherit;border:1px solid var(--border);border-radius:7px;padding:7px 9px;display:block}
+  .kt-card{color:inherit;border:1px solid var(--border);border-radius:7px;padding:7px 9px;display:block}
   .kt-card:hover{border-color:var(--blue)}
+  /* 카드 안 별표 — 기본 btn 여백이 카드를 밀어내지 않게 축소 */
+  .kt-card .watch-form .btn,.rec-card .watch-form .btn{padding:2px 4px;min-width:0;line-height:1;border:none;background:none}
+  .kt-card .watch-form .btn i{font-size:12px}
 </style>
 <details class="card fold-card" id="ktFold" data-fold="ktFold" open style="padding:14px 16px;margin-bottom:14px">
   <summary>
@@ -147,18 +154,21 @@
           <span style="font-size:11px;color:var(--text-3);margin-left:auto">{{ c.count }}건</span>
         </div>
         {% for p in c.top %}
-        <a href="{% url 'product_detail' p.id %}" class="kt-card">
+        <div class="kt-card" onclick="location.href='{% url 'product_detail' p.id %}'" style="cursor:pointer">
           <div style="display:flex;align-items:center;gap:6px;font-size:12px">
             <span style="flex:none;width:16px;height:16px;border-radius:5px;display:inline-grid;place-items:center;font-size:10px;font-weight:800;{% if forloop.first %}background:var(--blue-bg);color:var(--blue-dark){% else %}background:var(--bg);color:var(--text-3){% endif %}">{{ forloop.counter }}</span>
-            <span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.issuer }} {{ p.product_no }}</span>
+            <span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ p.issuer }} {{ p.product_no }}</span>
             <span style="margin-left:auto;font-weight:800;color:var(--blue-dark);white-space:nowrap">{{ p.yield_rate }}%</span>
+            {% if user.is_authenticated %}
+            <span style="flex:none;margin-right:-6px" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=p.id %}</span>
+            {% endif %}
           </div>
           <div style="display:flex;gap:5px;font-size:10.5px;color:var(--text-3);margin-top:2px;align-items:center">
             {% if p.radar %}<span class="badge" style="background:{{ p.radar.color }};color:#fff;font-size:9px;padding:1px 5px;flex:none" title="레이더 신호 · 이번주 {{ p.asset_type }} 상위 {{ p.radar.srank }}위">{{ p.radar.tier|cut:" 신호" }}</span>{% endif %}
             <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ p.assets_raw|asset_short }}</span>
             <span style="margin-left:auto;font-weight:700;white-space:nowrap;color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}손실 {{ p.loss_prob }}%{% else %}-{% endif %}</span>
           </div>
-        </a>
+        </div>
         {% endfor %}
       </div>
       {% endfor %}

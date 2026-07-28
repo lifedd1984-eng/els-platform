@@ -1,0 +1,16 @@
+{% comment %}
+관심 별표 토글 — weekly.html의 form.watch-form AJAX 핸들러가 가로챈다.
+호출 시 pid만 넘기면 되고, watched_ids는 상위 컨텍스트에서 상속받는다.
+(주의: 여기서는 include 예시를 태그로 쓰지 말 것 — 자기 자신을 재귀 호출하게 된다)
+{% endcomment %}
+<form method="post" action="{% url 'watchlist' %}" class="watch-form" style="display:inline">{% csrf_token %}
+  <input type="hidden" name="product_id" value="{{ pid }}">
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  {% if pid in watched_ids %}
+  <input type="hidden" name="action" value="remove">
+  <button class="btn btn-icon" title="관심 해제"><i class="fa-solid fa-star" style="color:var(--orange)"></i></button>
+  {% else %}
+  <input type="hidden" name="action" value="add">
+  <button class="btn btn-icon" title="관심 등록"><i class="fa-regular fa-star"></i></button>
+  {% endif %}
+</form>
