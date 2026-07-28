@@ -112,6 +112,79 @@
 </div>
 {% endif %}
 
+{# ── 낙인대별 최고 수익 — 기본 펼침, 접기 상태는 localStorage에 저장 ── #}
+{% if ki_top5 %}
+<style>
+  #ktFold summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:800}
+  #ktFold summary::-webkit-details-marker{display:none}
+  #ktFold summary .kt-chev{margin-left:auto;color:var(--text-3);transition:transform .15s}
+  #ktFold[open] summary .kt-chev{transform:rotate(180deg)}
+  .kt-tabbtn.kt-on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .kt-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+  .kt-col{flex:0 0 200px;display:flex;flex-direction:column;gap:6px}
+  .kt-card{text-decoration:none;color:inherit;border:1px solid var(--border);border-radius:7px;padding:7px 9px;display:block}
+  .kt-card:hover{border-color:var(--blue)}
+</style>
+<details class="card" id="ktFold" open style="padding:14px 16px;margin-bottom:14px">
+  <summary>
+    <i class="fa-solid fa-layer-group" style="color:var(--blue)"></i> 낙인대별 최고 수익
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">청약 가능 상품 · 낙인 값별 수익률 상위 5</span>
+    <i class="fa-solid fa-chevron-down kt-chev"></i>
+  </summary>
+  <div style="display:flex;gap:6px;margin:10px 0">
+    {% for g in ki_top5 %}
+    <button type="button" class="btn btn-sm kt-tabbtn {% if forloop.first %}kt-on{% endif %}" data-pane="kt-pane-{{ forloop.counter }}">{{ g.type }}</button>
+    {% endfor %}
+  </div>
+  {% for g in ki_top5 %}
+  <div id="kt-pane-{{ forloop.counter }}" class="kt-pane" {% if not forloop.first %}style="display:none"{% endif %}>
+    <div class="kt-strip">
+      {% for c in g.cols %}
+      <div class="kt-col">
+        <div style="display:flex;align-items:baseline;gap:6px;padding:6px 10px;background:var(--bg);border-radius:7px">
+          <b style="font-size:13.5px">낙인 {{ c.ki }}</b>
+          <span style="font-size:11px;color:var(--text-3);margin-left:auto">{{ c.count }}건</span>
+        </div>
+        {% for p in c.top %}
+        <a href="{% url 'product_detail' p.id %}" class="kt-card">
+          <div style="display:flex;align-items:center;gap:6px;font-size:12px">
+            <span style="flex:none;width:16px;height:16px;border-radius:5px;display:inline-grid;place-items:center;font-size:10px;font-weight:800;{% if forloop.first %}background:var(--blue-bg);color:var(--blue-dark){% else %}background:var(--bg);color:var(--text-3){% endif %}">{{ forloop.counter }}</span>
+            <span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.issuer }} {{ p.product_no }}</span>
+            <span style="margin-left:auto;font-weight:800;color:var(--blue-dark);white-space:nowrap">{{ p.yield_rate }}%</span>
+          </div>
+          <div style="display:flex;gap:6px;font-size:10.5px;color:var(--text-3);margin-top:2px;align-items:center">
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:116px">{{ p.assets_raw|asset_short }}</span>
+            <span style="margin-left:auto;font-weight:700;white-space:nowrap;color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}손실 {{ p.loss_prob }}%{% else %}-{% endif %}</span>
+          </div>
+        </a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% include "core/_disclaimer_inline.html" %}
+</details>
+<script>
+(function(){
+  var d = document.getElementById('ktFold');
+  if (!d) return;
+  try { if (localStorage.getItem('ktFold') === 'closed') d.removeAttribute('open'); } catch(e){}
+  d.addEventListener('toggle', function(){
+    try { localStorage.setItem('ktFold', d.open ? 'open' : 'closed'); } catch(e){}
+  });
+  document.querySelectorAll('.kt-tabbtn').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.kt-tabbtn').forEach(function(x){ x.classList.remove('kt-on'); });
+      document.querySelectorAll('.kt-pane').forEach(function(p){ p.style.display = 'none'; });
+      b.classList.add('kt-on');
+      document.getElementById(b.dataset.pane).style.display = '';
+    });
+  });
+})();
+</script>
+{% endif %}
+
 {% if products %}
   <div class="card" style="padding:8px 16px">
     <table>
