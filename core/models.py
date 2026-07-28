@@ -619,11 +619,25 @@ class Investment(models.Model):
         sched = self.schedule
         return sched[-1]["expected_after_tax"] if sched else None
 
+    def _latest_verdict(self):
+        """최신 판정. prefetch된 캐시를 그대로 쓴다(.first()는 매번 쿼리를 새로 낸다)."""
+        return next(iter(self.verdicts.all()), None)  # ordering=-eval_date → 최신
+
     @property
     def redemption_pending(self):
         """직전 회차 배리어 충족 판정(check_redemptions 기록). 충족 시 verdict, 아니면 None."""
-        v = self.verdicts.first()  # ordering=-eval_date → 최신
+        v = self._latest_verdict()
         return v if (v and v.met) else None
+
+    @property
+    def missed_redemption(self):
+        """직전 회차 배리어 미달 판정. 놓쳤으면 verdict, 아니면 None.
+
+        met=None(시세 미확보로 판정 불가)은 놓친 것으로 보지 않는다 —
+        확정되지 않은 건을 실패로 표시하지 않기 위함.
+        """
+        v = self._latest_verdict()
+        return v if (v and v.met is False) else None
 
     @property
     def worst_ki_status(self):

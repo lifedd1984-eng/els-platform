@@ -661,9 +661,13 @@ def portfolio(request):
         return redirect(request.POST.get("next") or "portfolio")
 
     invs = (Investment.objects.filter(user=request.user)
-            .select_related("product").prefetch_related("ki_status"))
+            .select_related("product").prefetch_related("ki_status", "verdicts"))
     holding = [i for i in invs if i.status == "보유중"]
     done = [i for i in invs if i.status != "보유중"]
+    # 조기상환 실패: 지난 평가에서 배리어 미달이 확정된 건 (통계에는 보유중으로 포함,
+    # 리스트 표시만 분리 — 돈은 여전히 들어가 있는 상태이므로)
+    missed = [i for i in holding if i.missed_redemption]
+    holding_display = [i for i in holding if not i.missed_redemption]
 
     today = date.today()
     month_end = date(today.year, today.month, pycalendar.monthrange(today.year, today.month)[1])
@@ -749,7 +753,8 @@ def portfolio(request):
     if h_sort not in H_SORT:
         h_sort = "next"
     h_dir = request.GET.get("hdir", "asc")
-    holding.sort(key=H_SORT[h_sort], reverse=(h_dir == "desc"))
+    holding_display.sort(key=H_SORT[h_sort], reverse=(h_dir == "desc"))
+    missed.sort(key=lambda i: i.missed_redemption.eval_date)  # 오래 놓친 순
 
     def _hsort_url(key):
         d = "desc" if (h_sort == key and h_dir == "asc") else "asc"
@@ -764,7 +769,7 @@ def portfolio(request):
     if page_size not in (10, 20, 50, 100):
         page_size = 10
 
-    h_page = Paginator(holding, page_size).get_page(request.GET.get("hpage"))
+    h_page = Paginator(holding_display, page_size).get_page(request.GET.get("hpage"))
     d_page = Paginator(done, page_size).get_page(request.GET.get("dpage"))
 
     h_cols = [
@@ -812,7 +817,9 @@ def portfolio(request):
     return render(request, "core/portfolio.html", {
         "perf": perf,
         "h_page": h_page, "d_page": d_page,
-        "holding_count": len(holding), "done_count": len(done),
+        "holding_count": len(holding_display), "done_count": len(done),
+        "missed": missed, "missed_count": len(missed),
+        "holding_total_count": len(holding),  # 빈 상태 문구용 (보유 전체)
         "h_cols": h_cols, "page_size": page_size,
         "total_invested": total_invested,
         "holding_by_type": holding_by_type,
