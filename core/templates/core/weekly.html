@@ -153,8 +153,9 @@
             <span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.issuer }} {{ p.product_no }}</span>
             <span style="margin-left:auto;font-weight:800;color:var(--blue-dark);white-space:nowrap">{{ p.yield_rate }}%</span>
           </div>
-          <div style="display:flex;gap:6px;font-size:10.5px;color:var(--text-3);margin-top:2px;align-items:center">
-            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:116px">{{ p.assets_raw|asset_short }}</span>
+          <div style="display:flex;gap:5px;font-size:10.5px;color:var(--text-3);margin-top:2px;align-items:center">
+            {% if p.radar %}<span class="badge" style="background:{{ p.radar.color }};color:#fff;font-size:9px;padding:1px 5px;flex:none" title="레이더 신호 · 이번주 {{ p.asset_type }} 상위 {{ p.radar.srank }}위">{{ p.radar.tier|cut:" 신호" }}</span>{% endif %}
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ p.assets_raw|asset_short }}</span>
             <span style="margin-left:auto;font-weight:700;white-space:nowrap;color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}손실 {{ p.loss_prob }}%{% else %}-{% endif %}</span>
           </div>
         </a>
