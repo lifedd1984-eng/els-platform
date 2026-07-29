@@ -263,7 +263,24 @@
     </span>
   </div>
   {% if h_page.object_list %}
-  <div style="overflow-x:auto">
+  {# 모바일 2줄 리스트 — 보유는 투자금액·다음 평가일이 핵심이라 전용 행 #}
+  <div class="m-list">
+    {% for inv in h_page %}
+    <div class="m-row" onclick="location.href='{% url 'product_detail' inv.product.id %}'">
+      <div class="m-left">
+        <div class="m-l1">{{ inv.product.issuer }} <span class="m-no">{{ inv.product.product_no }}</span>
+          {% with rp=inv.redemption_pending %}{% if rp %}<span class="badge" style="background:var(--green);color:#fff;font-size:9.5px">상환예정</span>{% endif %}{% endwith %}
+        </div>
+        <div class="m-l2">{{ inv.product.assets_raw|asset_short }} · 낙인 <b>{% if inv.product.is_no_ki %}없음{% else %}{{ inv.product.ki|default:"-" }}{% endif %}</b>{% with buf=inv.ki_buffer %}{% if buf is not None %} · 낙인까지 <b style="color:{% if buf <= 5 %}var(--red){% elif buf <= 15 %}var(--orange){% else %}var(--green){% endif %}">{{ buf|floatformat:1 }}%p</b>{% endif %}{% endwith %}</div>
+      </div>
+      <div class="m-right">
+        <span class="m-yield" style="font-size:15px">{{ inv.amount|intcomma }}<small>원</small></span>
+        {% with nxt=inv.next_evaluation %}{% if nxt %}<span class="m-dday done">{{ nxt.date|date:"n.j" }} 평가</span>{% endif %}{% endwith %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="overflow-x:auto" class="pc-table">
     <table>
       <thead>
         <tr>

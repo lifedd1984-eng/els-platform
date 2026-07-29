@@ -1,0 +1,24 @@
+{% load els_extras %}
+{% comment %}
+모바일 2줄 리스트의 한 행. 상품(p)만 넘기면 되고, invested_ids / watched_ids는
+상위 컨텍스트에서 상속받는다. 별표는 star=1을 넘길 때만 표시.
+윗줄: 발행사 상품번호 [신호][보유]  /  아랫줄: 기초자산 · 낙인 · 1차 · 손실
+오른쪽: 수익률 + D-day
+{% endcomment %}
+<div class="m-row" onclick="location.href='{% url 'product_detail' p.id %}'">
+  <div class="m-left">
+    <div class="m-l1">{{ p.issuer }} <span class="m-no">{{ p.product_no }}</span>
+      {% if p.radar %}<span class="badge" style="background:{{ p.radar.color }};color:#fff;font-size:9.5px">{{ p.radar.tier|cut:" 신호" }}</span>{% endif %}
+      {% if p.id in invested_ids %}<span class="badge badge-green" style="font-size:9.5px"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}
+    </div>
+    <div class="m-l2">{{ p.assets_raw|asset_short }} · 낙인 <b>{% if p.is_no_ki %}없음{% else %}{{ p.ki|default:"-" }}{% endif %}</b> · 1차 <b>{{ p.barrier_first|default:"-" }}</b> · 손실 <b style="color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}{{ p.loss_prob }}%{% else %}-{% endif %}</b></div>
+  </div>
+  <div class="m-right">
+    <span class="m-yield">{{ p.yield_rate|default:"-" }}<small>%</small></span>
+    {% if p.d_day is not None and p.d_day >= 0 %}<span class="m-dday">D-{{ p.d_day }}</span>
+    {% elif p.sub_end %}<span class="m-dday done">마감</span>{% endif %}
+  </div>
+  {% if star and user.is_authenticated %}
+  <span style="flex:none" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=p.id %}</span>
+  {% endif %}
+</div>

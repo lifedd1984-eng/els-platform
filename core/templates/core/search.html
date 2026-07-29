@@ -18,7 +18,10 @@
   {% if results %}
   <div class="card" style="padding:8px 16px">
     <div class="card-title" style="padding:10px 4px 4px">"{{ q }}" 검색결과 {{ results|length }}건{% if results|length == 200 %} <small style="color:var(--text-3)">(최근 200건만 표시)</small>{% endif %}</div>
-    <div style="overflow-x:auto">
+    <div class="m-list">
+      {% for p in results %}{% include "core/_mobile_row.html" with star=1 %}{% endfor %}
+    </div>
+    <div style="overflow-x:auto" class="pc-table">
       <table>
         <thead>
           <tr>
@@ -104,7 +107,10 @@
       {% endfor %}
     </div>
     {% if ai.results %}
-    <div style="overflow-x:auto">
+    <div class="m-list">
+      {% for p in ai.results %}{% include "core/_mobile_row.html" with star=1 %}{% endfor %}
+    </div>
+    <div style="overflow-x:auto" class="pc-table">
       <table>
         <thead>
           <tr>

@@ -233,7 +233,33 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   font-weight: 600;
 }
 
+/* ── 모바일 2줄 리스트 (≤800px에서 표 대신 표시) ── */
+.m-list { display: none; }
+.m-row { display: flex; align-items: center; gap: 10px; padding: 11px 13px;
+         border-bottom: 1px solid var(--border); cursor: pointer; }
+.m-row:last-child { border-bottom: none; }
+.m-left { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-l1 { display: flex; align-items: center; gap: 5px; font-size: 13.5px; font-weight: 700;
+        white-space: nowrap; overflow: hidden; }
+.m-l1 .m-no { color: var(--text-3); font-weight: 600; font-size: 12px; }
+.m-l2 { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden;
+        text-overflow: ellipsis; line-height: 1.65; }
+.m-l2 b { color: var(--text-2); font-weight: 700; }
+.m-right { flex: none; text-align: right; display: flex; flex-direction: column; gap: 1px; }
+.m-yield { font-size: 18px; font-weight: 800; color: var(--blue-dark); font-variant-numeric: tabular-nums; }
+.m-yield small { font-size: 11px; }
+.m-dday { font-size: 11px; font-weight: 700; color: var(--red); }
+.m-dday.done { color: var(--text-3); font-weight: 600; }
+.m-bar { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2);
+         padding: 6px 12px 8px; }
+.m-sort { margin-left: auto; border: 1px solid var(--border); border-radius: 7px;
+          background: var(--card); color: var(--text); padding: 5px 10px; font-size: 12px; font-weight: 700; }
+.m-row .watch-form .btn { padding: 2px 4px; min-width: 0; line-height: 1; border: none; background: none; }
+
 @media (max-width: 800px) {
+  .m-list { display: block; }
+  .pc-table { display: none; }
+
   .stat-grid, .stat-grid.cols-5 { grid-template-columns: repeat(2, 1fr); }
   .container { padding: 14px; }
 
@@ -438,5 +464,40 @@ document.addEventListener('click', function(e) {
     </div>
   </div>
 </footer>
+<script>
+// 별표 토글을 새로고침 없이 그 자리에서 처리.
+// 실패해도 전체 제출(f.submit)로 폴백하지 않는다 — 페이지가 새로고침되며
+// 스크롤이 최상단으로 튀는 UX가 더 나쁨. 실패 시 별을 잠깐 흔들어 알리고 유지.
+document.querySelectorAll('form.watch-form').forEach(function(f) {
+  f.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const btn = f.querySelector('button');
+    const ic = btn.querySelector('i');
+    try {
+      // 주의: f.action은 name="action" hidden input에 클로버링돼 엘리먼트를
+      // 반환한다 → getAttribute로 실제 URL을 읽어야 함
+      const r = await fetch(f.getAttribute('action'), {
+        method: 'POST', body: new FormData(f),
+        headers: {'X-Requested-With': 'XMLHttpRequest'}
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      const act = f.querySelector('input[name=action]');
+      if (j.watched) {
+        act.value = 'remove'; btn.title = '관심 해제';
+        ic.className = 'fa-solid fa-star'; ic.style.color = 'var(--orange)';
+      } else {
+        act.value = 'add'; btn.title = '관심 등록';
+        ic.className = 'fa-regular fa-star'; ic.style.color = '';
+      }
+    } catch (err) {
+      console.warn('별표 토글 실패:', err);
+      ic.style.transition = 'transform .1s';
+      ic.style.transform = 'scale(1.4)';
+      setTimeout(function(){ ic.style.transform = ''; }, 150);
+    }
+  });
+});
+</script>
 </body>
 </html>

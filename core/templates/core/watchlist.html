@@ -21,7 +21,10 @@
 
 {% if items %}
 <div class="card" style="padding:8px 16px">
-  <div style="overflow-x:auto">
+  <div class="m-list">
+    {% for item in items %}{% include "core/_mobile_row.html" with p=item.product star=1 %}{% endfor %}
+  </div>
+  <div style="overflow-x:auto" class="pc-table">
     <table>
       <thead>
         <tr>
