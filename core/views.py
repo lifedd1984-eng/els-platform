@@ -1669,18 +1669,16 @@ def about(request):
     if _ABOUT_CACHE["day"] == today and _ABOUT_CACHE["ctx"]:
         ctx = _ABOUT_CACHE["ctx"]
     else:
-        from .models import RadarVerdict, radar_top5
+        from .models import radar_top5
         top5 = radar_top5()
         if not top5:                       # 마감이 지나 이번주가 비면 지난주 것으로
             last_mon = today - timedelta(days=today.weekday() + 7)
             top5 = radar_top5(last_mon, last_mon + timedelta(days=6))
+        # stat_*·live는 랜딩 개편(2026-07-31)으로 화면에서 빠짐 — _about_live는 실전 인증
+        # 섹션 재삽입 때 다시 쓸 예정이라 헬퍼는 남겨둔다.
         ctx = {
-            "stat_total": Product.objects.count(),
-            "stat_sim": Product.objects.filter(loss_prob__isnull=False).count(),
-            "stat_verdict": RadarVerdict.objects.filter(met__isnull=False).count(),
             "accuracy": _about_accuracy(),
             "ki": _about_ki_series(),
-            "live": _about_live(),
             "top5": top5,
         }
         _ABOUT_CACHE.update(day=today, ctx=ctx)
