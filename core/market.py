@@ -52,6 +52,7 @@ TICKER_MAP = {
     "Broadcom": "AVGO", "BROADCOM": "AVGO", "브로드컴": "AVGO", "AVGO": "AVGO",
     "AMD": "AMD",
     "Qualcomm": "QCOM", "QUALCOMM": "QCOM", "QCOM": "QCOM",
+    "TSMC": "TSM", "티에스엠씨": "TSM", "TSM": "TSM",
     "Alphabet": "GOOGL", "ALPHABET": "GOOGL", "ALPHABET-A": "GOOGL", "GOOGL": "GOOGL",
     "Amazon": "AMZN", "AMZN": "AMZN",
     "Apple": "AAPL", "AAPL": "AAPL",
@@ -113,6 +114,8 @@ _DISPLAY_SHORTEN_MAP = {
     "eli lilly and company": "Eli Lilly",
     "intel corporation": "Intel",
     "palantir technologies inc. class a": "Palantir",
+    "tsmc adr": "TSMC",
+    "taiwan semiconductor manufacturing": "TSMC",
 }
 
 
