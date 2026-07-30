@@ -148,7 +148,9 @@
       <tr>
         <td style="font-weight:700">{{ v.product.issuer }} {{ v.product.product_no }}</td>
         <td>
-          {% if v.tier == "아주 강한 신호" %}<span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;color:#fff;background:#1B64DA">아주 강한</span>
+          {% if v.tier == "안정 신호" %}<span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;color:#fff;background:#1B64DA">안정</span>
+          {% elif v.tier == "수익 신호" %}<span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;color:#fff;background:#E8590C">수익</span>
+          {% elif v.tier == "아주 강한 신호" %}<span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;color:#fff;background:#1B64DA">아주 강한</span>
           {% else %}<span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;color:#fff;background:#3182F6">강한</span>{% endif %}
         </td>
         <td>{{ v.eval_date|date:"Y.n.j" }}</td>

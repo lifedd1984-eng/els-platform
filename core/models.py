@@ -34,10 +34,24 @@ RADAR_EARLY_MIN = 80           # 1년내 조기상환 % 이상만 통과
 RADAR_LOSS_MAX = 5             # 손실확률 % '이상'이면 제외
 RADAR_YIELD_TOP_PCT = 0.5      # 게이트 통과분 중 수익률 상위 이 비율만 (0.5 = 상위 50%)
 RADAR_SCORE_SHIFT = 20         # 점수 = 수익률 − 낙인 + 이 값 (음수 방지)
-# 등급 컷 (점수 순위 기준)
+# 등급 컷 (점수 순위 기준) — v6 유산. verify_historical 재현용으로 상수는 유지
 RADAR_TOP_STRONG = 5    # 1 ~ 이 순위 = 아주 강한 신호
 RADAR_TOP_WEAK = 15     # (상위)+1 ~ 이 순위 = 강한 신호, 그 외 배지 없음
-RADAR_COLORS = {"아주 강한 신호": "#1B64DA", "강한 신호": "#3182F6"}
+
+# ── 레이더 v7 (2026-07-30 확정, 10개년 68,496건 백테스트 근거) ──────────
+# 유형별 3중 게이트. 통과자 전원 배지, 순위는 수익률 내림차순.
+#   근거: 코어(지수형) 10년 손실 0/2,607 · 위성(종목형) 3.11% (rules 검증 세션)
+RADAR_V7_B0_MAX = {"종목형": 85, "지수형": 90}   # ① 1차 조기상환 배리어 이하
+RADAR_V7_PEAK_MAX = 95    # ② 워스트 자산의 52주 최고 대비 위치(%) 미만 — 고점 발행 회피
+RADAR_V7_KI_PCT = 0.30    # ③ 낙인 < 직전 연도 같은 유형 분포 하위 30% 값 (미만)
+RADAR_V7_KI_MIN_SAMPLE = 100   # 직전 연도 표본이 이보다 적으면 v6 고정 컷으로 폴백
+RADAR_V7_TIERS = {"지수형": "안정 신호", "종목형": "수익 신호"}
+
+RADAR_COLORS = {
+    "안정 신호": "#1B64DA", "수익 신호": "#E8590C",
+    # v6 유산 — 과거 검증 기록(RadarVerdict) 표시용
+    "아주 강한 신호": "#1B64DA", "강한 신호": "#3182F6",
+}
 # 별점 절대 컷 (★5,★4,★3,★2 경계 — 미달은 ★1). 수익성만 그룹 백분위 상대평가.
 RADAR_STAR_EARLY = (95, 90, 85, 80)                 # 1년내 조기상환 % 이상
 RADAR_STAR_LOSS = (0.0, 0.5, 1.0, 2.0)              # 손실확률 % 이하(0은 =0)
@@ -139,7 +153,8 @@ def _radar_axes(p, ax):
     return [
         {"name": "수익성", "val": f"연 {p.yield_rate:g}%" if p.yield_rate else "-",
          "score": ax["yield"], "stars": _radar_stars(ax["yield"])},
-        {"name": "안전성", "val": f"손실확률 {p.loss_prob:g}%",
+        {"name": "안전성",
+         "val": f"손실확률 {p.loss_prob:g}%" if p.loss_prob is not None else "-",
          "score": ax["safe"], "stars": _stars_loss(p.loss_prob or 0)},
         {"name": "조기상환", "val": f"1년내 {early:g}%" if early else "-",
          "score": ax["early"], "stars": _stars_early(early)},
@@ -150,54 +165,97 @@ def _radar_axes(p, ax):
     ]
 
 
+_V7_KI_CUT_CACHE = {}   # (오늘, 유형) → 컷 값
+
+
+def v7_ki_cut(asset_type):
+    """낙인 컷 = 직전 연도 같은 유형 발행 분포의 하위 30% 값 (조건: ki < 컷).
+
+    SEIBro 발행이력(HistoricalIssue)에서 산출하며 하루 단위 캐시.
+    표본 부족 시 v6 고정 컷(RADAR_KI_EXCL)으로 폴백한다.
+    """
+    today = date.today()
+    key = (today, asset_type)
+    if key in _V7_KI_CUT_CACHE:
+        return _V7_KI_CUT_CACHE[key]
+    qs = HistoricalIssue.objects.filter(
+        issue_date__year=today.year - 1, detail_fetched=True, ki__isnull=False)
+    if asset_type == "지수형":
+        qs = qs.filter(basset_sort="지수")
+    else:
+        qs = qs.exclude(basset_sort="지수")
+    vals = sorted(qs.values_list("ki", flat=True))
+    cut = (vals[int(len(vals) * RADAR_V7_KI_PCT)]
+           if len(vals) >= RADAR_V7_KI_MIN_SAMPLE else RADAR_KI_EXCL[asset_type])
+    _V7_KI_CUT_CACHE[key] = cut
+    return cut
+
+
+def v7_peak_ratio(p):
+    """고점 위치(%) = 자산별 (최근 종가 ÷ 직전 52주 최고) 중 최댓값.
+
+    청약 중 상품은 기준가가 미확정이라 최근 종가로 근사한다.
+    자산 하나라도 시세를 못 구하면 None (오판보다 결측 — 게이트 탈락 처리).
+    fetch_history가 티커·일 단위로 캐시하므로 같은 날 반복 호출은 싸다.
+    """
+    from core import market as _m
+    peak = None
+    for name in _m.split_assets(p.assets_raw or ""):
+        tk = _m.resolve_ticker(name)
+        if not tk:
+            return None
+        hist = _m.fetch_history(tk, days=370)
+        if not hist:
+            return None
+        closes = [c for _, c in hist if c]
+        if not closes:
+            return None
+        ratio = closes[-1] / max(closes) * 100
+        peak = ratio if peak is None else max(peak, ratio)
+    return peak
+
+
 def _compute_radar_pool(monday, asset_type):
-    """(주차, 유형) 그룹의 {product_id: radar_result} 계산. 배지 대상만 담는다."""
+    """(주차, 유형) 그룹의 {product_id: radar_result} 계산 — v7 3중 게이트.
+
+    ① 1차 배리어 ≤ 유형별 상한 (지수 90 / 종목 85)
+    ② 낙인 < 직전 연도 같은 유형 분포 하위 30% (미만)
+    ③ 고점 발행 회피 — 워스트 자산이 52주 최고 대비 95% 미만
+    통과자 전원 배지 (지수형=안정 신호, 종목형=수익 신호), 순위는 수익률순.
+    """
     sunday = monday + timedelta(days=6)
     group = list(Product.objects.filter(
-        sub_end__gte=monday, sub_end__lte=sunday,
-        asset_type=asset_type, loss_prob__isnull=False))
+        sub_end__gte=monday, sub_end__lte=sunday, asset_type=asset_type))
     if not group:
         return {}
-    ki_excl = RADAR_KI_EXCL[asset_type]
-    last_max = RADAR_LAST_MAX[asset_type]
+    b0_max = RADAR_V7_B0_MAX[asset_type]
+    ki_cut = v7_ki_cut(asset_type)
 
-    # ── 게이트 ①~⑤ ──
-    survivors = [p for p in group if (
-        (not p.is_no_ki and p.ki is not None)          # ① 낙인 있음
-        and p.ki < ki_excl                              # ② 낙인 < 임계
-        and (_radar_early(p) or 0) >= RADAR_EARLY_MIN   # ③ 1년내 조기상환
-        and (p.loss_prob or 0) < RADAR_LOSS_MAX         # ④ 손실확률
-        and p.barrier_last is not None
-        and p.barrier_last <= last_max                  # ⑤ 막차 배리어
+    # 값싼 게이트(배리어·낙인) 먼저, 시세가 필요한 고점 게이트는 생존자에만
+    cheap = [p for p in group if (
+        (not p.is_no_ki and p.ki is not None) and p.ki < ki_cut       # ② 낙인
+        and p.barrier_first is not None and p.barrier_first <= b0_max  # ① 1차 배리어
     )]
-    # ⑥ 수익률 상위 50% (게이트 통과분 기준)
-    if survivors:
-        ys = sorted(p.yield_rate or 0 for p in survivors)
-        y_med = ys[len(ys) // 2]
-        survivors = [p for p in survivors if (p.yield_rate or 0) >= y_med]
+    survivors = []
+    for p in cheap:
+        peak = v7_peak_ratio(p)
+        if peak is not None and peak < RADAR_V7_PEAK_MAX:              # ③ 고점 회피
+            survivors.append((p, peak))
 
-    # 점수 = 수익률 − 낙인 + 상수, 내림차순 순위 → 등급
-    ranked = sorted(survivors, key=lambda p: (p.yield_rate or 0) - p.ki + RADAR_SCORE_SHIFT,
-                    reverse=True)
+    ranked = sorted(survivors, key=lambda t: -(t[0].yield_rate or 0))
     eligible_n = len(ranked)
-
-    # 수익성 백분위(그룹 전체 기준) — 수익성 축만 상대평가, 나머지는 절대 컷
+    tier = RADAR_V7_TIERS[asset_type]
     yield_col = [p.yield_rate or 0 for p in group]
 
     result = {}
-    for i, p in enumerate(ranked):
-        if i < RADAR_TOP_STRONG:
-            tier = "아주 강한 신호"
-        elif i < RADAR_TOP_WEAK:
-            tier = "강한 신호"
-        else:
-            break   # 16위부터는 배지 없음 → 저장 안 함
+    for i, (p, peak) in enumerate(ranked):
         y_pct = round(_radar_pct(yield_col, p.yield_rate or 0))
         ax = _radar_display_ax(p, y_pct)
         result[p.id] = {
             "tier": tier, "color": RADAR_COLORS[tier],
             "srank": i + 1, "group_n": eligible_n,
-            "score": round((p.yield_rate or 0) - p.ki + RADAR_SCORE_SHIFT, 1),
+            "score": round(p.yield_rate or 0, 1),
+            "peak": round(peak),
             "reasons": [],
             "points": _radar_points(ax), "mini_points": _radar_mini_points(ax),
             "axes": _radar_axes(p, ax),
@@ -384,9 +442,9 @@ class Product(models.Model):
         반환: {tier, color, srank, group_n, score, points, mini_points, axes[4]}
         상세 산식은 모듈 상단 _compute_radar_pool 참고.
         """
-        if self.loss_prob is None or not self.sub_end:
+        if not self.sub_end:
             return None
-        if self.asset_type not in RADAR_KI_EXCL:
+        if self.asset_type not in RADAR_V7_B0_MAX:
             return None
         monday = self.sub_end - timedelta(days=self.sub_end.weekday())
         r = _radar_pool(monday, self.asset_type).get(self.id)
@@ -413,12 +471,11 @@ class Product(models.Model):
         return "기타"
 
 
-def radar_top5(monday=None, sunday=None):
-    """이번주 레이더 TOP5 상품 리스트.
+def radar_tracks(monday=None, sunday=None, limit=5):
+    """v7 트랙별 TOP 리스트 — {"안정 신호": [지수형...], "수익 신호": [종목형...]}.
 
-    선정 기준(weekly 뷰·주간요약 공용): 오늘 이후 마감 ~ 해당 주 일요일 사이,
-    레이더 '아주 강한 신호' & 손실확률 0% & 1년내 조기상환 ≥ 90% → 수익률 내림차순 5개.
-    monday/sunday 미지정 시 이번 주 기준. (overlap 등 표시용 계산은 호출부 책임)
+    각 트랙 = 해당 유형 3중 게이트 통과자 전원 중 수익률 상위 limit개.
+    오늘 이후 마감 상품만 (지난 주 조회 시엔 그 주 전체).
     """
     today = date.today()
     if monday is None:
@@ -426,19 +483,22 @@ def radar_top5(monday=None, sunday=None):
     if sunday is None:
         sunday = monday + timedelta(days=6)
     pool = Product.objects.filter(
-        sub_end__gte=max(monday, today), sub_end__lte=sunday,
-        barriers_raw__isnull=False, yield_rate__isnull=False, loss_prob__isnull=False,
-    )
-    cand = []
+        sub_end__gte=max(monday, today) if sunday >= today else monday,
+        sub_end__lte=sunday, yield_rate__isnull=False)
+    tracks = {tier: [] for tier in RADAR_V7_TIERS.values()}
     for p in pool:
         r = p.radar
-        if not (r and r["tier"] == "아주 강한 신호"):
-            continue
-        if (p.loss_prob or 0) != 0 or _radar_early(p) < 90:
-            continue
-        cand.append(p)
-    cand.sort(key=lambda p: -(p.yield_rate or 0))
-    return cand[:5]
+        if r and r["tier"] in tracks:
+            tracks[r["tier"]].append(p)
+    for tier in tracks:
+        tracks[tier].sort(key=lambda p: -(p.yield_rate or 0))
+        tracks[tier] = tracks[tier][:limit]
+    return tracks
+
+
+def radar_top5(monday=None, sunday=None):
+    """(v6 호환용) 안정 트랙 TOP5. 신규 코드는 radar_tracks()를 쓸 것."""
+    return radar_tracks(monday, sunday)["안정 신호"]
 
 
 class Preset(models.Model):

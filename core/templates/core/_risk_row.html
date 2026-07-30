@@ -1,0 +1,23 @@
+{% load humanize %}
+{% comment %}
+리스크 분석 한 행 — 클릭하면 해당 조건의 보유 상품 리스트가 펼쳐진다.
+사용: {% include "core/_risk_row.html" with row=a base="var(--blue)" warn=50 %}
+row = {name, count, amount, pct, items:[{pid,label,amount}]}
+{% endcomment %}
+<details class="rk-row">
+  <summary>
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+      <span>{{ row.name }} <small style="color:var(--text-3)">({{ row.count }}건)</small>
+        <i class="fa-solid fa-chevron-down rk-ch"></i></span>
+      <span><small style="color:var(--text-3)">{{ row.amount|intcomma }}원</small> <b>{{ row.pct }}%</b></span>
+    </div>
+    <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+      <div style="height:100%;width:{{ row.pct }}%;background:{% if row.pct > warn|default:50 %}var(--orange){% else %}{{ base|default:"var(--blue)" }}{% endif %};border-radius:3px"></div>
+    </div>
+  </summary>
+  <div class="rk-items">
+    {% for it in row.items %}
+    <a href="{% url 'product_detail' it.pid %}">{{ it.label }} <span>{{ it.amount|intcomma }}원</span></a>
+    {% endfor %}
+  </div>
+</details>

@@ -227,10 +227,11 @@ def weekly(request):
     # 중복도 = 보유 포트폴리오 중 같은 기초자산을 가진 투자금 비중.
     # 선정 로직은 models.radar_top5()로 통일(주간요약 텔레그램과 동일 기준).
     # overlap(보유 중복도) 계산만 뷰에 남긴다.
+    # ── v7 TOP5 이원화: 안정(지수형) / 수익(종목형) 트랙 ──
     recommendations = []
     if offset >= 0:  # 지난 주 조회 시에는 표시 안 함
         from core import market as _mkt
-        from core.models import radar_top5, _radar_early
+        from core.models import RADAR_V7_TIERS, radar_tracks, v7_ki_cut
 
         def _asset_keys(raw):
             return {_mkt.resolve_ticker(a) or a for a in _mkt.split_assets(raw)}
@@ -243,15 +244,31 @@ def weekly(request):
 
         # 중복도는 가족(staff) 계정에만 표시 — 외부인에게 보유 성향 노출 방지
         show_overlap = request.user.is_authenticated and request.user.is_staff
-        for p in radar_top5(monday, sunday):
-            overlap_pct = None
-            if show_overlap:
-                pkeys = _asset_keys(p.assets_raw)
-                overlap = sum(amt for amt, keys in inv_assets if keys & pkeys)
-                overlap_pct = round(overlap / total_held * 100) if total_held else 0
-            recommendations.append(
-                {"p": p, "overlap_pct": overlap_pct, "early1y": round(_radar_early(p))}
-            )
+        tracks = radar_tracks(monday, sunday)
+        TRACK_META = {
+            "안정 신호": {"label": "안정 TOP5", "sub": "지수형 · 1차 배리어 85~90 이하 · "
+                        "고점 발행 아님 · 낙인 상위 30% 안전군", "icon": "fa-shield-halved"},
+            "수익 신호": {"label": "수익 TOP5", "sub": "종목형 · 1차 배리어 85 이하 · "
+                        "고점 발행 아님 · 낙인 상위 30% 안전군", "icon": "fa-rocket"},
+        }
+        for tier in RADAR_V7_TIERS.values():
+            items = []
+            for p in tracks.get(tier, []):
+                overlap_pct = None
+                if show_overlap:
+                    pkeys = _asset_keys(p.assets_raw)
+                    overlap = sum(amt for amt, keys in inv_assets if keys & pkeys)
+                    overlap_pct = round(overlap / total_held * 100) if total_held else 0
+                r = p.radar or {}
+                items.append({"p": p, "overlap_pct": overlap_pct,
+                              "peak": r.get("peak")})
+            if items:
+                meta = TRACK_META[tier]
+                recommendations.append({
+                    "tier": tier, "label": meta["label"], "sub": meta["sub"],
+                    "icon": meta["icon"],
+                    "color": items[0]["p"].radar["color"], "items": items,
+                })
 
     # ── 낙인대별 최고 수익 (선택한 주차 상품 · 유형 탭 × 낙인 값별 수익률 top5) ──
     # 대상 낙인 값은 태훈님 지정: 종목형 15~30, 지수형 25~40. 노낙인 제외.
@@ -586,44 +603,68 @@ def _analyze_risk(holding, total_invested):
         return None
 
     from collections import defaultdict
-    asset_exposure = defaultdict(lambda: {"amount": 0, "count": 0})
-    issuer_exposure = defaultdict(lambda: {"amount": 0, "count": 0})
-    week_exposure = defaultdict(lambda: {"amount": 0, "count": 0})   # 청약 주차(빈티지)
+
+    def _bucket():
+        return {"amount": 0, "count": 0, "items": []}
+
+    asset_exposure = defaultdict(_bucket)
+    issuer_exposure = defaultdict(_bucket)
+    week_exposure = defaultdict(_bucket)     # 청약 주차(빈티지)
+    ki_exposure = defaultdict(_bucket)       # 종목형 낙인별
     maturity_buckets = defaultdict(int)  # 'YYYY-MM' → 건수
 
     for inv in holding:
         p = inv.product
+        item = {"pid": p.id, "label": f"{p.issuer} {p.product_no}", "amount": inv.amount}
         for asset in _split_assets(p.assets_raw):
-            asset_exposure[asset]["amount"] += inv.amount
-            asset_exposure[asset]["count"] += 1
-        issuer_exposure[p.issuer]["amount"] += inv.amount
-        issuer_exposure[p.issuer]["count"] += 1
+            b = asset_exposure[asset]
+            b["amount"] += inv.amount
+            b["count"] += 1
+            b["items"].append(item)
+        b = issuer_exposure[p.issuer]
+        b["amount"] += inv.amount
+        b["count"] += 1
+        b["items"].append(item)
         # 청약 주차 = 마감일이 속한 주의 월요일. 같은 주 발행분은 같은 빈티지로,
         # 시장 급변 시 함께 무너질 수 있다 (2021 HSCEI·2023 LG화학 사례).
         wd = p.sub_end or p.issue_date
         if wd:
             monday = wd - timedelta(days=wd.weekday())
-            week_exposure[monday]["amount"] += inv.amount
-            week_exposure[monday]["count"] += 1
+            b = week_exposure[monday]
+            b["amount"] += inv.amount
+            b["count"] += 1
+            b["items"].append(item)
+        # 종목형 낙인별 — 낙인이 얕을수록(숫자 클수록) 방어선이 약하다
+        if p.asset_type == "종목형":
+            kkey = "노낙인" if p.is_no_ki else (f"낙인 {p.ki:g}" if p.ki is not None else "낙인 미상")
+            b = ki_exposure[kkey]
+            b["amount"] += inv.amount
+            b["count"] += 1
+            b["items"].append(item)
         nxt = inv.next_evaluation
         if nxt:
             maturity_buckets[nxt["date"].strftime("%Y-%m")] += 1
 
+    def _row(name, v):
+        return {"name": name, "amount": v["amount"], "count": v["count"],
+                "pct": round(v["amount"] / total_invested * 100),
+                "items": sorted(v["items"], key=lambda i: -i["amount"])}
+
     def _top(exposure):
-        rows = [
-            {"name": k, "amount": v["amount"], "count": v["count"],
-             "pct": round(v["amount"] / total_invested * 100)}
-            for k, v in exposure.items()
-        ]
-        return sorted(rows, key=lambda r: -r["amount"])
+        return sorted((_row(k, v) for k, v in exposure.items()),
+                      key=lambda r: -r["amount"])
 
     assets = _top(asset_exposure)
     issuers = _top(issuer_exposure)
-    weeks = [
-        {"name": k.strftime("%y.%m.%d") + " 주", "amount": v["amount"],
-         "count": v["count"], "pct": round(v["amount"] / total_invested * 100)}
-        for k, v in sorted(week_exposure.items(), key=lambda kv: -kv[1]["amount"])
-    ]
+    weeks = [_row(k.strftime("%y.%m.%d") + " 주", v)
+             for k, v in sorted(week_exposure.items(), key=lambda kv: -kv[1]["amount"])]
+    # 낙인 낮은(깊은) 순 정렬, 노낙인·미상은 뒤로
+    def _ki_order(name):
+        if name.startswith("낙인 ") and name != "낙인 미상":
+            return (0, float(name.split()[1]))
+        return (1, 999)
+    ki_types = sorted((_row(k, v) for k, v in ki_exposure.items()),
+                      key=lambda r: _ki_order(r["name"]))
 
     # 경고: 단일 자산/발행사 노출이 전체의 50% 초과
     warnings = []
@@ -652,6 +693,7 @@ def _analyze_risk(holding, total_invested):
         "issuers": issuers[:5],
         "weeks": weeks[:6],
         "week_total": len(weeks),
+        "ki_types": ki_types,
         "maturity": sorted(maturity_buckets.items()),
         "warnings": warnings,
     }
@@ -1227,7 +1269,7 @@ def market_trend(request):
 
     # ── 레이더 신호 성과 검증 (verify_radar가 채운 RadarVerdict 집계) ──
     from core.models import RadarVerdict
-    BADGE_TIERS = ("아주 강한 신호", "강한 신호")
+    BADGE_TIERS = ("안정 신호", "수익 신호", "아주 강한 신호", "강한 신호")
     verdicts = list(RadarVerdict.objects.select_related("product").all())
     badges = [v for v in verdicts if v.tier in BADGE_TIERS]
 
@@ -1273,8 +1315,10 @@ def market_trend(request):
 
         # 등급별 1차 적중률 (배지 2등급 + 대조군 '없음')
         grade_defs = [
-            ("아주 강한 신호", "아주 강한 신호", "#1B64DA"),
-            ("강한 신호", "강한 신호", "#3182F6"),
+            ("안정 신호", "안정 신호 (v7)", "#1B64DA"),
+            ("수익 신호", "수익 신호 (v7)", "#E8590C"),
+            ("아주 강한 신호", "아주 강한 신호 (v6)", "#1B64DA"),
+            ("강한 신호", "강한 신호 (v6)", "#3182F6"),
             ("없음", "배지 없음 (대조군)", "#8B95A1"),
         ]
         radar_grades = []
@@ -1542,7 +1586,7 @@ def _about_accuracy():
     rows = qs.values("tier").annotate(n=Count("id"), ok=Count("id", filter=Q(met=True)))
     badge_n = badge_ok = ctrl_n = ctrl_ok = 0
     for r in rows:
-        if r["tier"] in ("아주 강한 신호", "강한 신호"):
+        if r["tier"] in ("안정 신호", "수익 신호", "아주 강한 신호", "강한 신호"):
             badge_n += r["n"]
             badge_ok += r["ok"]
         else:
