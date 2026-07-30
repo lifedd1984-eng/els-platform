@@ -47,4 +47,8 @@ urlpatterns = [
     path('manifest.json', views.pwa_manifest, name='pwa_manifest'),
     path('icons/icon-<str:size>.png', views.pwa_icon, name='pwa_icon'),
     path('og.png', views.og_image, name='og_image'),
+    path('sw.js', views.service_worker, name='service_worker'),
+    path('push/subscribe/', views.push_subscribe, name='push_subscribe'),
+    path('push/unsubscribe/', views.push_unsubscribe, name='push_unsubscribe'),
+    path('push/test/', views.push_test, name='push_test'),
 ]

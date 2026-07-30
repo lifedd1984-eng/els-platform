@@ -792,6 +792,24 @@ class RedemptionAlert(models.Model):
         ]
 
 
+class PushSubscription(models.Model):
+    """브라우저 웹 푸시 구독 — 사용자당 기기(브라우저)별 1행.
+
+    endpoint는 브라우저 푸시 서비스가 발급한 고유 수신 주소.
+    발송 시 410/404 응답(만료·해지)이 오면 core.push가 행을 삭제한다.
+    """
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                             related_name="push_subscriptions")
+    endpoint = models.TextField(unique=True)
+    p256dh = models.CharField(max_length=255)   # 메시지 암호화용 클라이언트 공개키
+    auth = models.CharField(max_length=255)     # 인증 시크릿
+    user_agent = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.user.username} · …{self.endpoint[-16:]}"
+
+
 class RedemptionVerdict(models.Model):
     """지난 평가일 조기상환 판정 (check_redemptions 배치가 기록).
 

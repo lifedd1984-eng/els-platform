@@ -17,6 +17,7 @@ STEP_LABELS = {
     "redeem": "상환판정",
     "simulate": "손실확률",
     "verify": "신호검증",
+    "redeem_alert": "상환알림",
     "deadline": "마감알림",
     "digest": "주간요약",
     "backup": "DB백업",

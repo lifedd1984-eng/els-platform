@@ -1,12 +1,17 @@
 """
-프리셋 매칭 / 상환 평가일 텔레그램 알림 (import_els, scrape_kofia 공용).
+프리셋 매칭 / 상환 평가일 / 관심 마감 알림.
+
+채널: 가족 공용 텔레그램(기존) + 사용자별 웹 푸시(core.push).
+호출처: notify_preset_matches — import_els·scrape_kofia(새벽 배치),
+        notify_redemptions·notify_watchlist_deadline — send_redemption_alert·
+        send_deadline_alert(아침 8시 크론, 새벽 푸시 방지).
 """
 
 from datetime import date, timedelta
 
 from django.conf import settings
 
-from core import telegram
+from core import push, telegram
 from core.models import (
     Investment, NotifiedMatch, Preset, Product, RedemptionAlert, WatchItem,
 )
@@ -67,22 +72,63 @@ def notify_redemptions(stdout=None):
             f"{nxt['n']}회차 평가일: {nxt['date']:%Y-%m-%d}\n"
             f"배리어: {nxt['barrier'] or '-'}% / 예상상환금: {expected}"
         )
+        n_push = push.send_to_user(
+            inv.user,
+            f"[상환 평가 {alert_type}] {inv.product.issuer} {inv.product.product_no}",
+            f"{nxt['n']}회차 평가일 {nxt['date']:%Y-%m-%d} · 배리어 {nxt['barrier'] or '-'}% "
+            f"· 예상상환 {expected}",
+            url="/portfolio/",
+            tag=f"redeem-{inv.id}-{nxt['n']}-{alert_type}",
+            stdout=stdout,
+        )
         if stdout:
-            stdout.write(f"[상환알림] {inv} {alert_type}")
+            stdout.write(f"[상환알림] {inv} {alert_type} (푸시 {n_push}건)")
 
 
 def notify_watchlist_deadline(stdout=None):
-    """관심상품 중 내일 청약마감 상품 알림 (전 계정 합집합, 상품 중복 제거).
+    """관심상품 중 내일 청약마감 상품 알림.
 
-    이미 보유중(Investment status='보유중')인 상품은 제외. 0건이면 발송하지 않는다.
+    ① 웹 푸시 — 계정별 (본인 관심상품 기준, 본인이 이미 보유중인 상품 제외)
+    ② 텔레그램 — 가족 공용 (전 계정 합집합, 누군가 보유중인 상품 제외 · 기존 동작)
     숙려대상자(65세+)는 마감 2영업일 전까지 청약해야 하므로 D-1에 안내.
     """
     tomorrow = date.today() + timedelta(days=1)
+    watches = list(
+        WatchItem.objects.filter(product__sub_end=tomorrow).select_related("product", "user")
+    )
+
+    # ── ① 사용자별 웹 푸시 ──
+    by_user = {}
+    for w in watches:
+        if w.user_id:
+            by_user.setdefault(w.user, []).append(w.product)
+    for user, prods in by_user.items():
+        held_u = set(
+            Investment.objects.filter(user=user, status="보유중").values_list("product_id", flat=True)
+        )
+        prods = [p for p in prods if p.id not in held_u]
+        if not prods:
+            continue
+        prods.sort(key=lambda p: -(p.yield_rate or 0))
+        top = prods[0]
+        y = f"{top.yield_rate:g}" if top.yield_rate is not None else "-"
+        body = f"{top.issuer} {top.product_no} 연 {y}%"
+        if len(prods) > 1:
+            body += f" 외 {len(prods) - 1}건"
+        body += f" — 내일({tomorrow.month}/{tomorrow.day}) 청약 마감"
+        n_push = push.send_to_user(
+            user, f"[청약 마감 D-1] 관심상품 {len(prods)}건", body,
+            url="/watchlist/", tag=f"deadline-{tomorrow:%Y%m%d}", stdout=stdout,
+        )
+        if n_push and stdout:
+            stdout.write(f"[마감푸시] {user.username}: {len(prods)}건 → 기기 {n_push}대")
+
+    # ── ② 가족 공용 텔레그램 (기존 동작 유지) ──
     held = set(
         Investment.objects.filter(status="보유중").values_list("product_id", flat=True)
     )
     seen = {}
-    for w in WatchItem.objects.filter(product__sub_end=tomorrow).select_related("product"):
+    for w in watches:
         p = w.product
         if p.id in held or p.id in seen:
             continue

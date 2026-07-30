@@ -78,9 +78,7 @@ class Command(BaseCommand):
         if should_notify and total_new_products:
             notify.notify_preset_matches(self.stdout)
 
-        # 상환 평가일 알림
-        if should_notify:
-            notify.notify_redemptions(self.stdout)
+        # 상환 평가일 D-7/D-1 알림은 send_redemption_alert(아침 크론)로 분리
 
         if new_files and should_notify:
             telegram.send_message(

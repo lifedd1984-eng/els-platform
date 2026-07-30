@@ -1,12 +1,14 @@
 import calendar as pycalendar
 from datetime import date, timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .models import ImportLog, Investment, Preset, Product, WatchItem
 
@@ -584,6 +586,7 @@ def watchlist(request):
     return render(request, "core/watchlist.html", {
         "invested_ids": invested_ids,
         "items": items, "w_cols": w_cols, "active_nav": "watchlist",
+        "vapid_public_key": settings.VAPID_PUBLIC_KEY,
     })
 
 
@@ -906,6 +909,7 @@ def portfolio(request):
         }
 
     return render(request, "core/portfolio.html", {
+        "vapid_public_key": settings.VAPID_PUBLIC_KEY,
         "perf": perf,
         "h_page": h_page, "d_page": d_page,
         "holding_count": len(holding_display), "done_count": len(done),
@@ -1511,6 +1515,78 @@ def pwa_icon(request, size):
     resp = FileResponse(open(path, "rb"), content_type="image/png")
     resp["Cache-Control"] = "public, max-age=86400"
     return resp
+
+
+# ── 웹 푸시 구독 ─────────────────────────────────
+def service_worker(request):
+    """서비스 워커 스크립트 — 루트(/sw.js)에서 서빙해야 스코프가 사이트 전체가 된다."""
+    from pathlib import Path
+
+    from django.http import FileResponse, Http404
+    path = Path(settings.BASE_DIR) / "core" / "assets" / "sw.js"
+    if not path.exists():
+        raise Http404
+    resp = FileResponse(open(path, "rb"), content_type="application/javascript")
+    resp["Cache-Control"] = "no-cache"  # 워커 수정이 다음 방문에 바로 반영되도록
+    return resp
+
+
+@login_required
+@require_POST
+def push_subscribe(request):
+    """브라우저가 발급받은 푸시 구독 저장. 같은 endpoint 재등록 시 소유자·키 갱신."""
+    import json
+
+    from django.http import JsonResponse
+
+    from .models import PushSubscription
+    try:
+        data = json.loads(request.body)
+        endpoint = data["endpoint"]
+        p256dh = data["keys"]["p256dh"]
+        auth = data["keys"]["auth"]
+    except (ValueError, KeyError, TypeError):
+        return JsonResponse({"ok": False}, status=400)
+    if not endpoint.startswith("https://"):
+        return JsonResponse({"ok": False}, status=400)
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={"user": request.user, "p256dh": p256dh, "auth": auth,
+                  "user_agent": request.META.get("HTTP_USER_AGENT", "")[:200]},
+    )
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def push_unsubscribe(request):
+    """알림 끄기 — endpoint 소유(브라우저)가 곧 증명이라 endpoint 기준으로 삭제."""
+    import json
+
+    from django.http import JsonResponse
+
+    from .models import PushSubscription
+    try:
+        endpoint = json.loads(request.body)["endpoint"]
+    except (ValueError, KeyError, TypeError):
+        return JsonResponse({"ok": False}, status=400)
+    PushSubscription.objects.filter(endpoint=endpoint).delete()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def push_test(request):
+    """구독 직후 확인용 테스트 알림 1건."""
+    from django.http import JsonResponse
+
+    from . import push
+    n = push.send_to_user(
+        request.user, "알림이 켜졌어요",
+        "조기상환 평가 D-7·D-1, 관심상품 청약마감 전날 아침에 알려드립니다.",
+        url="/portfolio/",
+    )
+    return JsonResponse({"ok": n > 0, "sent": n})
 
 
 def og_image(request):

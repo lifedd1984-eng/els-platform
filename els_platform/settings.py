@@ -163,6 +163,11 @@ ELS_DOWNLOADS_DIR = os.environ.get(
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+# 웹 푸시 (VAPID — .env에 키 보관, 로컬/EC2 동일 키. 미설정 시 푸시 발송·버튼 비활성)
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_SUB = os.environ.get("VAPID_SUB", "mailto:lifedd1984@gmail.com")
+
 # AI 리서치 (Claude Haiku — 자연어 → 검색 필터 변환 전용)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 

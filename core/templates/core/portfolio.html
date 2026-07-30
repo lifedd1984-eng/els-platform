@@ -4,8 +4,13 @@
 {% block title %}포트폴리오 — ELS 레이더{% endblock %}
 
 {% block content %}
-<div class="page-title">내 포트폴리오</div>
-<div class="page-sub">투자 현황과 상환 스케줄을 관리합니다</div>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+  <div>
+    <div class="page-title">내 포트폴리오</div>
+    <div class="page-sub">투자 현황과 상환 스케줄을 관리합니다</div>
+  </div>
+  <div style="text-align:right">{% include "core/_push_toggle.html" %}</div>
+</div>
 
 <div class="stat-grid cols-5">
   <div class="stat-card">

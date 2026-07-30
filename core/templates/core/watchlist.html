@@ -8,15 +8,16 @@
     <div class="page-title">관심 목록</div>
     <div class="page-sub">투자 검토 중인 상품 {{ items|length }}건</div>
   </div>
-  {% if items %}
-  <div style="display:flex;gap:8px">
+  <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap">
+    <div style="text-align:right">{% include "core/_push_toggle.html" %}</div>
+    {% if items %}
     <a href="{% url 'watchlist_export' %}" class="btn"><i class="fa-solid fa-file-excel" style="color:var(--green)"></i> 엑셀 다운로드</a>
     <form method="post" onsubmit="return confirm('관심 목록 {{ items|length }}건을 모두 비울까요?')" style="display:inline">{% csrf_token %}
       <input type="hidden" name="action" value="clear">
       <button class="btn btn-danger"><i class="fa-solid fa-rotate-left"></i> 초기화</button>
     </form>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 {% if items %}

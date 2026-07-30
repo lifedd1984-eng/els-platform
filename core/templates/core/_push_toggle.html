@@ -1,0 +1,105 @@
+{% if user.is_authenticated and vapid_public_key %}
+{# 웹 푸시 알림 토글 — 포트폴리오·관심 페이지 제목 옆. 구독은 계정 단위(두 페이지 공용). #}
+<div id="pushWidget" data-vapid="{{ vapid_public_key }}" style="display:none">
+  <span style="display:none">{% csrf_token %}</span>
+  <button type="button" id="pushBtn" class="btn btn-sm btn-primary" style="white-space:nowrap">
+    <i class="fa-solid fa-bell"></i> <span id="pushLabel">알림 켜기</span>
+  </button>
+  <div id="pushHint" style="display:none;font-size:11.5px;color:var(--text-3);margin-top:4px;max-width:240px;line-height:1.5"></div>
+</div>
+<div id="pushIosGuide" style="display:none;background:var(--orange-bg);color:#8A4600;font-size:12px;border-radius:8px;padding:8px 12px;line-height:1.55;max-width:340px">
+  <i class="fa-solid fa-circle-info"></i> 아이폰은 Safari <b>공유</b> 버튼 → <b>홈 화면에 추가</b> 후, 추가된 ELS 레이더 앱에서 알림을 켤 수 있어요
+</div>
+<script>
+(function () {
+  var w = document.getElementById("pushWidget");
+  if (!w) return;
+  var btn = document.getElementById("pushBtn"), label = document.getElementById("pushLabel"),
+      icon = btn.querySelector("i"), hint = document.getElementById("pushHint"),
+      ios = document.getElementById("pushIosGuide");
+  var vapid = w.dataset.vapid;
+  var csrf = w.querySelector("input[name=csrfmiddlewaretoken]").value;
+  var supported = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  var isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+      || window.navigator.standalone === true;
+
+  if (!supported) {
+    /* iOS는 홈 화면 추가(PWA)에서만 푸시 지원 → 설치 안내로 대체 */
+    if (isIos && !standalone) ios.style.display = "";
+    return;
+  }
+  w.style.display = "";
+
+  var BLOCKED_HINT = "브라우저 주소창 자물쇠(사이트 설정)에서 알림을 허용으로 바꾼 뒤 새로고침해주세요";
+  var state = "off";
+  function render(s, hintText) {
+    state = s;
+    btn.className = "btn btn-sm" + (s === "off" ? " btn-primary" : "");
+    btn.style.background = s === "on" ? "var(--blue-bg)" : (s === "blocked" ? "var(--bg)" : "");
+    btn.style.color = s === "on" ? "var(--blue-dark)" : (s === "blocked" ? "var(--text-3)" : "");
+    icon.className = "fa-solid " + (s === "blocked" ? "fa-bell-slash" : "fa-bell");
+    label.textContent = s === "on" ? "알림 켜짐" : (s === "blocked" ? "알림 차단됨" : "알림 켜기");
+    hint.textContent = hintText || "";
+    hint.style.display = hintText ? "" : "none";
+  }
+  function post(url, data) {
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+      body: JSON.stringify(data || {}),
+    });
+  }
+  function b64ToU8(s) {
+    var pad = "=".repeat((4 - s.length % 4) % 4);
+    var raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, function (c) { return c.charCodeAt(0); });
+  }
+  function getSub() {
+    return navigator.serviceWorker.getRegistration("/").then(function (reg) {
+      return reg ? reg.pushManager.getSubscription() : null;
+    });
+  }
+
+  if (Notification.permission === "denied") {
+    render("blocked", BLOCKED_HINT);
+  } else {
+    getSub().then(function (sub) {
+      if (sub) { render("on"); post("/push/subscribe/", sub.toJSON()); }
+      else render("off");
+    });
+  }
+
+  btn.addEventListener("click", function () {
+    if (state === "blocked") return;
+    if (state === "on") {
+      getSub().then(function (sub) {
+        if (sub) { post("/push/unsubscribe/", { endpoint: sub.endpoint }); sub.unsubscribe(); }
+        render("off", "알림을 껐어요");
+      });
+      return;
+    }
+    btn.disabled = true;
+    navigator.serviceWorker.register("/sw.js").then(function () {
+      return Notification.requestPermission().then(function (perm) {
+        if (perm !== "granted") {
+          render(perm === "denied" ? "blocked" : "off", perm === "denied" ? BLOCKED_HINT : "");
+          return;
+        }
+        return navigator.serviceWorker.ready.then(function (reg) {
+          return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(vapid) });
+        }).then(function (sub) {
+          return post("/push/subscribe/", sub.toJSON()).then(function (res) {
+            if (!res.ok) throw new Error("subscribe failed");
+            render("on", "테스트 알림을 보냈어요 — 잠시 후 도착합니다");
+            post("/push/test/", {});
+          });
+        });
+      });
+    }).catch(function () {
+      render("off", "알림 설정에 실패했어요. 잠시 후 다시 시도해주세요");
+    }).finally(function () { btn.disabled = false; });
+  });
+})();
+</script>
+{% endif %}
