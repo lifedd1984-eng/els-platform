@@ -45,10 +45,10 @@ RADAR_V7_B0_MAX = {"종목형": 85, "지수형": 90}   # ① 1차 조기상환 �
 RADAR_V7_PEAK_MAX = 95    # ② 워스트 자산의 52주 최고 대비 위치(%) 미만 — 고점 발행 회피
 RADAR_V7_KI_PCT = 0.30    # ③ 낙인 < 직전 연도 같은 유형 분포 하위 30% 값 (미만)
 RADAR_V7_KI_MIN_SAMPLE = 100   # 직전 연도 표본이 이보다 적으면 v6 고정 컷으로 폴백
-RADAR_V7_TIERS = {"지수형": "안정 신호", "종목형": "수익 신호"}
+RADAR_V7_TIER = "타겟 신호"   # 두 유형 공통 배지명 (유형 구분은 지수형/종목형 배지가 담당)
 
 RADAR_COLORS = {
-    "안정 신호": "#1B64DA", "수익 신호": "#E8590C",
+    "타겟 신호": "#1B64DA",
     # v6 유산 — 과거 검증 기록(RadarVerdict) 표시용
     "아주 강한 신호": "#1B64DA", "강한 신호": "#3182F6",
 }
@@ -244,7 +244,7 @@ def _compute_radar_pool(monday, asset_type):
 
     ranked = sorted(survivors, key=lambda t: -(t[0].yield_rate or 0))
     eligible_n = len(ranked)
-    tier = RADAR_V7_TIERS[asset_type]
+    tier = RADAR_V7_TIER
     yield_col = [p.yield_rate or 0 for p in group]
 
     result = {}
@@ -472,9 +472,9 @@ class Product(models.Model):
 
 
 def radar_tracks(monday=None, sunday=None, limit=5):
-    """v7 트랙별 TOP 리스트 — {"안정 신호": [지수형...], "수익 신호": [종목형...]}.
+    """v7 유형별 타겟 신호 TOP 리스트 — {"지수형": [...], "종목형": [...]}.
 
-    각 트랙 = 해당 유형 3중 게이트 통과자 전원 중 수익률 상위 limit개.
+    각 유형 = 3중 게이트 통과자(타겟 신호) 전원 중 수익률 상위 limit개.
     오늘 이후 마감 상품만 (지난 주 조회 시엔 그 주 전체).
     """
     today = date.today()
@@ -485,20 +485,20 @@ def radar_tracks(monday=None, sunday=None, limit=5):
     pool = Product.objects.filter(
         sub_end__gte=max(monday, today) if sunday >= today else monday,
         sub_end__lte=sunday, yield_rate__isnull=False)
-    tracks = {tier: [] for tier in RADAR_V7_TIERS.values()}
+    tracks = {"지수형": [], "종목형": []}
     for p in pool:
         r = p.radar
-        if r and r["tier"] in tracks:
-            tracks[r["tier"]].append(p)
-    for tier in tracks:
-        tracks[tier].sort(key=lambda p: -(p.yield_rate or 0))
-        tracks[tier] = tracks[tier][:limit]
+        if r and p.asset_type in tracks:
+            tracks[p.asset_type].append(p)
+    for t in tracks:
+        tracks[t].sort(key=lambda p: -(p.yield_rate or 0))
+        tracks[t] = tracks[t][:limit]
     return tracks
 
 
 def radar_top5(monday=None, sunday=None):
-    """(v6 호환용) 안정 트랙 TOP5. 신규 코드는 radar_tracks()를 쓸 것."""
-    return radar_tracks(monday, sunday)["안정 신호"]
+    """(v6 호환용) 지수형 타겟 신호 TOP5. 신규 코드는 radar_tracks()를 쓸 것."""
+    return radar_tracks(monday, sunday)["지수형"]
 
 
 class Preset(models.Model):

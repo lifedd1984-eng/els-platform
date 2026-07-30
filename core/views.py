@@ -231,7 +231,7 @@ def weekly(request):
     recommendations = []
     if offset >= 0:  # 지난 주 조회 시에는 표시 안 함
         from core import market as _mkt
-        from core.models import RADAR_V7_TIERS, radar_tracks, v7_ki_cut
+        from core.models import radar_tracks
 
         def _asset_keys(raw):
             return {_mkt.resolve_ticker(a) or a for a in _mkt.split_assets(raw)}
@@ -246,12 +246,12 @@ def weekly(request):
         show_overlap = request.user.is_authenticated and request.user.is_staff
         tracks = radar_tracks(monday, sunday)
         TRACK_META = {
-            "안정 신호": {"label": "안정 TOP5", "sub": "지수형 · 1차 배리어 85~90 이하 · "
-                        "고점 발행 아님 · 낙인 상위 30% 안전군", "icon": "fa-shield-halved"},
-            "수익 신호": {"label": "수익 TOP5", "sub": "종목형 · 1차 배리어 85 이하 · "
-                        "고점 발행 아님 · 낙인 상위 30% 안전군", "icon": "fa-rocket"},
+            "지수형": {"label": "지수형 TOP5", "sub": "1차 배리어 90 이하 · 고점 발행 아님 · "
+                      "낙인이 가장 낮은 30% 안에 드는 상품", "icon": "fa-shield-halved"},
+            "종목형": {"label": "종목형 TOP5", "sub": "1차 배리어 85 이하 · 고점 발행 아님 · "
+                      "낙인이 가장 낮은 30% 안에 드는 상품", "icon": "fa-rocket"},
         }
-        for tier in RADAR_V7_TIERS.values():
+        for tier in ("지수형", "종목형"):
             items = []
             for p in tracks.get(tier, []):
                 overlap_pct = None
@@ -1269,7 +1269,7 @@ def market_trend(request):
 
     # ── 레이더 신호 성과 검증 (verify_radar가 채운 RadarVerdict 집계) ──
     from core.models import RadarVerdict
-    BADGE_TIERS = ("안정 신호", "수익 신호", "아주 강한 신호", "강한 신호")
+    BADGE_TIERS = ("타겟 신호", "아주 강한 신호", "강한 신호")
     verdicts = list(RadarVerdict.objects.select_related("product").all())
     badges = [v for v in verdicts if v.tier in BADGE_TIERS]
 
@@ -1315,8 +1315,7 @@ def market_trend(request):
 
         # 등급별 1차 적중률 (배지 2등급 + 대조군 '없음')
         grade_defs = [
-            ("안정 신호", "안정 신호 (v7)", "#1B64DA"),
-            ("수익 신호", "수익 신호 (v7)", "#E8590C"),
+            ("타겟 신호", "타겟 신호 (v7)", "#1B64DA"),
             ("아주 강한 신호", "아주 강한 신호 (v6)", "#1B64DA"),
             ("강한 신호", "강한 신호 (v6)", "#3182F6"),
             ("없음", "배지 없음 (대조군)", "#8B95A1"),
@@ -1586,7 +1585,7 @@ def _about_accuracy():
     rows = qs.values("tier").annotate(n=Count("id"), ok=Count("id", filter=Q(met=True)))
     badge_n = badge_ok = ctrl_n = ctrl_ok = 0
     for r in rows:
-        if r["tier"] in ("안정 신호", "수익 신호", "아주 강한 신호", "강한 신호"):
+        if r["tier"] in ("타겟 신호", "아주 강한 신호", "강한 신호"):
             badge_n += r["n"]
             badge_ok += r["ok"]
         else:
