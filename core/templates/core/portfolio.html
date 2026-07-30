@@ -109,7 +109,7 @@
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
     <div>
-      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">기초자산 집중도 <small style="color:var(--text-3);font-weight:400">(금액기준 · 가장 부진한 자산 기준)</small></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">기초자산 집중도 <small style="color:var(--text-3);font-weight:400" title="ELS는 가장 부진한 자산 하나로 손익이 결정되므로, 어떤 자산이 포함되기만 해도 그 상품의 투자금 전액이 해당 자산에 노출된 것으로 계산합니다">(금액기준 · 포함 시 전액 노출)</small></div>
       {% for a in risk.assets %}
       <div style="margin-bottom:8px">
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
@@ -136,6 +136,22 @@
       </div>
       {% endfor %}
     </div>
+    {% if risk.weeks %}
+    <div>
+      <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px">청약 주차별 집중도 <small style="color:var(--text-3);font-weight:400" title="같은 주에 청약한 상품들은 같은 시점의 시장 조건을 공유해, 그 주 직후 시장이 급변하면 함께 흔들립니다. 여러 주에 나눠 청약할수록 시점 위험이 분산됩니다">(금액기준{% if risk.week_total > 6 %} · 상위 6주 / 전체 {{ risk.week_total }}주{% endif %})</small></div>
+      {% for w in risk.weeks %}
+      <div style="margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+          <span>{{ w.name }} <small style="color:var(--text-3)">({{ w.count }}건)</small></span>
+          <span><small style="color:var(--text-3)">{{ w.amount|intcomma }}원</small> <b>{{ w.pct }}%</b></span>
+        </div>
+        <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:{{ w.pct }}%;background:{% if w.pct > 50 %}var(--orange){% else %}var(--green){% endif %};border-radius:3px"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endif %}

@@ -588,6 +588,7 @@ def _analyze_risk(holding, total_invested):
     from collections import defaultdict
     asset_exposure = defaultdict(lambda: {"amount": 0, "count": 0})
     issuer_exposure = defaultdict(lambda: {"amount": 0, "count": 0})
+    week_exposure = defaultdict(lambda: {"amount": 0, "count": 0})   # 청약 주차(빈티지)
     maturity_buckets = defaultdict(int)  # 'YYYY-MM' → 건수
 
     for inv in holding:
@@ -597,6 +598,13 @@ def _analyze_risk(holding, total_invested):
             asset_exposure[asset]["count"] += 1
         issuer_exposure[p.issuer]["amount"] += inv.amount
         issuer_exposure[p.issuer]["count"] += 1
+        # 청약 주차 = 마감일이 속한 주의 월요일. 같은 주 발행분은 같은 빈티지로,
+        # 시장 급변 시 함께 무너질 수 있다 (2021 HSCEI·2023 LG화학 사례).
+        wd = p.sub_end or p.issue_date
+        if wd:
+            monday = wd - timedelta(days=wd.weekday())
+            week_exposure[monday]["amount"] += inv.amount
+            week_exposure[monday]["count"] += 1
         nxt = inv.next_evaluation
         if nxt:
             maturity_buckets[nxt["date"].strftime("%Y-%m")] += 1
@@ -611,6 +619,11 @@ def _analyze_risk(holding, total_invested):
 
     assets = _top(asset_exposure)
     issuers = _top(issuer_exposure)
+    weeks = [
+        {"name": k.strftime("%y.%m.%d") + " 주", "amount": v["amount"],
+         "count": v["count"], "pct": round(v["amount"] / total_invested * 100)}
+        for k, v in sorted(week_exposure.items(), key=lambda kv: -kv[1]["amount"])
+    ]
 
     # 경고: 단일 자산/발행사 노출이 전체의 50% 초과
     warnings = []
@@ -622,6 +635,12 @@ def _analyze_risk(holding, total_invested):
         warnings.append(
             f"발행사 '{issuers[0]['name']}'에 전체의 {issuers[0]['pct']}%가 집중되어 있습니다."
         )
+    # 청약 주차 집중: 같은 주 상품은 같은 빈티지 — 한 주에 50% 초과면 경고
+    if weeks and weeks[0]["pct"] > 50 and len(holding) >= 3:
+        warnings.append(
+            f"청약 주차 {weeks[0]['name']}에 전체의 {weeks[0]['pct']}%가 집중되어 있습니다. "
+            f"같은 주 상품은 시장 급변 시 함께 흔들립니다."
+        )
     # 만기 집중: 한 달에 60% 초과 평가 몰림
     if maturity_buckets:
         top_month, top_cnt = max(maturity_buckets.items(), key=lambda x: x[1])
@@ -631,6 +650,8 @@ def _analyze_risk(holding, total_invested):
     return {
         "assets": assets[:6],
         "issuers": issuers[:5],
+        "weeks": weeks[:6],
+        "week_total": len(weeks),
         "maturity": sorted(maturity_buckets.items()),
         "warnings": warnings,
     }
