@@ -127,8 +127,8 @@ def notify_weekly_digest(stdout=None):
     # ① 이번주 레이더 TOP5 — v7 트랙별 (사이트 추천과 동일 기준, radar_tracks 공용)
     from core.models import radar_tracks
     tracks = radar_tracks()
-    lines.append("\n📡 이번주 레이더 TOP5 (10년 검증 규칙)")
-    for tier, head in (("안정 신호", "🛡 안정 (지수형)"), ("수익 신호", "🚀 수익 (종목형)")):
+    lines.append("\n📡 이번주 타겟 신호 TOP5 (10년 검증 규칙)")
+    for tier, head in (("지수형", "🛡 지수형"), ("종목형", "🚀 종목형")):
         items = tracks.get(tier, [])
         lines.append(head)
         if not items:

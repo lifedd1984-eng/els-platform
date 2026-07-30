@@ -3,7 +3,7 @@
 
 "당시(발행 주차) 레이더가 있었다면 어떤 상품에 배지를 줬을지"를 그룹 내 상대평가로
 재현하고(radar_tier/radar_rank), 배지군과 대조군(배지 없음)의 **실제 1차 조기상환**
-결과를 시세로 판정해(verdict_met) 적중률 격차를 산출한다.
+결과를 시세로 판정해(verdict_met) 1년 이내 조기상환 성공률 격차를 산출한다.
 
 ■ 그룹
   issue_date가 속한 주의 월요일 × 유형(지수형/종목형).
@@ -22,12 +22,17 @@
   시뮬값(sim_loss_prob/sim_early_1y)이 없는 건은 자동으로 배지 후보에서 빠진다
   — simulate_historical이 느슨한 상한 게이트로 미리 떨어뜨린 건들이다.
 
-■ 결과 판정 (배지군 + 대조군 전체)
-  1차 평가일 = eval_dates[0]. 오늘보다 3일 이상 지난 건만 판정(시세 확정 대기).
+■ 결과 판정 (배지군 + 대조군 전체) — 1년 이내 조기상환 성공 여부
+  발행일 + 365일 안에 있는 **모든 평가 회차**를 보고, 한 번이라도 그 회차 배리어를
+  충족하면 성공으로 본다. 같은 평가일에 배리어가 둘인 리자드 구조는 각각 한 회차로
+  취급된다(낮은 배리어로도 상환되므로).
+  창의 마지막 회차가 오늘보다 3일 이상 지나야 판정한다(시세 확정 대기) — 즉
+  발행 후 1년이 안 지난 상품은 미판정으로 남는다.
   기준가는 SEIBro 공시 std_price를 쓰되, market.is_normalized_std_price로
   정규화 공시값(0·1·100·1000 등)으로 판정되면 **발행일 종가**로 대체한다.
-  워스트 레벨 = min(평가일 종가 / 기준가) × 100, 충족 = 레벨 >= stepdown_barriers[0].
-  시세를 못 구하면 미판정(null)으로 남겨 다음 실행 때 재시도한다.
+  각 회차의 워스트 레벨 = min(평가일 종가 / 기준가) × 100.
+  일부 회차만 시세 결측이면 그 회차만 건너뛰고, 전 회차 결측이면 미판정(null)으로
+  남겨 다음 실행 때 재시도한다.
 
 ■ 재개
   verdict_met이 이미 확정된 건은 다시 시세를 안 본다(집계에는 그대로 포함).
@@ -62,7 +67,7 @@ SAVE_FIELDS = ["radar_tier", "radar_rank", "verdict_met", "verdict_level"]
 
 
 class Command(BaseCommand):
-    help = "과거 주차 레이더 배지 재현 + 1차 조기상환 적중률 검증"
+    help = "과거 주차 레이더 배지 재현 + 1년 이내 조기상환 성공률 검증"
 
     def add_arguments(self, parser):
         parser.add_argument("--start-year", type=int, default=2016)
@@ -100,7 +105,7 @@ class Command(BaseCommand):
             return
         self._log(f"=== 시작 {total}건 ({opts['start_year']}~{opts['end_year']}) ===")
 
-        # 집계 버킷: (스코프, 등급) → [건수, 적중]
+        # 집계 버킷: (스코프, 등급) → [건수, 성공]
         self.agg = defaultdict(lambda: [0, 0])
         stats = {"groups": 0, "badge": 0, "judged": 0, "wait": 0, "noprice": 0,
                  "nocut": 0}
@@ -218,51 +223,95 @@ class Command(BaseCommand):
         HistoricalIssue.objects.bulk_update(issues, SAVE_FIELDS)
         return len(issues)
 
-    def _judge(self, issue, stats):
-        """1차 평가일 워스트 레벨 판정. 판정 불가면 값을 남기지 않는다(null 유지)."""
-        evals = issue.eval_dates or []
-        bars = issue.stepdown_barriers or []
-        if not evals or not bars or not isinstance(bars[0], (int, float)):
-            return
-        try:
-            eval_date = date.fromisoformat(str(evals[0])[:10])
-        except ValueError:
-            return
-        if eval_date > self.today - timedelta(days=SETTLE_DAYS):
-            stats["wait"] += 1
-            return
-
-        worst = None
+    def _refs(self, issue, stats):
+        """기초자산별 (티커, 기준가) 목록. 하나라도 못 구하면 None."""
+        out = []
         for asset in (issue.assets or []):
             if not isinstance(asset, dict):
-                return
+                return None
             ticker = hist_radar.resolve_asset_ticker(asset)
             if not ticker or self.store.get(ticker) is None:
                 stats["noprice"] += 1
-                return
+                return None
             issue_close = self.store.close_on(ticker, issue.issue_date)
             # 공시 기준가가 정규화 값(0·1·100·1000 등)이면 발행일 종가로 대체
             if issue_close is None:
                 stats["noprice"] += 1
-                return
+                return None
             if market.is_normalized_std_price(asset.get("std_price"), issue_close):
                 ref = issue_close
                 self.base_fallback += 1
             else:
                 ref = float(asset["std_price"])
                 self.base_disclosed += 1
-            ev = self.store.close_on(ticker, eval_date)
-            if not ev or ref <= 0:
+            if ref <= 0:
                 stats["noprice"] += 1
-                return
-            level = ev / ref * 100
-            if worst is None or level < worst:
-                worst = level
+                return None
+            out.append((ticker, ref))
+        return out or None
 
-        if worst is None:
+    def _judge(self, issue, stats):
+        """1년 이내 조기상환 성공 여부 판정. 판정 불가면 값을 남기지 않는다(null 유지).
+
+        발행일로부터 365일 안에 있는 모든 평가 회차를 보고, 그중 한 번이라도
+        해당 회차 배리어를 충족하면 성공으로 본다(=조기상환됨). 같은 평가일에
+        배리어가 둘인 리자드 구조도 각각 한 회차로 취급된다.
+        """
+        evals = issue.eval_dates or []
+        bars = issue.stepdown_barriers or []
+        if not evals or not bars or not issue.issue_date:
             return
-        issue.verdict_level = round(worst, 1)
-        issue.verdict_met = issue.verdict_level >= bars[0]
+
+        # 1년 창 안의 (평가일, 배리어) 회차만 추린다
+        limit = issue.issue_date + timedelta(days=365)
+        rounds = []
+        for i, raw in enumerate(evals):
+            if i >= len(bars) or not isinstance(bars[i], (int, float)):
+                continue
+            try:
+                d = date.fromisoformat(str(raw)[:10])
+            except ValueError:
+                continue
+            if d <= limit:
+                rounds.append((d, bars[i]))
+        if not rounds:
+            return
+
+        # 창의 마지막 회차가 아직 안 지났으면 성패를 확정할 수 없다
+        if max(d for d, _ in rounds) > self.today - timedelta(days=SETTLE_DAYS):
+            stats["wait"] += 1
+            return
+
+        refs = self._refs(issue, stats)
+        if refs is None:
+            return
+
+        met = False
+        decided_level = None
+        for d, barrier in sorted(rounds):
+            worst = None
+            for ticker, ref in refs:
+                ev = self.store.close_on(ticker, d)
+                if not ev:
+                    worst = None
+                    break
+                level = ev / ref * 100
+                if worst is None or level < worst:
+                    worst = level
+            if worst is None:          # 그 회차 시세 결측 → 해당 회차만 건너뜀
+                continue
+            if decided_level is None:
+                decided_level = round(worst, 1)   # 기본값: 첫 판정 가능 회차
+            if worst >= barrier:
+                met = True
+                decided_level = round(worst, 1)   # 성공한 회차의 레벨로 갱신
+                break
+
+        if decided_level is None:      # 1년 내 어떤 회차도 판정 불가
+            stats["noprice"] += 1
+            return
+        issue.verdict_level = decided_level
+        issue.verdict_met = met
 
     # ------------------------------------------------------------------ 집계
     def _count(self, issue, tier, asset_type):
@@ -273,13 +322,13 @@ class Command(BaseCommand):
             cell[1] += hit
 
     def _report(self, opts):
-        """전체/연도별/유형별 적중률 + 배지 vs 대조군 격차(%p) 출력 및 JSON 저장."""
+        """전체/연도별/유형별 성공률 + 배지 vs 대조군 격차(%p) 출력 및 JSON 저장."""
         scopes = sorted({s for s, _ in self.agg},
                         key=lambda s: (s.split(":")[0] != "전체", s))
         out = {}
         lines = ["", "=" * 72,
-                 "레이더 재현 성과 (1차 조기상환 적중률)", "=" * 72,
-                 f"{'구분':<12}{'등급':<12}{'건수':>8}{'적중':>8}{'적중률':>9}"]
+                 "레이더 재현 성과 (1년 이내 조기상환 성공률)", "=" * 72,
+                 f"{'구분':<12}{'등급':<12}{'건수':>8}{'성공':>8}{'성공률':>9}"]
 
         for scope in scopes:
             cells = {t: self.agg.get((scope, t), [0, 0]) for t in TIERS}
