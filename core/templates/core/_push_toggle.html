@@ -40,8 +40,17 @@
     btn.style.color = s === "on" ? "var(--blue-dark)" : (s === "blocked" ? "var(--text-3)" : "");
     icon.className = "fa-solid " + (s === "blocked" ? "fa-bell-slash" : "fa-bell");
     label.textContent = s === "on" ? "알림 켜짐" : (s === "blocked" ? "알림 차단됨" : "알림 켜기");
-    hint.textContent = hintText || "";
-    hint.style.display = hintText ? "" : "none";
+    setHint(hintText);
+  }
+  function setHint(t) {
+    hint.textContent = t || "";
+    hint.style.display = t ? "" : "none";
+  }
+  /* 권한 요청·구독 발급·발송까지 수 초 걸린다 — 그동안 버튼이 멈춘 것처럼 보이지 않게 진행 표시 */
+  function busy(text, hintText) {
+    icon.className = "fa-solid fa-spinner fa-spin";
+    label.textContent = text;
+    setHint(hintText);
   }
   function post(url, data) {
     return fetch(url, {
@@ -73,26 +82,38 @@
   btn.addEventListener("click", function () {
     if (state === "blocked") return;
     if (state === "on") {
+      btn.disabled = true;
+      busy("끄는 중…");
       getSub().then(function (sub) {
         if (sub) { post("/push/unsubscribe/", { endpoint: sub.endpoint }); sub.unsubscribe(); }
         render("off", "알림을 껐어요");
-      });
+      }).finally(function () { btn.disabled = false; });
       return;
     }
     btn.disabled = true;
+    busy("설정 중…", "브라우저가 물어보면 '허용'을 눌러주세요");
     navigator.serviceWorker.register("/sw.js").then(function () {
       return Notification.requestPermission().then(function (perm) {
         if (perm !== "granted") {
           render(perm === "denied" ? "blocked" : "off", perm === "denied" ? BLOCKED_HINT : "");
           return;
         }
+        busy("등록 중…", "알림 수신 주소를 발급받고 있어요");
         return navigator.serviceWorker.ready.then(function (reg) {
           return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(vapid) });
         }).then(function (sub) {
           return post("/push/subscribe/", sub.toJSON()).then(function (res) {
             if (!res.ok) throw new Error("subscribe failed");
-            render("on", "테스트 알림을 보냈어요 — 잠시 후 도착합니다");
-            post("/push/test/", {});
+            render("on", "테스트 알림을 보내는 중…");
+            return post("/push/test/", {}).then(function (r) {
+              return r.json();
+            }).then(function (d) {
+              setHint(d && d.sent
+                ? "테스트 알림을 보냈어요 — 몇 초 안에 도착합니다"
+                : "알림은 켜졌어요. 테스트 알림이 안 오면 기기 알림 설정을 확인해주세요");
+            }).catch(function () {
+              setHint("알림이 켜졌어요");
+            });
           });
         });
       });
