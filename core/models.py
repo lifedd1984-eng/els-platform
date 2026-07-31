@@ -342,6 +342,7 @@ class Product(models.Model):
     sub_end = models.DateField("청약마감일", null=True, blank=True)
 
     # 간이투자설명서에서 추출한 정확한 날짜 (없으면 None → issue_date 폴백)
+    # 표시용 발행일은 아래 issued_on 프로퍼티를 쓸 것 (2026-07-31 날짜 라벨 통일)
     base_eval_date = models.DateField("최초기준가격평가일", null=True, blank=True)
     real_issue_date = models.DateField("실제 발행일", null=True, blank=True)
 
@@ -380,6 +381,11 @@ class Product(models.Model):
         if not self.sub_end:
             return None
         return (self.sub_end - date.today()).days
+
+    @property
+    def issued_on(self):
+        """표시용 발행일 — 간이투자설명서 추출값 우선, 없으면 issue_date(≈청약종료일) 폴백."""
+        return self.real_issue_date or self.issue_date
 
     @property
     def term_months(self):

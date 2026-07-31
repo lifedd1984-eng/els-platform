@@ -165,12 +165,12 @@
     <tr style="background:var(--blue-bg)">
       <td style="color:var(--blue-dark);font-weight:700">내 투자금액</td>
       <td><strong>{{ my_inv.amount|intcomma }}원</strong>
-        <span style="font-size:11px;color:var(--text-3)">(보유 중{% if my_inv.invested_at %} · {{ my_inv.invested_at|date:"Y-m-d" }} 청약{% endif %})</span>
+        <span style="font-size:11px;color:var(--text-3)">(보유 중{% if my_inv.invested_at %} · {{ my_inv.invested_at|date:"Y-m-d" }} 발행{% endif %})</span>
       </td>
     </tr>
     {% endif %}
     <tr><td style="color:var(--text-3);font-weight:600">기초자산</td><td>{{ product.assets_raw|asset_short }}</td></tr>
-    <tr><td style="color:var(--text-3);font-weight:600">발행일</td><td>{{ product.issue_date|date:"Y-m-d"|default:"-" }}</td></tr>
+    <tr><td style="color:var(--text-3);font-weight:600">발행일</td><td>{{ product.issued_on|date:"Y-m-d"|default:"-" }}</td></tr>
     <tr><td style="color:var(--text-3);font-weight:600">만기일</td><td>{{ product.expiry_date|date:"Y-m-d"|default:"-" }}</td></tr>
     <tr><td style="color:var(--text-3);font-weight:600">청약기간</td><td>{{ product.sub_start|date:"Y-m-d"|default:"?" }} ~ {{ product.sub_end|date:"Y-m-d"|default:"?" }}</td></tr>
     <tr><td style="color:var(--text-3);font-weight:600">최대손실률</td><td>{{ product.max_loss|default:"-" }}%</td></tr>
@@ -354,9 +354,9 @@
 
   {% if ki_worst_buffer != None %}
   <div style="margin-bottom:14px;padding:12px 14px;border-radius:10px;
-       background:{% if ki_worst_buffer <= 5 %}var(--red-bg){% elif ki_worst_buffer <= 15 %}var(--orange-bg){% else %}var(--green-bg){% endif %}">
-    <span style="font-size:13px;font-weight:700;color:{% if ki_worst_buffer <= 5 %}var(--red){% elif ki_worst_buffer <= 15 %}var(--orange){% else %}var(--green){% endif %}">
-      {% if ki_worst_buffer <= 5 %}<i class="fa-solid fa-triangle-exclamation"></i> 위험 — 낙인 임박{% elif ki_worst_buffer <= 15 %}<i class="fa-solid fa-circle-exclamation"></i> 경고 — 낙인 주의{% else %}<i class="fa-solid fa-circle-check"></i> 안전{% endif %}
+       background:{% if ki_worst_buffer <= 5 %}var(--red-bg){% elif ki_worst_buffer <= 20 %}var(--orange-bg){% else %}var(--green-bg){% endif %}">
+    <span style="font-size:13px;font-weight:700;color:{% if ki_worst_buffer <= 5 %}var(--red){% elif ki_worst_buffer <= 20 %}var(--orange){% else %}var(--green){% endif %}">
+      {% if ki_worst_buffer <= 5 %}<i class="fa-solid fa-triangle-exclamation"></i> 위험 — 낙인 임박{% elif ki_worst_buffer <= 20 %}<i class="fa-solid fa-circle-exclamation"></i> 경고 — 낙인 주의{% else %}<i class="fa-solid fa-circle-check"></i> 안전{% endif %}
     </span>
     <span style="font-size:13px;color:var(--text-2)"> · 가장 부진한 자산 기준 낙인까지 <b>{{ ki_worst_buffer }}%p</b> 남음</span>
   </div>
@@ -376,7 +376,7 @@
           <td class="num">{{ s.current_price|floatformat:0|intcomma|default:"-" }}</td>
           <td class="num" style="font-weight:700">{% if s.level_pct != None %}{{ s.level_pct }}%{% else %}-{% endif %}</td>
           <td class="num">{% if product.is_no_ki %}노낙인{% else %}{{ product.ki }}%{% endif %}</td>
-          <td class="num" style="font-weight:800;color:{% if s.buffer == None %}var(--text-3){% elif s.buffer <= 5 %}var(--red){% elif s.buffer <= 15 %}var(--orange){% else %}var(--green){% endif %}">
+          <td class="num" style="font-weight:800;color:{% if s.buffer == None %}var(--text-3){% elif s.buffer <= 5 %}var(--red){% elif s.buffer <= 20 %}var(--orange){% else %}var(--green){% endif %}">
             {% if s.buffer != None %}{{ s.buffer }}%p{% else %}-{% endif %}
           </td>
         </tr>

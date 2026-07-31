@@ -2,7 +2,7 @@
 {% comment %}
 리스크 분석 한 행 — 클릭하면 해당 조건의 보유 상품 리스트가 펼쳐진다.
 사용: {% include "core/_risk_row.html" with row=a base="var(--blue)" warn=50 %}
-row = {name, count, amount, pct, items:[{pid,label,amount}]}
+row = {name, count, amount, pct, items:[{pid,label,amount,ki,issued}]}
 {% endcomment %}
 <details class="rk-row">
   <summary>
@@ -17,7 +17,10 @@ row = {name, count, amount, pct, items:[{pid,label,amount}]}
   </summary>
   <div class="rk-items">
     {% for it in row.items %}
-    <a href="{% url 'product_detail' it.pid %}">{{ it.label }} <span>{{ it.amount|intcomma }}원</span></a>
+    <a href="{% url 'product_detail' it.pid %}">
+      <span style="color:inherit">{{ it.label }}
+        <small style="color:var(--text-3)">· 낙인 {{ it.ki }}{% if it.issued %} · 발행 {{ it.issued|date:"y.n.j" }}{% endif %}</small></span>
+      <span>{{ it.amount|intcomma }}원</span></a>
     {% endfor %}
   </div>
 </details>

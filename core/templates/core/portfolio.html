@@ -62,26 +62,26 @@
 </p>
 
 {% if perf %}
-<div class="card" style="padding:14px 16px">
-  <div class="card-title" style="padding:0 0 10px"><i class="fa-solid fa-chart-column" style="color:var(--blue-dark)"></i> 누적 상환수익</div>
-  <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-end">
+<div class="card" style="padding:10px 16px 8px">
+  <div class="card-title" style="padding:0 0 6px"><i class="fa-solid fa-chart-column" style="color:var(--blue-dark)"></i> 누적 상환수익</div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end">
     <div>
       <div style="font-size:12px;color:var(--text-3)">누적 실현수익 ({{ perf.count }}건)</div>
-      <div style="font-size:24px;font-weight:800;color:{% if perf.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">{{ perf.profit|intcomma }}원</div>
+      <div style="font-size:20px;font-weight:800;color:{% if perf.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">{{ perf.profit|intcomma }}원</div>
     </div>
     <div>
       <div style="font-size:12px;color:var(--text-3)">실현수익률</div>
-      <div style="font-size:18px;font-weight:700">{{ perf.rate }}%</div>
+      <div style="font-size:16px;font-weight:700">{{ perf.rate }}%</div>
     </div>
     {% if perf.ann_rate is not None %}
     <div>
-      <div style="font-size:12px;color:var(--text-3)" title="청약일부터 상환일까지 실제 자금이 묶인 일수 기준으로 연환산">연환산 수익률 <small>(실경과일 기준)</small></div>
-      <div style="font-size:18px;font-weight:700;color:var(--blue-dark)">{{ perf.ann_rate }}%</div>
+      <div style="font-size:12px;color:var(--text-3)" title="발행일부터 상환일까지 실제 자금이 묶인 일수 기준으로 연환산">연환산 수익률 <small>(실경과일 기준)</small></div>
+      <div style="font-size:16px;font-weight:700;color:var(--blue-dark)">{{ perf.ann_rate }}%</div>
     </div>
     {% endif %}
     <div style="flex:1;min-width:260px">
       <div style="font-size:12px;color:var(--text-3);margin-bottom:4px">월별 실현수익</div>
-      <div style="display:flex;gap:6px;align-items:flex-end;height:80px">
+      <div style="display:flex;gap:6px;align-items:flex-end;height:48px">
         {% for b in perf.bars %}
         <div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%" title="{{ b.label }}: {{ b.value|intcomma }}원">
           <div style="width:100%;max-width:42px;height:{{ b.h }}%;min-height:3px;border-radius:3px 3px 0 0;background:{% if b.neg %}var(--red){% else %}var(--blue){% endif %}"></div>
@@ -153,7 +153,7 @@
 <div class="card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
     <span><i class="fa-solid fa-gauge-high" style="color:var(--blue)"></i> 낙인 경보
-      <small style="font-weight:400;color:var(--text-3)">(낙인까지 15%p 이내)</small></span>
+      <small style="font-weight:400;color:var(--text-3)">(낙인까지 20%p 이내)</small></span>
     {% if ki_updated %}
     <span style="font-weight:400;font-size:11px;color:var(--text-3)">{{ ki_updated|date:"m/d H:i" }} 기준</span>
     {% endif %}
@@ -191,12 +191,12 @@
     </table>
   </div>
   <p style="font-size:11px;color:var(--text-3);margin-top:10px">
-    낙인까지 = 가장 부진한 자산의 기준가 대비 % − 낙인 배리어. 위험 ≤ 5%p / 경고 ≤ 15%p. 상품 클릭 시 상세 낙인 현황.
+    낙인까지 = 가장 부진한 자산의 기준가 대비 % − 낙인 배리어. 위험 ≤ 5%p / 경고 ≤ 20%p. 상품 클릭 시 상세 낙인 현황.
   </p>
   {% else %}
   <div style="text-align:center;padding:18px 0;color:var(--green);font-weight:600;font-size:14px">
     <i class="fa-solid fa-circle-check"></i> 현재 위험(낙인 임박) 상품 없음
-    <div style="font-size:12px;color:var(--text-3);font-weight:400;margin-top:4px">보유 상품 모두 낙인까지 15%p 넘게 여유가 있습니다.</div>
+    <div style="font-size:12px;color:var(--text-3);font-weight:400;margin-top:4px">보유 상품 모두 낙인까지 20%p 넘게 여유가 있습니다.</div>
   </div>
   {% endif %}
 </div>
@@ -280,7 +280,7 @@
         <div class="m-l1">{{ inv.product.issuer }} <span class="m-no">{{ inv.product.product_no }}</span>
           {% with rp=inv.redemption_pending %}{% if rp %}<span class="badge" style="background:var(--green);color:#fff;font-size:9.5px">상환예정</span>{% endif %}{% endwith %}
         </div>
-        <div class="m-l2">{{ inv.product.assets_raw|asset_short }} · 낙인 <b>{% if inv.product.is_no_ki %}없음{% else %}{{ inv.product.ki|default:"-" }}{% endif %}</b>{% with buf=inv.ki_buffer %}{% if buf is not None %} · 낙인까지 <b style="color:{% if buf <= 5 %}var(--red){% elif buf <= 15 %}var(--orange){% else %}var(--green){% endif %}">{{ buf|floatformat:1 }}%p</b>{% endif %}{% endwith %}</div>
+        <div class="m-l2">{{ inv.product.assets_raw|asset_short }} · 낙인 <b>{% if inv.product.is_no_ki %}없음{% else %}{{ inv.product.ki|default:"-" }}{% endif %}</b>{% with buf=inv.ki_buffer %}{% if buf is not None %} · 낙인까지 <b style="color:{% if buf <= 5 %}var(--red){% elif buf <= 20 %}var(--orange){% else %}var(--green){% endif %}">{{ buf|floatformat:1 }}%p</b>{% endif %}{% endwith %}</div>
       </div>
       <div class="m-right">
         <span class="m-yield" style="font-size:15px">{{ inv.amount|intcomma }}<small>원</small></span>
@@ -303,7 +303,7 @@
             </a>
           </th>
           {% endfor %}
-          <th class="num">배리어</th><th class="num">주기</th><th></th>
+          <th class="num">주기</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -322,7 +322,9 @@
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw|asset_short }}</td>
           <td class="num" onclick="event.stopPropagation()">{% include "core/_amount_edit.html" with inv_id=inv.id field="amount" value=inv.amount %}</td>
           <td class="num" style="color:var(--blue-dark);font-weight:700">{{ inv.product.yield_rate|default:"-" }}%</td>
-          <td>{% if inv.product.issue_date %}{{ inv.product.issue_date|date:"Y.n.j" }}{% else %}-{% endif %}</td>
+          <td class="num" style="font-weight:700">{% if inv.product.is_no_ki %}없음{% else %}{{ inv.product.ki|floatformat:"-1"|default:"-" }}{% endif %}</td>
+          <td class="num">{% with b0=inv.product.stepdown_barriers.0 %}{% if b0 %}{{ b0|floatformat:"-1" }}%{% else %}-{% endif %}{% endwith %}</td>
+          <td>{% if inv.product.issued_on %}{{ inv.product.issued_on|date:"Y.n.j" }}{% else %}-{% endif %}</td>
           <td>
             {% with nxt=inv.next_evaluation badge=inv.schedule_badge %}
             {% if nxt %}
@@ -334,13 +336,11 @@
           <td class="num" style="font-weight:800;color:var(--green)">
             {% if nxt and nxt.expected %}{{ nxt.expected|intcomma }}{% else %}-{% endif %}
           </td>
+          {% endwith %}
           <td class="num">
             {% if inv.product.loss_prob != None %}
               <span style="font-weight:700;color:{% if inv.product.loss_prob > 5 %}var(--red){% elif inv.product.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ inv.product.loss_prob }}%</span>
             {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
-          </td>
-          <td class="num">{% if nxt and nxt.barrier %}{{ nxt.barrier }}%{% else %}-{% endif %}
-            {% endwith %}
           </td>
           <td class="num" style="white-space:nowrap">{{ inv.product.period_display }}</td>
           <td>
@@ -411,7 +411,7 @@
             / <span style="color:var(--red);font-weight:700">{{ v.worst_level|default:"-" }}%</span>
           </td>
           <td>{% if nxt %}{{ nxt.date|date:"Y.n.j" }}{% else %}-{% endif %}</td>
-          <td class="num" style="font-weight:700;color:{% if buf is None %}var(--text-3){% elif buf <= 5 %}var(--red){% elif buf <= 15 %}var(--orange){% else %}var(--green){% endif %}">
+          <td class="num" style="font-weight:700;color:{% if buf is None %}var(--text-3){% elif buf <= 5 %}var(--red){% elif buf <= 20 %}var(--orange){% else %}var(--green){% endif %}">
             {% if buf is not None %}{{ buf|floatformat:1 }}%p{% else %}-{% endif %}
           </td>
         </tr>

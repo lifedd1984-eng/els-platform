@@ -207,7 +207,7 @@ def notify_weekly_digest(stdout=None):
             continue
         if buf <= 5:
             danger += 1
-        elif buf <= 15:
+        elif buf <= 20:
             warn += 1
         else:
             safe += 1

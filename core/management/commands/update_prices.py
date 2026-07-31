@@ -9,7 +9,7 @@
 
 위험 구간:
   - 버퍼 ≤ 5%p  → '위험'
-  - 버퍼 ≤ 15%p → '경고'
+  - 버퍼 ≤ 20%p → '경고'
 """
 
 from django.conf import settings
@@ -19,7 +19,7 @@ from core import market, telegram
 from core.models import Investment, KnockInStatus, KnockInAlert
 
 
-BANDS = [("위험", 5), ("경고", 15)]
+BANDS = [("위험", 5), ("경고", 20)]
 
 
 class Command(BaseCommand):

@@ -618,7 +618,9 @@ def _analyze_risk(holding, total_invested):
 
     for inv in holding:
         p = inv.product
-        item = {"pid": p.id, "label": f"{p.issuer} {p.product_no}", "amount": inv.amount}
+        item = {"pid": p.id, "label": f"{p.issuer} {p.product_no}", "amount": inv.amount,
+                "ki": "없음" if p.is_no_ki else (f"{p.ki:g}" if p.ki is not None else "-"),
+                "issued": p.issued_on}
         for asset in _split_assets(p.assets_raw):
             b = asset_exposure[asset]
             b["amount"] += inv.amount
@@ -659,7 +661,7 @@ def _analyze_risk(holding, total_invested):
 
     assets = _top(asset_exposure)
     issuers = _top(issuer_exposure)
-    weeks = [_row(k.strftime("%y.%m.%d") + " 주", v)
+    weeks = [_row(f"{k.month}.{k.day}~{(k + timedelta(days=6)).month}.{(k + timedelta(days=6)).day}", v)
              for k, v in sorted(week_exposure.items(), key=lambda kv: -kv[1]["amount"])]
     # 낙인 낮은(깊은) 순 정렬, 노낙인·미상은 뒤로
     def _ki_order(name):
@@ -713,7 +715,7 @@ def portfolio(request):
                 user=request.user,
                 product=product,
                 amount=int(request.POST.get("amount", "0").replace(",", "")),
-                # 청약일 미입력 시 상품 발행일 기준 — 실현수익 연환산이
+                # 발행일 미입력 시 상품 발행일 기준 — 실현수익 연환산이
                 # 발행일~상환일 실경과일로 계산되므로 발행일이 정확한 기준
                 invested_at=(request.POST.get("invested_at")
                              or product.issue_date or date.today()),
@@ -808,7 +810,7 @@ def portfolio(request):
     # ── 리스크 분석 ──────────────────────────────
     risk = _analyze_risk(holding, total_invested)
 
-    # ── 낙인 모니터링: 전체 보유 중 위험/경고(버퍼 ≤ 15%p)만 추림 ──
+    # ── 낙인 모니터링: 전체 보유 중 위험/경고(버퍼 ≤ 20%p)만 추림 ──
     ki_updated = None
     ki_alerts = []
     for inv in holding:
@@ -817,7 +819,7 @@ def portfolio(request):
             if s.updated_at and (ki_updated is None or s.updated_at > ki_updated):
                 ki_updated = s.updated_at
         buf = inv.ki_buffer
-        if worst is not None and buf is not None and buf <= 15:
+        if worst is not None and buf is not None and buf <= 20:
             ki_alerts.append({"inv": inv, "worst": worst, "buffer": buf})
     ki_alerts.sort(key=lambda a: a["buffer"])  # 위험한 순
     has_ki_data = ki_updated is not None
@@ -838,7 +840,11 @@ def portfolio(request):
         "assets": lambda i: (i.product.assets_raw or ""),
         "amount": lambda i: i.amount or 0,
         "yield": lambda i: i.product.yield_rate if i.product.yield_rate is not None else -1,
-        "issue": lambda i: (i.product.issue_date or date.max),
+        "issue": lambda i: (i.product.issued_on or date.max),
+        "ki": lambda i: (999 if i.product.is_no_ki or i.product.ki is None else i.product.ki),
+        "b1": lambda i: (i.product.stepdown_barriers[0]
+                         if i.product.stepdown_barriers
+                         and isinstance(i.product.stepdown_barriers[0], (int, float)) else 999),
         "next": lambda i: (i.next_evaluation["date"] if i.next_evaluation else date.max),
         "pretax": _pretax,
         "loss": lambda i: (i.product.loss_prob if i.product.loss_prob is not None else -1),
@@ -872,6 +878,7 @@ def portfolio(request):
         for k, lbl, num in [
             ("issuer", "상품", False), ("assets", "기초자산", False),
             ("amount", "투자금액", True), ("yield", "수익률", True),
+            ("ki", "낙인", True), ("b1", "1차 조기상환", True),
             ("issue", "발행일", False),
             ("next", "다음 평가일", False), ("pretax", "예상상환금", True),
             ("loss", "손실확률", True),
@@ -935,7 +942,7 @@ def portfolio(request):
 
 
 # ── 포트폴리오 엑셀 양식 다운로드 ─────────────────
-PORTFOLIO_COLS = ["발행사", "상품번호", "투자금액(원)", "청약일(YYYY-MM-DD)", "증권사/계좌", "메모"]
+PORTFOLIO_COLS = ["발행사", "상품번호", "투자금액(원)", "발행일(YYYY-MM-DD)", "증권사/계좌", "메모"]
 
 
 @login_required
@@ -963,7 +970,7 @@ def portfolio_template(request):
         ["2. 발행사 + 상품번호로 수집된 상품과 자동 매칭합니다."],
         ["   (주간청약/상품 목록에 있는 발행사·상품번호와 동일하게 입력)"],
         ["3. 투자금액은 숫자만 (원 단위). 예: 10000000"],
-        ["4. 청약일은 YYYY-MM-DD. 비우면 오늘 날짜로 등록됩니다."],
+        ["4. 발행일은 YYYY-MM-DD. 비우면 오늘 날짜로 등록됩니다."],
         ["5. 증권사/계좌·메모는 선택입니다."],
         ["6. 예시 행은 삭제하고 업로드하세요."],
         [""],
