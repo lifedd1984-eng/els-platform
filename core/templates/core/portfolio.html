@@ -38,6 +38,9 @@
     <div class="stat-value" style="color:var(--green)">
       +{{ expected_profit_pretax|intcomma }}<small>원</small>
     </div>
+    {% if expected_profit_rate is not None %}
+    <div class="type-split"><span style="color:var(--text-3)">총 투자금액 대비 <b style="color:var(--green)">+{{ expected_profit_rate }}%</b></span></div>
+    {% endif %}
   </div>
   <div class="stat-card">
     <div class="stat-label">예상 손실율 <small style="color:var(--text-3)">(금액가중)</small></div>

@@ -801,6 +801,9 @@ def portfolio(request):
         sched = i.schedule
         total_expected_pretax += sched[0]["expected"] if sched else i.amount
     expected_profit_pretax = total_expected_pretax - total_invested
+    # 수익률 = 예상 세전수익 ÷ 총 투자금액 (연환산 아님 — 1차 상환까지의 단순 수익률)
+    expected_profit_rate = (round(expected_profit_pretax / total_invested * 100, 2)
+                            if total_invested else None)
 
     # 포트폴리오 예상 손실율 = Σ(투자금 × 손실확률) / Σ투자금  (금액 가중평균)
     weighted_loss = 0
@@ -946,6 +949,7 @@ def portfolio(request):
         "total_redeemed_profit": total_redeemed_profit,
         "total_expected_pretax": total_expected_pretax,
         "expected_profit_pretax": expected_profit_pretax,
+        "expected_profit_rate": expected_profit_rate,
         "port_loss_rate": port_loss_rate,
         "loss_coverage_pct": loss_coverage_pct,
         "risk": risk,
