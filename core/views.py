@@ -1401,10 +1401,48 @@ def redemption_calendar(request):
             })
         weeks.append(row)
 
+    # ── 이 달 예상 결과 요약 ──
+    # 한 투자가 같은 달에 두 번 평가받으면 첫 회차에서 상환되고 끝나므로
+    # 가장 이른 평가 1건만 대표로 집계한다(투자금액·예상상환금 중복 방지).
+    first_ev = {}
+    for day in sorted(events):
+        for ev in events[day]:
+            first_ev.setdefault(ev["inv"].id, (day, ev))
+    summary = None
+    if first_ev:
+        rows = [ev for _, ev in first_ev.values()]
+        invested = sum(ev["inv"].amount for ev in rows)
+        expected = sum(ev["expected"] for ev in rows if ev["expected"])
+        exp_n = sum(1 for ev in rows if ev["expected"])
+        by_type = {"종목형": {"amount": 0, "count": 0}, "지수형": {"amount": 0, "count": 0}}
+        loss_w = loss_base = 0
+        for ev in rows:
+            p = ev["inv"].product
+            b = by_type.get(p.asset_type)
+            if b:
+                b["amount"] += ev["inv"].amount
+                b["count"] += 1
+            if p.loss_prob is not None:
+                loss_w += ev["inv"].amount * p.loss_prob
+                loss_base += ev["inv"].amount
+        summary = {
+            "count": len(rows),
+            "upcoming": sum(1 for _, (d, _e) in first_ev.items() if not _e["is_past"]),
+            "past": sum(1 for _, (d, _e) in first_ev.items() if _e["is_past"]),
+            "invested": invested,
+            "expected": expected,
+            "expected_n": exp_n,
+            "profit": expected - sum(ev["inv"].amount for ev in rows if ev["expected"]),
+            "by_type": by_type,
+            "loss_rate": round(loss_w / loss_base, 2) if loss_base else None,
+            "loss_coverage": round(loss_base / invested * 100) if invested else 0,
+        }
+
     return render(request, "core/calendar.html", {
         "year": year, "month": month, "weeks": weeks,
         "prev_y": prev_y, "prev_m": prev_m, "next_y": next_y, "next_m": next_m,
         "event_count": sum(len(v) for v in events.values()),
+        "summary": summary,
         "active_nav": "calendar",
     })
 

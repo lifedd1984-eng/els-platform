@@ -45,6 +45,57 @@
   </table>
 </div>
 
+{% if summary %}
+<div class="card" style="padding:14px 16px">
+  <div class="card-title" style="padding:0 0 12px">
+    <i class="fa-solid fa-calculator" style="color:var(--blue-dark)"></i>
+    {{ month }}월 예상 결과
+    <small style="font-weight:400;color:var(--text-3)">(조기상환 성공 가정)</small>
+  </div>
+  <div class="stat-grid cols-5" style="margin-bottom:0">
+    <div class="stat-card">
+      <div class="stat-label">평가 대상</div>
+      <div class="stat-value">{{ summary.count }}<small>건</small></div>
+      <div class="type-split">
+        <span>예정 <b>{{ summary.upcoming }}건</b></span>
+        <span>지남 <b>{{ summary.past }}건</b></span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">대상 투자금액</div>
+      <div class="stat-value">{{ summary.invested|intcomma }}<small>원</small></div>
+      <div class="type-split">
+        <span><i class="dot" style="background:var(--orange)"></i>종목형 <b>{{ summary.by_type.종목형.count }}건</b></span>
+        <span><i class="dot" style="background:var(--blue)"></i>지수형 <b>{{ summary.by_type.지수형.count }}건</b></span>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">예상 상환금</div>
+      <div class="stat-value" style="color:var(--green)">{{ summary.expected|intcomma }}<small>원</small></div>
+      {% if summary.expected_n < summary.count %}
+      <div class="type-split"><span style="color:var(--text-3)">{{ summary.expected_n }}건 산출</span></div>
+      {% endif %}
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">예상 세전수익</div>
+      <div class="stat-value" style="color:var(--green)">+{{ summary.profit|intcomma }}<small>원</small></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">예상 손실율 <small style="color:var(--text-3)">(금액가중)</small></div>
+      <div class="stat-value" style="color:{% if summary.loss_rate > 5 %}var(--red){% elif summary.loss_rate > 0 %}var(--orange){% else %}var(--green){% endif %}">
+        {% if summary.loss_rate != None %}{{ summary.loss_rate }}<small>%</small>{% else %}<small>-</small>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div style="font-size:11.5px;color:var(--text-3);line-height:1.6;margin-top:10px">
+    이 달에 평가일이 있는 보유 상품 기준입니다. 같은 상품이 이 달에 두 번 평가받으면 가장 이른 회차만 셉니다
+    (첫 회차에 조기상환되면 이후 평가는 열리지 않습니다).
+    예상 상환금·세전수익은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치이며 실제 결과는 평가일 종가로 결정됩니다.
+    {% if summary.loss_coverage < 100 %}<span style="color:var(--orange)">손실확률 산출 상품이 투자금의 {{ summary.loss_coverage }}%.</span>{% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% if event_count %}
 <div class="card">
   <div class="card-title">이 달 평가 상세</div>
