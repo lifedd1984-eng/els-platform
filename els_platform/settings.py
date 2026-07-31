@@ -48,6 +48,10 @@ ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "loca
 # 터널/역방향 프록시 뒤에서 CSRF 신뢰 도메인 (https 포함)
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.environ.get("DJANGO_CSRF_TRUSTED", "").split(",") if o.strip()]
 
+# 로그인 성공이 CSRF 토큰을 회전시킨 뒤 중복 제출이 403으로 떨어지는 문제 대응:
+# 이미 인증된 사용자는 에러 대신 홈으로 보낸다 (2026-07-31 태훈 계정 사례)
+CSRF_FAILURE_VIEW = "core.views.csrf_failure"
+
 
 # Application definition
 

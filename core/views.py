@@ -1517,6 +1517,19 @@ def pwa_icon(request, size):
     return resp
 
 
+def csrf_failure(request, reason=""):
+    """CSRF 검증 실패 커스텀 처리 (settings.CSRF_FAILURE_VIEW).
+
+    로그인 성공이 CSRF 토큰을 회전시킨 직후 같은 폼이 다시 제출되면
+    (모바일 연타·브라우저 재전송) 옛 토큰이라 403이 난다. 이 경우
+    사용자는 이미 로그인돼 있으므로 에러 대신 홈으로 보낸다.
+    비로그인 실패(오래 열린 페이지 등)만 새로고침 안내 페이지를 보여준다.
+    """
+    if request.user.is_authenticated:
+        return redirect(settings.LOGIN_REDIRECT_URL)
+    return render(request, "core/csrf_failure.html", status=403)
+
+
 # ── 웹 푸시 구독 ─────────────────────────────────
 def service_worker(request):
     """서비스 워커 스크립트 — 루트(/sw.js)에서 서빙해야 스코프가 사이트 전체가 된다."""

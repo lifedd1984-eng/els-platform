@@ -1,0 +1,18 @@
+{% extends "core/base.html" %}
+{% block title %}보안 확인 만료 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:90px auto;text-align:center;word-break:keep-all">
+  <div style="font-size:44px;margin-bottom:14px">🔒</div>
+  <h1 style="font-size:24px;font-weight:800;letter-spacing:-0.6px;margin-bottom:12px">
+    보안 확인이 만료됐어요</h1>
+  <p style="font-size:14.5px;color:var(--text-2);line-height:1.7;margin-bottom:28px">
+    페이지가 오래 열려 있었거나 같은 요청이 두 번 제출되면 이렇게 나올 수 있어요.<br>
+    아래 버튼으로 돌아가서 한 번만 다시 시도해 주세요.
+  </p>
+  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <a href="{% url 'login' %}" class="btn btn-primary" style="padding:12px 26px">로그인으로 돌아가기</a>
+    <a href="{% url 'weekly' %}" class="btn" style="padding:12px 26px">주간 청약 보기</a>
+  </div>
+</div>
+{% endblock %}
