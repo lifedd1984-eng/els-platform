@@ -64,6 +64,7 @@ class Command(BaseCommand):
 
         n_new = 0
         missing_assets = []   # KOFIA가 기초자산을 빈 값으로 내려준 상품 (경보용)
+        odd_period = []       # 상품기간÷배리어단계로 역산한 주기와 어긋난 상품 (경보용)
         for row in rows:
             desc = row["description"]
             ki = parsers.extract_ki(desc)
@@ -81,6 +82,17 @@ class Command(BaseCommand):
                 else:
                     missing_assets.append(f"{row['issuer']} {row['product_no']} (~{row['sub_end']})")
             asset_type = parsers.classify_asset(row["assets_raw"]) or ""
+
+            # 조기상환주기 정합성 — 설명 원문에 주기가 명시된 경우에만 대조한다.
+            # 기간÷배리어수 역산은 쓰지 않는다: 원문이 만기 회차를 생략하거나
+            # 괄호로 묶어 배리어가 실제보다 적게 파싱되는 일이 흔해 오탐이 대부분이었다.
+            # schedule(평가일)이 이 값으로 만들어져 알림·캘린더가 통째로 밀리므로
+            # 원문과 어긋나는 건은 조용히 넘기지 않는다. (2026-07-31)
+            stated = parsers.extract_period_text(desc)
+            if period and stated and stated != period:
+                odd_period.append(
+                    f"{row['issuer']} {row['product_no']}: 저장 {period}개월 / 원문 {stated}개월"
+                )
 
             is_no_ki = ki == "NoKI"
             ki_val = None if (ki is None or is_no_ki) else int(ki)
@@ -131,6 +143,18 @@ class Command(BaseCommand):
                 + "\nKOFIA 웹에서 실물 확인 후 보정 필요 (유형·손실확률 계산 불가 상태)"
             )
             self.stdout.write(f"[기초자산 누락 경보] {len(missing_assets)}건 발송")
+
+        # 조기상환주기 이상 경보 — 평가일 계산의 뿌리라 즉시 확인 필요
+        if odd_period and should_notify:
+            lines = [f"[주기 이상] 조기상환주기가 상품기간과 맞지 않는 상품 {len(odd_period)}건"]
+            lines += [f"- {m}" for m in odd_period[:10]]
+            if len(odd_period) > 10:
+                lines.append(f"... 외 {len(odd_period)-10}건")
+            lines.append("설명서 확인 후 period_months 보정 필요 "
+                         "(평가일·알림 날짜가 어긋납니다)")
+            telegram.send_message("\n".join(lines))
+            self.stdout.write(f"[주기 이상 경보] {len(odd_period)}건 발송")
+
         ImportLog.objects.create(
             filename=f"kofia_auto_{timezone_today()}", row_count=len(rows), new_count=n_new
         )

@@ -356,6 +356,12 @@ def extract_barriers(text):
 
 
 # 명시적 "주기 텍스트" 패턴 — 있으면 주기 확정(최우선)
+# "6개월이후1개월단위" 처럼 1차 평가와 이후 간격이 다른 표기.
+# 아래 일반 패턴보다 먼저 봐야 한다 — "3년만기 6개월이후1개월단위"에서
+# r'만기\s*(\d+)개월'이 6을 물어 주기를 6개월로 잘못 읽는 사례가 있었다
+# (한국투자 18932·18935: 실제는 첫 6개월 후 매월, 배리어 31단계). 2026-07-31
+_STEP_FIRST_INTERVAL = re.compile(r'(\d+)\s*개월\s*이후\s*(\d+)\s*개월\s*단위')
+
 _PERIOD_TEXT_PATTERNS = [
     r'(\d+)개월단위 조기상환',
     r'상환주기\s*(\d+)개월',
@@ -371,11 +377,22 @@ _PERIOD_TEXT_PATTERNS = [
 ]
 
 
+def extract_step_first_interval(text):
+    """'N개월이후M개월단위' 표기에서 (1차평가 개월, 이후 간격) 반환. 없으면 None."""
+    if not text:
+        return None
+    m = _STEP_FIRST_INTERVAL.search(str(text))
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
 def extract_period_text(text):
     """설명에 명시적 주기 텍스트가 있으면 정수 개월 반환, 없으면 None (폴백 없음)."""
     if not text:
         return None
     text = str(text)
+    step = extract_step_first_interval(text)
+    if step:
+        return step[1]
     for pat in _PERIOD_TEXT_PATTERNS:
         m = re.search(pat, text)
         if m:
@@ -395,6 +412,11 @@ def infer_schedule(n_barriers, issue_date, expiry_date, desc):
     """
     if not n_barriers or n_barriers < 1:
         return None
+
+    # (0-1) '6개월이후1개월단위' — 1차와 이후 간격이 다른 비균등 구조
+    step = extract_step_first_interval(desc)
+    if step and step[0] > 0 and step[1] > 0:
+        return (step[0], step[1], False)
 
     # (0) 텍스트 주기 최우선 — 균등으로 확정
     tp = extract_period_text(desc)
@@ -435,6 +457,9 @@ def extract_period(text, issue_date=None, expiry_date=None, barriers=None):
     if not text:
         text = ''
     text = str(text)
+    step = extract_step_first_interval(text)
+    if step:
+        return step[1]
     for pat in _PERIOD_TEXT_PATTERNS:
         m = re.search(pat, text)
         if m:
