@@ -291,6 +291,19 @@
       {% if chart.based_on_issue %}(발행일 기준가 = 100){% else %}(미발행 — 1년 전 = 100){% endif %}
     </small>
   </div>
+  {% if chart.peak_ratio %}
+  <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;background:var(--bg);
+              border-radius:8px;padding:9px 12px;margin-bottom:10px">
+    <span style="font-size:12.5px;font-weight:700">고점대비</span>
+    <b style="font-size:17px;letter-spacing:-0.5px;color:{% if chart.peak_ratio < 90 %}var(--green){% elif chart.peak_ratio < 95 %}var(--blue-dark){% else %}var(--text-2){% endif %}">{{ chart.peak_ratio }}%</b>
+    <span style="font-size:12px;color:var(--text-2)">
+      1년 최고가 대비 {{ chart.peak_ratio }}% 자리에서 발행 —
+      {% if chart.peak_ratio < 95 %}고점 발행이 아닙니다{% else %}고점 부근입니다{% endif %}</span>
+    <span style="font-size:11.5px;color:var(--text-3);margin-left:auto">
+      {% for s in chart.series %}{% if s.peak_ratio %}{{ s.asset|asset_short }} {{ s.peak_ratio }}%{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}
+    </span>
+  </div>
+  {% endif %}
   <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:6px">
     {% for s in chart.series %}
     <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ s.color }};margin-right:4px"></span>{{ s.asset }} <b>{{ s.last }}</b></span>

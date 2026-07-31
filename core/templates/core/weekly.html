@@ -218,7 +218,7 @@
       {{ products|length }}건
       <select class="m-sort" onchange="if(this.value)location.href=this.value" aria-label="정렬">
         {% for c in columns %}
-          {% if c.label == '수익률' or c.label == '낙인' or c.label == '손실확률' or c.label == '마감' %}
+          {% if c.label == '수익률' or c.label == '낙인' or c.label == '고점대비' or c.label == '손실확률' or c.label == '마감' %}
           <option value="{{ c.url }}" {% if c.active %}selected{% endif %}>{{ c.label }}{% if c.active %} {% if c.dir == 'asc' %}오름차순{% else %}내림차순{% endif %}{% endif %}</option>
           {% endif %}
         {% endfor %}
@@ -260,6 +260,11 @@
           <td class="num">{{ p.barrier_last|default:"-" }}</td>
           <td class="num" style="white-space:nowrap">{{ p.term_display }}</td>
           <td class="num" style="white-space:nowrap">{{ p.period_months|default:"-" }}{% if p.period_months %}개월{% endif %}</td>
+          <td class="num" title="기초자산의 최근 종가가 1년 최고가의 몇 %인지 — 낮을수록 이미 내린 자리에서 발행됩니다">
+            {% if p.peak_ratio %}
+              <span style="font-weight:700;color:{% if p.peak_ratio < 90 %}var(--green){% elif p.peak_ratio < 95 %}var(--blue-dark){% else %}var(--text-2){% endif %}">{{ p.peak_ratio }}%</span>
+            {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
+          </td>
           <td class="num">
             {% if p.loss_prob is not None %}
               <span style="font-weight:700;color:{% if p.loss_prob > 5 %}var(--red){% elif p.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ p.loss_prob }}%</span>

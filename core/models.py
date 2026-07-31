@@ -191,6 +191,34 @@ def v7_ki_cut(asset_type):
     return cut
 
 
+def attach_peak_ratios(products):
+    """상품 목록에 고점대비(%)를 p.peak_ratio로 붙인다.
+
+    v7_peak_ratio와 같은 정의(자산별 최근종가÷52주최고 중 최댓값)지만
+    티커 단위로 한 번만 조회해 목록 화면에서도 쓸 수 있게 한 배치판.
+    한 주 상품 283건이 구분 티커 23개뿐이라 캐시가 차면 사실상 공짜다.
+    """
+    from core import market as _m
+    cache = {}
+    for p in products:
+        peak = None
+        for name in _m.split_assets(p.assets_raw or ""):
+            tk = _m.resolve_ticker(name)
+            if not tk:
+                peak = None
+                break
+            if tk not in cache:
+                hist = _m.fetch_history(tk, days=370)
+                closes = [c for _, c in (hist or []) if c]
+                cache[tk] = round(closes[-1] / max(closes) * 100) if closes else None
+            r = cache[tk]
+            if r is None:
+                peak = None
+                break
+            peak = r if peak is None else max(peak, r)
+        p.peak_ratio = peak
+
+
 def v7_peak_ratio(p):
     """고점 위치(%) = 자산별 (최근 종가 ÷ 직전 52주 최고) 중 최댓값.
 

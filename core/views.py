@@ -10,7 +10,9 @@ from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from .models import ImportLog, Investment, Preset, Product, WatchItem
+from .models import (
+    ImportLog, Investment, Preset, Product, WatchItem, attach_peak_ratios,
+)
 
 # 가족(운영진) 전용 — 공유 데이터(관심·프리셋·업로드)는 staff 계정만
 family_required = user_passes_test(lambda u: u.is_active and u.is_staff, login_url="/accounts/login/")
@@ -162,26 +164,34 @@ def weekly(request):
         "last": "barrier_last", "period": "period_months", "type": "asset_type",
         "sub_end": "sub_end", "loss": "loss_prob",
     }
+    # term_months·peak_ratio는 계산값(DB 컬럼 아님) → Python 정렬
+    PY_SORT = {"term": lambda p: p.term_months, "peak": lambda p: p.peak_ratio}
+
     # 기본 정렬: 수익률 내림차순 (정렬 파라미터 없을 때)
     sort_key = request.GET.get("sort", "yield")
-    if sort_key != "term" and sort_key not in SORT_FIELDS:
+    if sort_key not in PY_SORT and sort_key not in SORT_FIELDS:
         sort_key = "yield"
     sort_dir = request.GET.get("dir", "desc" if "sort" not in request.GET else "asc")
-    if sort_key == "term":
-        # term_months는 계산 property(DB 컬럼 아님) → Python 정렬. None은 항상 뒤로.
-        # 정렬 방향과 무관하게 None이 끝에 오도록 sentinel 사용.
-        desc = sort_dir == "desc"
-        sentinel = float("-inf") if desc else float("inf")
+    if sort_key in PY_SORT:
         products = list(qs.order_by("-yield_rate"))
-        products.sort(
-            key=lambda p: p.term_months if p.term_months is not None else sentinel,
-            reverse=desc,
-        )
     else:
         field = SORT_FIELDS[sort_key]
         ordering = (F(field).desc(nulls_last=True) if sort_dir == "desc"
                     else F(field).asc(nulls_last=True))
         products = list(qs.order_by(ordering, "-yield_rate"))
+
+    # 고점대비 — 표시·정렬 모두에 필요하므로 정렬 전에 붙인다
+    attach_peak_ratios(products)
+
+    if sort_key in PY_SORT:
+        # None은 정렬 방향과 무관하게 항상 뒤로 (sentinel)
+        desc = sort_dir == "desc"
+        sentinel = float("-inf") if desc else float("inf")
+        getter = PY_SORT[sort_key]
+        products.sort(
+            key=lambda p: getter(p) if getter(p) is not None else sentinel,
+            reverse=desc,
+        )
 
     # 정렬 헤더용 컬럼 메타 (URL은 현재 필터 유지 + 정렬 토글)
     base_params = request.GET.copy()
@@ -198,7 +208,8 @@ def weekly(request):
         ("issuer", "발행사", False), ("product_no", "상품번호", False),
         ("assets", "기초자산", False), ("yield", "수익률", True),
         ("ki", "낙인", True), ("first", "1차", True), ("last", "막차", True),
-        ("term", "기간", True), ("period", "주기", True), ("loss", "손실확률", True),
+        ("term", "기간", True), ("period", "주기", True),
+        ("peak", "고점대비", True), ("loss", "손실확률", True),
         ("type", "유형", False), ("sub_end", "마감", True),
     ]
     columns = [
@@ -430,6 +441,8 @@ def product_detail(request, pk):
             (hi_d, hi_c), (lo_d, lo_c) = s["hi"], s["lo"]
             chart_series.append({
                 "asset": s["asset"], "color": palette[i % 4],
+                # 고점대비 = 최근 종가 ÷ 1년 최고가 × 100 (레이더 고점 게이트와 같은 정의)
+                "peak_ratio": round(s["cur"] / hi_c * 100) if hi_c else None,
                 "poly": " ".join(f"{_x(d)},{_y(v)}" for d, v in s["pts"]),
                 "last": round(s["pts"][-1][1], 1),
                 # 실제 가격 정보 (기준가 통화 단위 그대로)
@@ -451,8 +464,12 @@ def product_detail(request, pk):
         if product.ki is not None and not product.is_no_ki:
             chart_lines.append({"label": f"낙인 {product.ki:g}",
                                 "y": _y(product.ki), "color": "#e03131", "dash": "2 3"})
+        # 상품 단위 고점대비 = 자산별 값 중 최댓값 (레이더 v7 게이트와 같은 정의 —
+        # 가장 덜 빠진 자산이 고점 부근이면 그 상품은 고점 발행으로 본다)
+        peaks = [s["peak_ratio"] for s in chart_series if s["peak_ratio"] is not None]
         chart = {"W": W, "H": H, "series": chart_series, "lines": chart_lines,
-                 "based_on_issue": bool(base_date)}
+                 "based_on_issue": bool(base_date),
+                 "peak_ratio": max(peaks) if peaks else None}
 
     return render(request, "core/product_detail.html", {
         "product": product, "is_watched": is_watched, "svg": svg,
