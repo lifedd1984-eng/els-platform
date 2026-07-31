@@ -19,7 +19,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 KEEP_PRIMARY = 30   # F: (PC 대용량 드라이브)
-KEEP_LOCAL = 7      # EC2 로컬 폴백 (디스크 여유 2GB 미만이라 최소만)
+KEEP_LOCAL = 5      # EC2 로컬 폴백 — DB 383MB 시대 기준 재조정 (2026-07-31, 디스크 87% 사건)
 PRIMARY_DIR = Path("F:/ELS_backup")
 
 
