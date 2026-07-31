@@ -299,6 +299,34 @@ def _add_months(d: date, months: int) -> date:
             day -= 1
 
 
+# 발행사별 ELS 안내 페이지 — 상품별 broker_url이 없을 때의 대체 링크.
+# KOFIA는 '청약중' API 응답에만 상품별 URL을 실어 주므로 2026-07-18(수집 시작)
+# 이전 상품은 개별 링크를 영영 구할 수 없다. 그 상품들에서 "증권사 ELS 목록"으로
+# 보내 사용자가 직접 찾아볼 수 있게 한다. 2026-07-31 전 주소 응답 확인.
+# 에스케이증권은 공개 ELS 페이지를 찾지 못해 제외(대체 링크 없이 버튼 숨김).
+BROKER_SITE_URLS = {
+    "한국투자증권": "https://www.truefriend.com/main/mall/openels/EdlsGuide.jsp?cmd=TF02ce000000",
+    "신한투자증권": "https://www.shinhaninvest.com/siw/wealth-management/els/els-info/view.do",
+    "키움증권": "https://www.kiwoom.com/wm/edl/es010/edlElsView?_reqAgent=form",
+    "미래에셋증권": "https://securities.miraeasset.com/hks/hks4023/p02.do",
+    "삼성증권": "https://www.samsungpop.com/ux/kor/finance/els/saleGoods/ingDetailTab1.do",
+    "NH투자증권": "https://www.nhsec.com/finance/els/sellingProductList.action",
+    "KB증권": "https://www.kbsec.com/go.able?linkcd=s010201000000",
+    "메리츠증권": "https://home.imeritz.com/drvtlnkdprod/SbscCmptProd.do",
+    "하나증권": "https://www.hanaw.com/main/finance/els/FP_050100_P1.cmd",
+    "한화투자증권": "https://www.hanwhawm.com/main/finance/info/FI310_1.cmd",
+    "유안타증권": "http://www.myasset.com/myasset/mall/els/elsDls/MA_0401001_P1.cmd",
+    "비엔케이투자증권": "http://www.bnkfn.co.kr/els/elsdls2.jspx?cmd=list&subTp=A00",
+    "DB증권": "https://www.dbsec.co.kr/product/els/pr_ElsDetail_viw.do",
+    "교보증권": "https://www.iprovest.com/main.jsp",
+    "신영증권": "https://www.shinyoung.com/?page=10070",
+    "현대차증권": "https://www.hmsec.com/product/els/subscr_open/ol4706q_1.to?gdsTp=7",
+    "유진투자증권": "https://www.eugenefn.com/ingo/iged/iged200r.do",
+    "대신증권": "https://www.daishin.com/content/w/fnmall/els/elsDlsItmInfo.ds",
+    "아이비케이투자증권": "https://www.ibks.com/fundproduct/els/elsInfo_popsearch.do",
+}
+
+
 class Product(models.Model):
     """수집된 ELS 상품 — 이력 축적용, 삭제하지 않음."""
     PRODUCT_TYPES = [("ELS", "ELS"), ("DLS", "DLS"), ("ELB", "ELB"), ("DLB", "DLB")]
@@ -381,6 +409,13 @@ class Product(models.Model):
         if not self.sub_end:
             return None
         return (self.sub_end - date.today()).days
+
+    @property
+    def broker_site_url(self):
+        """상품별 broker_url이 없을 때 쓸 발행사 ELS 페이지. 없으면 None."""
+        if self.broker_url:
+            return None
+        return BROKER_SITE_URLS.get(self.issuer)
 
     @property
     def issued_on(self):

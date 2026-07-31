@@ -21,6 +21,10 @@
     <a href="{{ product.broker_url }}" target="_blank" rel="noopener" class="btn btn-sm"
        title="발행 증권사의 상품 상세페이지 (새 창)">
       <i class="fa-solid fa-arrow-up-right-from-square" style="color:var(--blue-dark)"></i> 증권사 페이지</a>
+    {% elif product.broker_site_url %}
+    <a href="{{ product.broker_site_url }}" target="_blank" rel="noopener" class="btn btn-sm"
+       title="이 상품의 개별 페이지 주소는 없습니다. {{ product.issuer }} ELS 안내 페이지에서 직접 찾아보세요 (새 창)">
+      <i class="fa-solid fa-magnifying-glass" style="color:var(--text-3)"></i> {{ product.issuer }}에서 찾기</a>
     {% endif %}
   </span>
 </div>
