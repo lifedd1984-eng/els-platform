@@ -45,6 +45,7 @@ RADAR_TOP_WEAK = 15     # (상위)+1 ~ 이 순위 = 강한 신호, 그 외 배�
 # 1년 성공률 87.7%→95.3%. 공급은 주당 3.0→1.5개로 감소 — 안전 우선 결정.
 RADAR_V7_B0_MAX = {"종목형": 80, "지수형": 90}   # ① 1차 조기상환 배리어 이하
 RADAR_V7_PEAK_MAX = 95    # ② 워스트 자산의 52주 최고 대비 위치(%) 미만 — 고점 발행 회피
+RADAR_V7_RELAX_RET1Y = 15  # ②-완화: 고점 95% 이상이어도 직전 1년 상승률이 이 값(%) 이하면 통과
 RADAR_V7_KI_PCT = 0.30    # ③ 낙인 < 직전 연도 같은 유형 분포 하위 30% 값 (미만)
 RADAR_V7_KI_MIN_SAMPLE = 100   # 직전 연도 표본이 이보다 적으면 v6 고정 컷으로 폴백
 RADAR_V7_TIER = "타겟 신호"   # 두 유형 공통 배지명 (유형 구분은 지수형/종목형 배지가 담당)
@@ -221,12 +222,43 @@ def attach_peak_ratios(products):
         p.peak_ratio = peak
 
 
+def v7_peak_gate(p):
+    """고점 발행 회피 게이트 판정 → (통과 여부, 표시용 고점위치%).
+
+    자산별로: 고점 대비 95% 미만이면 통과. 95% 이상이면 '급등 후 고점'만
+    걸러내기 위해 직전 1년 상승률을 본다 — 상승률이 RADAR_V7_RELAX_RET1Y
+    이하인 완만한 우상향 자산은 고점 부근이어도 통과시킨다.
+    (2026-08-01 채택. 10년 검증: 완화 15%에서 공급 주당 6.5→10.4개,
+     손실 15→17건. 20% 이상으로 열면 2021 HSCEI형이 14건 되살아나 기각.)
+
+    자산 하나라도 위반이면 탈락. 시세를 못 구하면 (False, None) — 오판보다 결측.
+    """
+    from core import market as _m
+    peak_disp = None
+    for name in _m.split_assets(p.assets_raw or ""):
+        tk = _m.resolve_ticker(name)
+        if not tk:
+            return False, None
+        hist = _m.fetch_history(tk, days=370)
+        if not hist:
+            return False, None
+        closes = [c for _, c in hist if c]
+        if not closes:
+            return False, None
+        ratio = closes[-1] / max(closes) * 100
+        peak_disp = ratio if peak_disp is None else max(peak_disp, ratio)
+        if ratio >= RADAR_V7_PEAK_MAX:
+            ret1y = (closes[-1] / closes[0] - 1) * 100 if closes[0] else None
+            if ret1y is None or ret1y > RADAR_V7_RELAX_RET1Y:
+                return False, peak_disp
+    return True, peak_disp
+
+
 def v7_peak_ratio(p):
     """고점 위치(%) = 자산별 (최근 종가 ÷ 직전 52주 최고) 중 최댓값.
 
-    청약 중 상품은 기준가가 미확정이라 최근 종가로 근사한다.
-    자산 하나라도 시세를 못 구하면 None (오판보다 결측 — 게이트 탈락 처리).
-    fetch_history가 티커·일 단위로 캐시하므로 같은 날 반복 호출은 싸다.
+    표시·호환용. 게이트 판정은 v7_peak_gate를 쓸 것.
+    자산 하나라도 시세를 못 구하면 None.
     """
     from core import market as _m
     peak = None
@@ -248,10 +280,11 @@ def v7_peak_ratio(p):
 def _compute_radar_pool(monday, asset_type):
     """(주차, 유형) 그룹의 {product_id: radar_result} 계산 — v7 3중 게이트.
 
-    ① 1차 배리어 ≤ 유형별 상한 (지수 90 / 종목 85)
+    ① 1차 배리어 ≤ 유형별 상한 (지수 90 / 종목 80)
     ② 낙인 < 직전 연도 같은 유형 분포 하위 30% (미만)
-    ③ 고점 발행 회피 — 워스트 자산이 52주 최고 대비 95% 미만
-    통과자 전원 배지 (지수형=안정 신호, 종목형=수익 신호), 순위는 수익률순.
+    ③ 고점 발행 회피 — 자산이 52주 최고 대비 95% 미만
+       (95% 이상이어도 직전 1년 상승률 15% 이하면 통과 — 완만한 우상향 예외)
+    통과자 전원 타겟 신호 배지, 순위는 수익률순.
     """
     sunday = monday + timedelta(days=6)
     group = list(Product.objects.filter(
@@ -268,8 +301,8 @@ def _compute_radar_pool(monday, asset_type):
     )]
     survivors = []
     for p in cheap:
-        peak = v7_peak_ratio(p)
-        if peak is not None and peak < RADAR_V7_PEAK_MAX:              # ③ 고점 회피
+        ok, peak = v7_peak_gate(p)                                     # ③ 고점 회피(완화 포함)
+        if ok and peak is not None:
             survivors.append((p, peak))
 
     ranked = sorted(survivors, key=lambda t: -(t[0].yield_rate or 0))
