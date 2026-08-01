@@ -40,3 +40,15 @@ def qs_set(context, key, value):
     else:
         q[key] = value
     return q.urlencode()
+
+
+@register.filter
+def dictval(d, key):
+    """정수 키 딕셔너리 조회 — 템플릿의 {{ d.40 }} 은 문자열 키로 찾아 실패한다.
+    스트레스 테스트의 충격률(40/50/60/70) 매핑용."""
+    if not isinstance(d, dict):
+        return ""
+    try:
+        return d.get(int(key), d.get(str(key), ""))
+    except (TypeError, ValueError):
+        return d.get(key, "")

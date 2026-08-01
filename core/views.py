@@ -938,28 +938,42 @@ def portfolio(request):
             _covered.add(_inv.id)
             if not (_p.is_no_ki or _p.ki is None):
                 _a["trigs"].append((_s.ref_price * _p.ki / 100.0, _inv.amount))
+        SHOCKS = (40, 50, 60, 70)
         rows = []
+        tot = {d: 0.0 for d in SHOCKS}
+        conc = 0.0            # 같은 시기에 몰아 샀다면(-60%) 손실
         for name, _a in _sa.items():
             pct = _a["amt"] / total_invested * 100
             if pct < 3 or not _a["cur"] or not _a["trigs"]:
                 continue
-            # 첫 낙인까지 필요한 추가 하락률
-            first = min((1 - trig / _a["cur"]) * 100 for trig, _ in _a["trigs"])
-            hits = {}
-            for d in (30, 40, 50):
+            needs = [(1 - trig / _a["cur"]) * 100 for trig, _ in _a["trigs"]]
+            amts = [amt for _, amt in _a["trigs"]]
+            # 금액가중 평균 여유 — 대표값 (min은 가장 취약한 1건이라 대표성이 없다)
+            wavg = sum(n * m for n, m in zip(needs, amts)) / sum(amts)
+            losses = {}
+            for d in SHOCKS:
                 px = _a["cur"] * (1 - d / 100)
                 hit = sum(amt for trig, amt in _a["trigs"] if px < trig)
-                hits[d] = round(hit / total_invested * 100, 1)
-            loss40 = round(hits[40] * KI_LOSS_ASSUMED / 100, 1)
+                v = hit / total_invested * 100 * KI_LOSS_ASSUMED / 100
+                losses[d] = round(v, 2)
+                tot[d] += v
+            # 시기 분산이 없었다면: 전액이 가장 취약한 기준가로 매수됐다고 가정
+            worst_trig = max(trig for trig, _ in _a["trigs"])
+            c = pct * KI_LOSS_ASSUMED / 100 if _a["cur"] * 0.40 < worst_trig else 0.0
+            conc += c
             rows.append({"name": name, "pct": round(pct, 1),
-                         "first": round(first, 1), "hits": hits,
-                         "loss40": loss40})
+                         "wavg": round(wavg, 1), "nearest": round(min(needs), 1),
+                         "losses": losses, "conc60": round(c, 2)})
         if rows:
-            rows.sort(key=lambda r: (-r["loss40"], -r["pct"]))
+            rows.sort(key=lambda r: -r["losses"][60])
             _miss = [i for i in holding if i.id not in _covered]
             stress = {
                 "rows": rows,
+                "shocks": list(SHOCKS),
                 "loss_assumed": KI_LOSS_ASSUMED,
+                "total": {d: round(v, 2) for d, v in tot.items()},
+                "conc60": round(conc, 2),
+                "saved60": round(conc - tot[60], 2),
                 "worst": rows[0],
                 "missing_n": len(_miss),
                 "missing_amt": sum(i.amount for i in _miss),

@@ -156,19 +156,29 @@
 <div class="card">
   <div class="card-title">
     <i class="fa-solid fa-cloud-bolt" style="color:var(--orange)"></i> 스트레스 테스트
-    <small style="font-weight:400;color:var(--text-3)">기초자산이 지금보다 더 떨어지면 얼마가 낙인되나</small>
+    <small style="font-weight:400;color:var(--text-3)">기초자산이 더 떨어지면 얼마를 잃나</small>
   </div>
+
+  <div style="background:var(--bg);border-radius:10px;padding:14px 16px;margin-bottom:14px">
+    <div style="font-size:13.5px;line-height:1.75">
+      기초자산이 지금보다 <b>60% 더 폭락</b>하면 전체 투자금의
+      <b style="color:{% if stress.total.60 > 10 %}var(--red){% elif stress.total.60 > 5 %}var(--orange){% else %}var(--green){% endif %};font-size:16px">{{ stress.total.60 }}%</b>를 잃을 수 있습니다.
+      {% if stress.saved60 > 0 %}
+      <br><span style="color:var(--text-2)">같은 시기에 몰아서 샀다면 <b>{{ stress.conc60 }}%</b>였을 텐데,
+      <b style="color:var(--green)">시기를 나눠 산 덕분에 {{ stress.saved60 }}%p를 막았습니다.</b></span>
+      {% endif %}
+    </div>
+  </div>
+
   <div style="overflow-x:auto">
     <table>
       <thead>
         <tr>
           <th>기초자산</th>
-          <th class="num" title="이 자산이 포함된 보유 상품의 투자금 합계 (전체 대비)">노출</th>
-          <th class="num" title="현재가에서 이만큼 더 떨어지면 첫 보유 상품이 낙인 구간에 들어갑니다">첫 낙인까지</th>
-          <th class="num">-30% 시 낙인</th>
-          <th class="num">-40% 시 낙인</th>
-          <th class="num">-50% 시 낙인</th>
-          <th class="num" title="-40% 하락 시 낙인 진입액 × 손실 가정 {{ stress.loss_assumed }}%">-40% 예상 손실</th>
+          <th class="num" title="이 자산이 포함된 보유 상품의 투자금 합계 (전체 대비)">내 돈의</th>
+          <th class="num" title="투자금 가중평균 — 이 자산이 평균 이만큼 더 떨어져야 낙인이 시작됩니다">평균 여유</th>
+          <th class="num" title="가장 취약한 보유 1건 기준">가장 가까운 건</th>
+          {% for d in stress.shocks %}<th class="num">-{{ d }}% 시 손실</th>{% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -176,21 +186,29 @@
         <tr>
           <td style="font-weight:600">{{ r.name }}</td>
           <td class="num">{{ r.pct }}%</td>
-          <td class="num" style="font-weight:700;color:{% if r.first < 20 %}var(--red){% elif r.first < 35 %}var(--orange){% else %}var(--green){% endif %}">-{{ r.first }}%</td>
-          <td class="num">{{ r.hits.30 }}%</td>
-          <td class="num" style="font-weight:700">{{ r.hits.40 }}%</td>
-          <td class="num">{{ r.hits.50 }}%</td>
-          <td class="num" style="font-weight:800;color:{% if r.loss40 > 10 %}var(--red){% elif r.loss40 > 5 %}var(--orange){% else %}var(--green){% endif %}">{{ r.loss40 }}%</td>
+          <td class="num" style="font-weight:700;color:{% if r.wavg < 30 %}var(--red){% elif r.wavg < 50 %}var(--orange){% else %}var(--green){% endif %}">-{{ r.wavg }}%</td>
+          <td class="num" style="color:var(--text-3)">-{{ r.nearest }}%</td>
+          {% for d in stress.shocks %}
+          <td class="num" style="{% if r.losses|dictval:d %}font-weight:700{% endif %}">{{ r.losses|dictval:d }}%</td>
+          {% endfor %}
         </tr>
         {% endfor %}
       </tbody>
+      <tfoot>
+        <tr style="border-top:2px solid var(--border)">
+          <td style="font-weight:800">합계</td><td></td><td></td><td></td>
+          {% for d in stress.shocks %}
+          <td class="num" style="font-weight:800;color:{% if stress.total|dictval:d > 10 %}var(--red){% elif stress.total|dictval:d > 5 %}var(--orange){% else %}var(--text){% endif %}">{{ stress.total|dictval:d }}%</td>
+          {% endfor %}
+        </tr>
+      </tfoot>
     </table>
   </div>
   <p style="font-size:11.5px;color:var(--text-3);margin-top:10px;line-height:1.65">
-    낙인 진입 = 그 자산이 현재가에서 해당 폭만큼 더 떨어졌을 때 낙인 구간에 들어가는 보유 금액 비중(전체 대비).
-    발행 시기가 다르면 기준가가 달라 같은 자산이라도 한꺼번에 낙인되지 않습니다 — 그 완충이 반영된 수치입니다.
-    낙인 진입이 곧 손실은 아니며(만기까지 회복하면 원금 지급), 예상 손실은 낙인 후 회복 실패 시 원금의
-    {{ stress.loss_assumed }}%를 잃는다는 가정의 상한선입니다.
+    <b>평균 여유</b> = 보유 금액으로 가중평균한 낙인까지 거리. 같은 자산이라도 산 시기가 다르면
+    기준가가 달라 한꺼번에 낙인되지 않습니다 — 그 완충이 반영된 수치입니다.
+    손실은 낙인 진입액에 회복 실패(원금의 {{ stress.loss_assumed }}% 손실)를 가정한 상한선이며,
+    낙인에 들어가도 만기까지 회복하면 원금을 받습니다.
     {% if stress.missing_n %}<span style="color:var(--orange)">시세 미확보 {{ stress.missing_n }}건({{ stress.missing_amt|intcomma }}원)은 제외.</span>{% endif %}
   </p>
 </div>
