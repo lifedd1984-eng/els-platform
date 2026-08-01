@@ -143,20 +143,43 @@ def _market_regime(monday, sunday):
     rate = n_pass / n_all * 100
     band = next(b for b in REGIME_BANDS if rate < b[0])
 
-    idx = []
-    for label, name in REGIME_INDEXES:
+    def _gauge(label, name):
         tk = _m.resolve_ticker(name)
         hist = _m.fetch_history(tk, days=370) if tk else None
         closes = [c for _, c in (hist or []) if c]
         if not closes:
+            return None
+        return {"name": label,
+                "peak": round(closes[-1] / max(closes) * 100, 1),
+                "ret1y": round((closes[-1] / closes[0] - 1) * 100, 1)}
+
+    idx = [g for g in (_gauge(lb, nm) for lb, nm in REGIME_INDEXES) if g]
+
+    # 종목형 기초자산 — 이번 주 종목형 상품에 가장 많이 등장하는 5개
+    freq = {}
+    for p in group:
+        if p.asset_type != "종목형":
             continue
-        idx.append({
-            "name": label,
-            "peak": round(closes[-1] / max(closes) * 100, 1),
-            "ret1y": round((closes[-1] / closes[0] - 1) * 100, 1),
-        })
+        for a in _m.split_assets(p.assets_raw or ""):
+            a = a.strip()
+            if a:
+                freq[a] = freq.get(a, 0) + 1
+    # 지수는 위 표에 이미 있으므로 제외 (혼합형 상품 때문에 섞여 들어온다)
+    idx_tickers = {_m.resolve_ticker(nm) for _, nm in REGIME_INDEXES}
+    stocks = []
+    for name, cnt in sorted(freq.items(), key=lambda x: -x[1]):
+        if _m.resolve_ticker(name) in idx_tickers:
+            continue
+        g = _gauge(_m.shorten_asset_display(name), name)
+        if g:
+            g["cnt"] = cnt
+            stocks.append(g)
+        if len(stocks) >= 5:
+            break
+
     return {"n_all": n_all, "n_pass": n_pass, "rate": round(rate, 1),
-            "label": band[1], "color": band[2], "desc": band[3], "indexes": idx}
+            "label": band[1], "color": band[2], "desc": band[3],
+            "indexes": idx, "stocks": stocks}
 
 
 def weekly(request):
@@ -525,8 +548,11 @@ def product_detail(request, pk):
         # 상품 단위 고점대비 = 자산별 값 중 최댓값 (레이더 v7 게이트와 같은 정의 —
         # 가장 덜 빠진 자산이 고점 부근이면 그 상품은 고점 발행으로 본다)
         peaks = [s["peak_ratio"] for s in chart_series if s["peak_ratio"] is not None]
+        # 발행일(기준가 산정일) 세로 점선 — 차트 구간 안에 있을 때만
+        base_x = _x(base_date) if (base_date and dmin <= base_date <= dmax) else None
         chart = {"W": W, "H": H, "series": chart_series, "lines": chart_lines,
                  "based_on_issue": bool(base_date),
+                 "base_x": base_x, "top": PT, "bottom": H - PB,
                  "peak_ratio": max(peaks) if peaks else None}
 
     return render(request, "core/product_detail.html", {
