@@ -103,6 +103,61 @@ def _week_range(offset: int = 0):
 WEEKLY_FILTER_PARAMS = ["asset", "ki_max", "yield_min", "currency",
                         "no_ki", "issuer", "preset", "sort", "dir"]
 
+# 시장 국면 카드에 표시할 대표 지수
+REGIME_INDEXES = [("KOSPI200", "KOSPI200 Index"), ("S&P500", "S&P500 Index"),
+                  ("Nikkei225", "Nikkei225 Index"), ("Euro Stoxx 50", "Euro Stoxx 50 Index")]
+# 10년 분기별 검증 기준선 (regime_signal.py, 2016~2025)
+#   통과율 <5% 15개 분기 → 이후 1년 주식 -7.5%, 그 분기 ELS 성공률 78.0%
+#   15~30% 15개 분기 → 이후 1년 +52.2%, 성공률 96.9%
+REGIME_BANDS = [(5, "과열", "var(--red)", "조건이 나쁜 시기 — 과거 이 구간 뒤 시장도 부진했습니다"),
+                (15, "주의", "var(--orange)", "조건이 평범한 시기입니다"),
+                (100, "양호", "var(--green)", "조건이 좋은 시기 — 과거 이 구간의 성적이 가장 좋았습니다")]
+
+
+def _market_regime(monday, sunday):
+    """시장 국면 — 이번 주 조건 통과율 + 대표 지수 위치.
+
+    통과율은 시세가 필요 없는 두 게이트(낙인 p30 · 1차 배리어)로만 계산한다.
+    10년 분기 검증에서 통과율 ↔ 이후 1년 주식수익률 상관 +0.52 — 즉 조건이
+    나쁜 시기는 시장도 과열된 시기였다. '갈아타라'가 아니라 '지금이 어디인가'를
+    읽는 용도. (regime_signal.py 검증, 2026-08-02)
+    """
+    from core import market as _m
+    from core.models import RADAR_V7_B0_MAX, v7_ki_cut
+
+    group = list(Product.objects.filter(sub_end__gte=monday, sub_end__lte=sunday))
+    if not group:
+        return None
+    n_all = n_pass = 0
+    for p in group:
+        if p.asset_type not in RADAR_V7_B0_MAX:
+            continue
+        n_all += 1
+        cut = v7_ki_cut(p.asset_type)
+        if (not p.is_no_ki and p.ki is not None and cut is not None and p.ki < cut
+                and p.barrier_first is not None
+                and p.barrier_first <= RADAR_V7_B0_MAX[p.asset_type]):
+            n_pass += 1
+    if not n_all:
+        return None
+    rate = n_pass / n_all * 100
+    band = next(b for b in REGIME_BANDS if rate < b[0])
+
+    idx = []
+    for label, name in REGIME_INDEXES:
+        tk = _m.resolve_ticker(name)
+        hist = _m.fetch_history(tk, days=370) if tk else None
+        closes = [c for _, c in (hist or []) if c]
+        if not closes:
+            continue
+        idx.append({
+            "name": label,
+            "peak": round(closes[-1] / max(closes) * 100, 1),
+            "ret1y": round((closes[-1] / closes[0] - 1) * 100, 1),
+        })
+    return {"n_all": n_all, "n_pass": n_pass, "rate": round(rate, 1),
+            "label": band[1], "color": band[2], "desc": band[3], "indexes": idx}
+
 
 def weekly(request):
     # ── 필터 세션 저장/복원 ──
@@ -228,6 +283,8 @@ def weekly(request):
     if last_import:
         freshness_days = (date.today() - last_import.imported_at.date()).days
 
+    regime = _market_regime(monday, sunday)
+
     # 발행사 필터 후보 (이번 주 상품에 존재하는 발행사)
     issuers = sorted(set(
         Product.objects.filter(sub_end__gte=monday, sub_end__lte=sunday)
@@ -310,6 +367,7 @@ def weekly(request):
         ki_top5 = None
 
     return render(request, "core/weekly.html", {
+        "regime": regime,
         "products": products,
         "recommendations": recommendations,
         "ki_top5": ki_top5,

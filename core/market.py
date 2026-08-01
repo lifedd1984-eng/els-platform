@@ -400,5 +400,37 @@ def fetch_history(ticker: str, days: int = 365):
         rows = [(idx.date(), float(v)) for idx, v in closes.items()]
     except Exception:
         pass
+    rows = _drop_bad_ticks(ticker, rows)
     _history_cache[key] = rows
+    return rows
+
+
+# 하루 변동 한도 — 이보다 큰 점프는 시세 오류로 보고 그 지점 이후를 버린다.
+# 한국 주식은 ±30% 가격제한폭, 지수·ETF는 그보다 훨씬 작게 움직인다.
+# (2026-08-01 사고: 국내 자산 3종이 같은 날 +24~30% 동시 점프 → 낙인 버퍼가
+#  25~30% 부풀려져 포트폴리오가 실제보다 안전하게 표시됐다.)
+MAX_DAILY_MOVE = 0.22
+
+
+def _drop_bad_ticks(ticker, rows):
+    """마지막 구간의 비정상 급등락을 잘라낸다.
+
+    과거 구간까지 손대면 백테스트 재현성이 깨지므로, 끝에서부터 훑어
+    직전 종가 대비 MAX_DAILY_MOVE를 넘는 지점이 나오면 그 이후를 버린다.
+    (오래된 이상치는 이미 검증에 반영돼 있어 건드리지 않는다.)
+    """
+    if len(rows) < 3:
+        return rows
+    cut = len(rows)
+    for i in range(len(rows) - 1, max(len(rows) - 6, 0), -1):
+        prev, cur = rows[i - 1][1], rows[i][1]
+        if prev > 0 and abs(cur / prev - 1) > MAX_DAILY_MOVE:
+            cut = i
+    if cut < len(rows):
+        import logging
+        logging.getLogger(__name__).warning(
+            "[시세 이상] %s: %s 이후 %d개 종가 제외 (직전 대비 %.0f%% 변동)",
+            ticker, rows[cut - 1][0], len(rows) - cut,
+            (rows[cut][1] / rows[cut - 1][1] - 1) * 100)
+        return rows[:cut]
     return rows

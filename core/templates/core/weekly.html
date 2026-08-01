@@ -80,6 +80,54 @@
   </form>
 </div>
 
+{% if regime %}
+<details class="card fold-card" data-fold="regimeFold" style="padding:14px 16px;margin-bottom:14px">
+  <summary>
+    <i class="fa-solid fa-gauge" style="color:{{ regime.color }}"></i> 시장 국면
+    <span class="badge" style="background:{{ regime.color }};color:#fff;margin-left:4px">{{ regime.label }}</span>
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">
+      이번 주 조건 통과율 {{ regime.rate }}% ({{ regime.n_pass }}/{{ regime.n_all }}건)</span>
+    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
+  </summary>
+  <div style="margin-top:12px;display:grid;grid-template-columns:minmax(200px,1fr) 2fr;gap:16px" class="rg-grid">
+    <div style="background:var(--bg);border-radius:10px;padding:14px 16px">
+      <div style="font-size:12px;color:var(--text-3);font-weight:700">조건 통과율</div>
+      <div style="font-size:30px;font-weight:800;letter-spacing:-1px;color:{{ regime.color }};line-height:1.2">
+        {{ regime.rate }}%</div>
+      <div style="height:7px;background:var(--card);border-radius:4px;overflow:hidden;margin:8px 0 6px">
+        <div style="height:100%;width:{{ regime.rate }}%;background:{{ regime.color }};border-radius:4px"></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--text-2);line-height:1.6">{{ regime.desc }}</div>
+    </div>
+    <div>
+      <div style="font-size:12px;color:var(--text-3);font-weight:700;margin-bottom:8px">
+        주요 지수 위치 <span style="font-weight:400">— 고점에 가깝고 많이 올랐을수록 신중</span></div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr><th>지수</th><th class="num">52주 고점 대비</th><th class="num">직전 1년</th></tr></thead>
+          <tbody>
+            {% for i in regime.indexes %}
+            <tr>
+              <td style="font-weight:600">{{ i.name }}</td>
+              <td class="num" style="font-weight:700;color:{% if i.peak >= 95 %}var(--red){% elif i.peak >= 90 %}var(--orange){% else %}var(--green){% endif %}">{{ i.peak }}%</td>
+              <td class="num" style="color:{% if i.ret1y > 30 %}var(--red){% elif i.ret1y > 15 %}var(--orange){% else %}var(--text-2){% endif %}">{% if i.ret1y > 0 %}+{% endif %}{{ i.ret1y }}%</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:11.5px;color:var(--text-3);margin:12px 0 0;line-height:1.65">
+    통과율 = 이번 주 상품 중 낙인·1차 조기상환 조건을 통과한 비율. 10년 분기별 검증에서
+    통과율이 낮은 시기(&lt;5%)는 이후 1년 주식 수익률도 평균 −7.5%로 부진했고,
+    15~30%인 시기가 가장 좋았습니다(+52.2%). <b>ELS가 어려울 때 주식이 대안이 되지는 않았다</b>는 뜻이며,
+    투자 권유가 아니라 현재 위치를 읽는 참고 지표입니다.
+  </p>
+</details>
+<style>@media (max-width:760px){ .rg-grid{ grid-template-columns:1fr !important } }</style>
+{% endif %}
+
 {% if recommendations %}
 <details class="card fold-card" data-fold="top5Fold" open style="padding:14px 16px;margin-bottom:14px">
   <summary>
