@@ -830,6 +830,57 @@ def portfolio(request):
     # ── 리스크 분석 ──────────────────────────────
     risk = _analyze_risk(holding, total_invested)
 
+    # ── 스트레스 테스트: 자산별 추가 하락 시나리오 → 낙인 진입액·예상 손실 ──
+    # 위험 단위는 '노출 %'가 아니라 '낙인 발동가 분포'다. 같은 자산이라도
+    # 발행 시기(기준가)가 다르면 발동가가 달라 함께 무너지지 않는다 — 총노출만
+    # 보면 과대평가라는 태훈님 지적(2026-08-01)을 반영한 지표.
+    KI_LOSS_ASSUMED = 55   # 낙인 확정 시 원금 손실률 가정(%)
+    stress = None
+    if holding and total_invested:
+        from collections import defaultdict as _dd
+
+        from core.models import KnockInStatus
+        _sa = _dd(lambda: {"cur": None, "trigs": [], "amt": 0})
+        _covered = set()
+        for _s in KnockInStatus.objects.filter(
+                investment__in=holding).select_related("investment__product"):
+            _inv = _s.investment
+            if _s.ref_price is None or _s.current_price is None:
+                continue
+            _p = _inv.product
+            _a = _sa[_s.asset_name.strip()]
+            _a["cur"] = _s.current_price
+            _a["amt"] += _inv.amount
+            _covered.add(_inv.id)
+            if not (_p.is_no_ki or _p.ki is None):
+                _a["trigs"].append((_s.ref_price * _p.ki / 100.0, _inv.amount))
+        rows = []
+        for name, _a in _sa.items():
+            pct = _a["amt"] / total_invested * 100
+            if pct < 3 or not _a["cur"] or not _a["trigs"]:
+                continue
+            # 첫 낙인까지 필요한 추가 하락률
+            first = min((1 - trig / _a["cur"]) * 100 for trig, _ in _a["trigs"])
+            hits = {}
+            for d in (30, 40, 50):
+                px = _a["cur"] * (1 - d / 100)
+                hit = sum(amt for trig, amt in _a["trigs"] if px < trig)
+                hits[d] = round(hit / total_invested * 100, 1)
+            loss40 = round(hits[40] * KI_LOSS_ASSUMED / 100, 1)
+            rows.append({"name": name, "pct": round(pct, 1),
+                         "first": round(first, 1), "hits": hits,
+                         "loss40": loss40})
+        if rows:
+            rows.sort(key=lambda r: (-r["loss40"], -r["pct"]))
+            _miss = [i for i in holding if i.id not in _covered]
+            stress = {
+                "rows": rows,
+                "loss_assumed": KI_LOSS_ASSUMED,
+                "worst": rows[0],
+                "missing_n": len(_miss),
+                "missing_amt": sum(i.amount for i in _miss),
+            }
+
     # ── 낙인 모니터링: 전체 보유 중 위험/경고(버퍼 ≤ 20%p)만 추림 ──
     ki_updated = None
     ki_alerts = []
@@ -956,6 +1007,7 @@ def portfolio(request):
         "ki_updated": ki_updated,
         "has_ki_data": has_ki_data,
         "ki_alerts": ki_alerts,
+        "stress": stress,
         "candidates": candidates,
         "today": today,
         "active_nav": "portfolio",

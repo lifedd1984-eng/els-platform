@@ -152,6 +152,50 @@
 </div>
 {% endif %}
 
+{% if stress %}
+<div class="card">
+  <div class="card-title">
+    <i class="fa-solid fa-cloud-bolt" style="color:var(--orange)"></i> 스트레스 테스트
+    <small style="font-weight:400;color:var(--text-3)">기초자산이 지금보다 더 떨어지면 얼마가 낙인되나</small>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>기초자산</th>
+          <th class="num" title="이 자산이 포함된 보유 상품의 투자금 합계 (전체 대비)">노출</th>
+          <th class="num" title="현재가에서 이만큼 더 떨어지면 첫 보유 상품이 낙인 구간에 들어갑니다">첫 낙인까지</th>
+          <th class="num">-30% 시 낙인</th>
+          <th class="num">-40% 시 낙인</th>
+          <th class="num">-50% 시 낙인</th>
+          <th class="num" title="-40% 하락 시 낙인 진입액 × 손실 가정 {{ stress.loss_assumed }}%">-40% 예상 손실</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in stress.rows %}
+        <tr>
+          <td style="font-weight:600">{{ r.name }}</td>
+          <td class="num">{{ r.pct }}%</td>
+          <td class="num" style="font-weight:700;color:{% if r.first < 20 %}var(--red){% elif r.first < 35 %}var(--orange){% else %}var(--green){% endif %}">-{{ r.first }}%</td>
+          <td class="num">{{ r.hits.30 }}%</td>
+          <td class="num" style="font-weight:700">{{ r.hits.40 }}%</td>
+          <td class="num">{{ r.hits.50 }}%</td>
+          <td class="num" style="font-weight:800;color:{% if r.loss40 > 10 %}var(--red){% elif r.loss40 > 5 %}var(--orange){% else %}var(--green){% endif %}">{{ r.loss40 }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p style="font-size:11.5px;color:var(--text-3);margin-top:10px;line-height:1.65">
+    낙인 진입 = 그 자산이 현재가에서 해당 폭만큼 더 떨어졌을 때 낙인 구간에 들어가는 보유 금액 비중(전체 대비).
+    발행 시기가 다르면 기준가가 달라 같은 자산이라도 한꺼번에 낙인되지 않습니다 — 그 완충이 반영된 수치입니다.
+    낙인 진입이 곧 손실은 아니며(만기까지 회복하면 원금 지급), 예상 손실은 낙인 후 회복 실패 시 원금의
+    {{ stress.loss_assumed }}%를 잃는다는 가정의 상한선입니다.
+    {% if stress.missing_n %}<span style="color:var(--orange)">시세 미확보 {{ stress.missing_n }}건({{ stress.missing_amt|intcomma }}원)은 제외.</span>{% endif %}
+  </p>
+</div>
+{% endif %}
+
 {% if holding_count %}
 <div class="card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
