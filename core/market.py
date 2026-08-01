@@ -281,14 +281,20 @@ def resolve_ticker(asset_name: str):
 
 
 def fetch_current_price(ticker: str):
-    """현재가(최근 종가) 조회. 실패 시 None."""
+    """현재가(최근 종가) 조회. 실패 시 None.
+
+    마지막 종가가 직전 대비 비정상 급등락이면 그 값을 버리고 직전 종가를 쓴다
+    (_drop_bad_ticks와 같은 기준). 낙인 버퍼가 부풀려지는 것을 막는다.
+    """
     import yfinance as yf
     try:
-        h = yf.Ticker(ticker).history(period="5d")
+        h = yf.Ticker(ticker).history(period="10d")
         if len(h):
             price = h["Close"].dropna()
-            if len(price):
-                return float(price.iloc[-1])
+            rows = [(idx.date(), float(v)) for idx, v in price.items()]
+            rows = _drop_bad_ticks(ticker, rows)
+            if rows:
+                return rows[-1][1]
     except Exception:
         pass
     return None
