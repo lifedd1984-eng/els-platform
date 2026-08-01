@@ -261,7 +261,7 @@ def weekly(request):
         TRACK_META = {
             "지수형": {"label": "지수형 TOP5", "sub": "1차 배리어 90 이하 · 고점 발행 아님 · "
                       "낙인이 가장 낮은 30% 안에 드는 상품", "icon": "fa-shield-halved"},
-            "종목형": {"label": "종목형 TOP5", "sub": "1차 배리어 85 이하 · 고점 발행 아님 · "
+            "종목형": {"label": "종목형 TOP5", "sub": "1차 배리어 80 이하 · 고점 발행 아님 · "
                       "낙인이 가장 낮은 30% 안에 드는 상품", "icon": "fa-rocket"},
         }
         for tier in ("지수형", "종목형"):
