@@ -923,8 +923,18 @@ def portfolio(request):
     if holding and total_invested:
         from collections import defaultdict as _dd
 
+        from core import market as _mkt_s
         from core.models import KnockInStatus
-        _sa = _dd(lambda: {"cur": None, "trigs": [], "amt": 0})
+
+        # 자산 키는 티커로 정규화 — 'Micron'과 'Micron Technology'가 표기만 다른
+        # 같은 자산으로 분리되면 3% 게이트에 걸려 통째로 누락된다 (레드팀 B [상3])
+        def _akey(name):
+            n = (name or "").strip()
+            return _mkt_s.resolve_ticker(n) or n
+
+        _sa = _dd(lambda: {"name": None, "cur": None, "trigs": [], "amt": 0})
+        _inv_assets = _dd(list)   # inv_id → [(asset_key, trigger|None)]
+        _inv_amt = {}
         _covered = set()
         for _s in KnockInStatus.objects.filter(
                 investment__in=holding).select_related("investment__product"):
@@ -932,17 +942,26 @@ def portfolio(request):
             if _s.ref_price is None or _s.current_price is None:
                 continue
             _p = _inv.product
-            _a = _sa[_s.asset_name.strip()]
+            _k = _akey(_s.asset_name)
+            _a = _sa[_k]
+            if _a["name"] is None:
+                _a["name"] = _mkt_s.shorten_asset_display(_s.asset_name.strip())
             _a["cur"] = _s.current_price
-            _a["amt"] += _inv.amount
             _covered.add(_inv.id)
+            _inv_amt[_inv.id] = _inv.amount
+            trig = None
             if not (_p.is_no_ki or _p.ki is None):
-                _a["trigs"].append((_s.ref_price * _p.ki / 100.0, _inv.amount))
+                trig = _s.ref_price * _p.ki / 100.0
+                _a["trigs"].append((trig, _inv.amount))
+            _inv_assets[_inv.id].append((_k, trig))
+        # 노출은 투자 단위로 (같은 투자가 한 자산에 두 번 잡히지 않게)
+        for _iid, _al in _inv_assets.items():
+            for _k in {k for k, _ in _al}:
+                _sa[_k]["amt"] += _inv_amt[_iid]
+
         SHOCKS = (40, 50, 60, 70)
         rows = []
-        tot = {d: 0.0 for d in SHOCKS}
-        conc = 0.0            # 같은 시기에 몰아 샀다면(-60%) 손실
-        for name, _a in _sa.items():
+        for _k, _a in _sa.items():
             pct = _a["amt"] / total_invested * 100
             if pct < 3 or not _a["cur"] or not _a["trigs"]:
                 continue
@@ -954,25 +973,39 @@ def portfolio(request):
             for d in SHOCKS:
                 px = _a["cur"] * (1 - d / 100)
                 hit = sum(amt for trig, amt in _a["trigs"] if px < trig)
-                v = hit / total_invested * 100 * KI_LOSS_ASSUMED / 100
-                losses[d] = round(v, 2)
-                tot[d] += v
-            # 시기 분산이 없었다면: 전액이 가장 취약한 기준가로 매수됐다고 가정
-            worst_trig = max(trig for trig, _ in _a["trigs"])
-            c = pct * KI_LOSS_ASSUMED / 100 if _a["cur"] * 0.40 < worst_trig else 0.0
-            conc += c
-            rows.append({"name": name, "pct": round(pct, 1),
+                losses[d] = round(hit / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
+            rows.append({"name": _a["name"] or _k, "pct": round(pct, 1),
                          "wavg": round(wavg, 1), "nearest": round(min(needs), 1),
-                         "losses": losses, "conc60": round(c, 2)})
+                         "losses": losses})
         if rows:
+            # 합계는 투자 단위 union — 워스트오브 상품은 어느 자산이든 발동가를
+            # 깨지면 낙인 1번이다. 자산 행 합산은 다중자산 투자를 중복 계상해
+            # 이론상 상한(55%)을 넘는 값까지 만들었다 (레드팀 B [상1·상2])
+            _cur = {k: _sa[k]["cur"] for k in _sa}
+            tot = {}
+            for d in SHOCKS:
+                knocked = 0
+                for _iid, _al in _inv_assets.items():
+                    if any(t is not None and _cur.get(k) and _cur[k] * (1 - d / 100) < t
+                           for k, t in _al):
+                        knocked += _inv_amt[_iid]
+                tot[d] = round(knocked / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
+            # '몰아 샀다면'(-60%): 전액을 각 자산의 가장 취약한 기준가에 샀다고 가정
+            _worst_trig = {k: max((t for t, _ in _sa[k]["trigs"]), default=None) for k in _sa}
+            conc_knocked = 0
+            for _iid, _al in _inv_assets.items():
+                if any(_worst_trig.get(k) is not None and _cur.get(k)
+                       and _cur[k] * 0.40 < _worst_trig[k] for k, _ in _al):
+                    conc_knocked += _inv_amt[_iid]
+            conc = round(conc_knocked / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
             rows.sort(key=lambda r: -r["losses"][60])
             _miss = [i for i in holding if i.id not in _covered]
             stress = {
                 "rows": rows,
                 "shocks": list(SHOCKS),
                 "loss_assumed": KI_LOSS_ASSUMED,
-                "total": {d: round(v, 2) for d, v in tot.items()},
-                "conc60": round(conc, 2),
+                "total": tot,
+                "conc60": conc,
                 "saved60": round(conc - tot[60], 2),
                 "worst": rows[0],
                 "missing_n": len(_miss),
