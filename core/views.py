@@ -365,7 +365,8 @@ def weekly(request):
     # ── 낙인대별 최고 수익 (선택한 주차 상품 · 유형 탭 × 낙인 값별 수익률 top5) ──
     # 대상 낙인 값은 태훈님 지정: 종목형 15~30, 지수형 25~40. 노낙인 제외.
     # TOP5처럼 주차를 따라간다 (주 이동 시 그 주의 분포로 갱신, 필터바 무관).
-    KI_BUCKETS = {"종목형": (15, 20, 25, 30), "지수형": (25, 30, 35, 40)}
+    # 지수형 먼저 (탭 기본 선택도 지수형) — 2026-08-03 태훈님 요청
+    KI_BUCKETS = {"지수형": (25, 30, 35, 40), "종목형": (15, 20, 25, 30)}
     from collections import defaultdict
     _buckets = defaultdict(list)
     for p in Product.objects.filter(

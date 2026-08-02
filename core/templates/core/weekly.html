@@ -148,52 +148,6 @@
 <style>@media (max-width:760px){ .rg-grid{ grid-template-columns:1fr !important } }</style>
 {% endif %}
 
-{% if recommendations %}
-<details class="card fold-card" data-fold="top5Fold" open style="padding:14px 16px;margin-bottom:14px">
-  <summary>
-    <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-3px"><circle cx="12" cy="12" r="10" fill="none" stroke="#1B64DA" stroke-opacity=".25" stroke-width="1"/><polygon points="12,3 20,12 12,21 5,12" fill="#1B64DA" fill-opacity=".28" stroke="#1B64DA" stroke-width="1.6"/></svg> 이번주 TOP5
-    <span style="font-weight:400;font-size:12px;color:var(--text-3)">10년 68,496건 검증 규칙 통과 상품 · 수익률 상위 5</span>
-    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
-  </summary>
-  {% for track in recommendations %}
-  <div style="margin-top:12px">
-    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
-      <i class="fa-solid {{ track.icon }}" style="color:{{ track.color }}"></i>
-      <b style="font-size:13.5px">{{ track.label }}</b>
-      <span style="font-size:11.5px;color:var(--text-3)">{{ track.sub }}</span>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap">
-      {% for r in track.items %}
-      <div class="rec-card" onclick="location.href='{% url 'product_detail' r.p.id %}'" style="flex:1;min-width:170px;border:1px solid var(--border);border-left:3px solid {{ track.color }};border-radius:8px;padding:10px 12px;color:inherit;cursor:pointer">
-        <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-2)">
-          <span>{{ r.p.issuer }} {{ r.p.product_no }}</span>
-          <span class="badge {% if r.p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ r.p.asset_type }}</span>
-          {% if user.is_authenticated %}
-          <span style="margin-left:auto" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=r.p.id %}</span>
-          {% endif %}
-        </div>
-        <div style="font-weight:800;font-size:20px;color:var(--blue-dark)">연 {{ r.p.yield_rate }}<span style="font-size:12px">%</span>
-          <span class="badge" style="background:{{ track.color }};color:#fff;margin-left:4px">{{ track.tier|cut:" 신호" }}</span>
-        </div>
-        <div style="font-size:12px;color:var(--text-2)">낙인 {{ r.p.ki }}% · 1차 {{ r.p.barrier_first|default:"-" }}%{% if r.peak %} · 고점대비 {{ r.peak }}%{% endif %}{% if r.p.loss_prob is not None %} · 손실 {{ r.p.loss_prob }}%{% endif %}</div>
-        <div style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)">{{ r.p.assets_raw|asset_short }}</div>
-        <div style="font-size:11px;margin-top:4px">
-          {% if r.overlap_pct is not None %}
-            {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700"><i class="fa-solid fa-triangle-exclamation"></i> 보유 {{ r.overlap_pct }}% 중복</span>
-            {% elif r.overlap_pct > 0 %}<span style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</span>
-            {% else %}<span style="color:var(--green)">신규 자산</span>{% endif %}
-          {% endif %}
-          <span style="color:var(--text-3)">~{{ r.p.sub_end|date:"m.d" }} 마감</span>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
-  {% endfor %}
-  {% include "core/_disclaimer_inline.html" %}
-</details>
-{% endif %}
-
 {# ── 낙인대별 최고 수익 — 기본 펼침, 접기 상태는 localStorage에 저장 ── #}
 {% if ki_top5 %}
 <style>
@@ -213,13 +167,13 @@
 <details class="card fold-card" id="ktFold" data-fold="ktFold" open style="padding:14px 16px;margin-bottom:14px">
   <summary>
     <i class="fa-solid fa-layer-group" style="color:var(--blue)"></i> 낙인대별 최고 수익
-    <span style="font-weight:400;font-size:12px;color:var(--text-3)">이 주 청약 상품 · 낙인 값별 수익률 상위 5</span>
-    <span style="display:flex;gap:6px;margin-left:auto">
+    <span style="display:flex;gap:6px">
       {% for g in ki_top5 %}
       <button type="button" class="btn btn-sm kt-tabbtn {% if forloop.first %}kt-on{% endif %}" data-pane="kt-pane-{{ forloop.counter }}">{{ g.type }}</button>
       {% endfor %}
     </span>
-    <i class="fa-solid fa-chevron-down fold-chev"></i>
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">이 주 청약 상품 · 낙인 값별 수익률 상위 5</span>
+    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
   </summary>
   {% for g in ki_top5 %}
   <div id="kt-pane-{{ forloop.counter }}" class="kt-pane" style="margin-top:10px;{% if not forloop.first %}display:none{% endif %}">
@@ -278,6 +232,54 @@
 })();
 </script>
 {% endif %}
+
+{% if recommendations %}
+<details class="card fold-card" data-fold="top5Fold" open style="padding:14px 16px;margin-bottom:14px">
+  <summary>
+    <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-3px"><circle cx="12" cy="12" r="10" fill="none" stroke="#1B64DA" stroke-opacity=".25" stroke-width="1"/><polygon points="12,3 20,12 12,21 5,12" fill="#1B64DA" fill-opacity=".28" stroke="#1B64DA" stroke-width="1.6"/></svg> 이번주 TOP5
+    <span style="font-weight:400;font-size:12px;color:var(--text-3)">10년 69,903건 검증 규칙 통과 상품 · 수익률 상위 5</span>
+    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
+  </summary>
+  {% for track in recommendations %}
+  <div style="margin-top:12px">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <i class="fa-solid {{ track.icon }}" style="color:{{ track.color }}"></i>
+      <b style="font-size:13.5px">{{ track.label }}</b>
+      <span style="font-size:11.5px;color:var(--text-3)">{{ track.sub }}</span>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      {% for r in track.items %}
+      <div class="rec-card" onclick="location.href='{% url 'product_detail' r.p.id %}'" style="flex:1;min-width:170px;border:1px solid var(--border);border-left:3px solid {{ track.color }};border-radius:8px;padding:10px 12px;color:inherit;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text-2)">
+          <span>{{ r.p.issuer }} {{ r.p.product_no }}</span>
+          <span class="badge {% if r.p.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ r.p.asset_type }}</span>
+          {% if user.is_authenticated %}
+          <span style="margin-left:auto" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=r.p.id %}</span>
+          {% endif %}
+        </div>
+        <div style="font-weight:800;font-size:20px;color:var(--blue-dark)">연 {{ r.p.yield_rate }}<span style="font-size:12px">%</span>
+          <span class="badge" style="background:{{ track.color }};color:#fff;margin-left:4px">{{ track.tier|cut:" 신호" }}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text-2)">낙인 {{ r.p.ki }}% · 1차 {{ r.p.barrier_first|default:"-" }}%{% if r.peak %} · 고점대비 {{ r.peak }}%{% endif %}{% if r.p.loss_prob is not None %} · 손실 {{ r.p.loss_prob }}%{% endif %}</div>
+        <div style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-2)">{{ r.p.assets_raw|asset_short }}</div>
+        <div style="font-size:11px;margin-top:4px">
+          {% if r.overlap_pct is not None %}
+            {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700"><i class="fa-solid fa-triangle-exclamation"></i> 보유 {{ r.overlap_pct }}% 중복</span>
+            {% elif r.overlap_pct > 0 %}<span style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</span>
+            {% else %}<span style="color:var(--green)">신규 자산</span>{% endif %}
+          {% endif %}
+          <span style="color:var(--text-3)">~{{ r.p.sub_end|date:"m.d" }} 마감</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  {% include "core/_disclaimer_inline.html" %}
+</details>
+{% endif %}
+
+
 
 {% if products %}
   {# ── 모바일(≤800px) 2줄 리스트 — 스타일·행 마크업은 base.html / _mobile_row.html 공용 ── #}
