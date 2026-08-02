@@ -819,7 +819,7 @@ def portfolio(request):
                 # 발행일 미입력 시 상품 발행일 기준 — 실현수익 연환산이
                 # 발행일~상환일 실경과일로 계산되므로 발행일이 정확한 기준
                 invested_at=(request.POST.get("invested_at")
-                             or product.issue_date or date.today()),
+                             or product.issued_on or date.today()),
                 broker_account=request.POST.get("broker_account", ""),
                 memo=request.POST.get("memo", ""),
             )
@@ -1346,7 +1346,8 @@ def portfolio_upload(request):
             errors.append(f"{i}행: 투자금액 '{amount}'을 숫자로 읽을 수 없습니다.")
             continue
 
-        inv_date = _parse_invest_date(invested) or date.today()
+        # 날짜 미기재 시 상품 발행일로 — 오늘 날짜 폴백은 발행일 표시·연환산을 오염시킴
+        inv_date = _parse_invest_date(invested) or product.issued_on or date.today()
 
         Investment.objects.create(
             user=request.user, product=product, amount=amount_int,
