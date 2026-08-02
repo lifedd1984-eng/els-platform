@@ -106,12 +106,9 @@ WEEKLY_FILTER_PARAMS = ["asset", "ki_max", "yield_min", "currency",
 # 시장 국면 카드에 표시할 대표 지수
 REGIME_INDEXES = [("KOSPI200", "KOSPI200 Index"), ("S&P500", "S&P500 Index"),
                   ("Nikkei225", "Nikkei225 Index"), ("Euro Stoxx 50", "Euro Stoxx 50 Index")]
-# 10년 분기별 검증 기준선 (regime_signal.py, 2016~2025)
-#   통과율 <5% 15개 분기 → 이후 1년 주식 -7.5%, 그 분기 ELS 성공률 78.0%
-#   15~30% 15개 분기 → 이후 1년 +52.2%, 성공률 96.9%
-REGIME_BANDS = [(5, "과열", "var(--red)", "조건이 나쁜 시기 — 과거 이 구간 뒤 시장도 부진했습니다"),
-                (15, "주의", "var(--orange)", "조건이 평범한 시기입니다"),
-                (100, "양호", "var(--green)", "조건이 좋은 시기 — 과거 이 구간의 성적이 가장 좋았습니다")]
+# 등급(양호/주의/과열) 라벨은 붙이지 않는다 — 분기 발행 기준으로 만든 눈금과
+# 주간 청약 기준 통과율은 모수가 달라 단정할 근거가 없다. 사실만 전달한다.
+# (2026-08-03 태훈님: "굳이 평가를 우리가 할 필요는 없다")
 
 
 def _market_regime(monday, sunday):
@@ -141,7 +138,6 @@ def _market_regime(monday, sunday):
     if not n_all:
         return None
     rate = n_pass / n_all * 100
-    band = next(b for b in REGIME_BANDS if rate < b[0])
 
     def _gauge(label, name):
         tk = _m.resolve_ticker(name)
@@ -177,9 +173,12 @@ def _market_regime(monday, sunday):
         if len(stocks) >= 5:
             break
 
+    # 통과 조건을 화면에 그대로 노출 (컷은 매년 자동 산출되므로 하드코딩 금지)
+    cond = " · ".join(
+        f"{t} 낙인 {v7_ki_cut(t)} 미만 · 1차 조기상환 {RADAR_V7_B0_MAX[t]} 이하"
+        for t in ("지수형", "종목형"))
     return {"n_all": n_all, "n_pass": n_pass, "rate": round(rate, 1),
-            "label": band[1], "color": band[2], "desc": band[3],
-            "indexes": idx, "stocks": stocks}
+            "cond": cond, "indexes": idx, "stocks": stocks}
 
 
 def weekly(request):

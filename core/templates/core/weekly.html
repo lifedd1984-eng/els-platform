@@ -83,8 +83,7 @@
 {% if regime %}
 <details class="card fold-card" data-fold="regimeFold" style="padding:14px 16px;margin-bottom:14px">
   <summary>
-    <i class="fa-solid fa-gauge" style="color:{{ regime.color }}"></i> 시장 국면
-    <span class="badge" style="background:{{ regime.color }};color:#fff;margin-left:4px">{{ regime.label }}</span>
+    <i class="fa-solid fa-gauge" style="color:var(--blue)"></i> 시장 국면
     <span style="font-weight:400;font-size:12px;color:var(--text-3)">
       이번 주 조건 통과율 {{ regime.rate }}% ({{ regime.n_pass }}/{{ regime.n_all }}건)</span>
     <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
@@ -92,19 +91,22 @@
   <div style="margin-top:12px;display:grid;grid-template-columns:minmax(200px,1fr) 2fr;gap:16px" class="rg-grid">
     <div style="background:var(--bg);border-radius:10px;padding:14px 16px">
       <div style="font-size:12px;color:var(--text-3);font-weight:700">조건 통과율</div>
-      <div style="font-size:30px;font-weight:800;letter-spacing:-1px;color:{{ regime.color }};line-height:1.2">
+      <div style="font-size:30px;font-weight:800;letter-spacing:-1px;color:var(--blue-dark);line-height:1.2">
         {{ regime.rate }}%</div>
       <div style="height:7px;background:var(--card);border-radius:4px;overflow:hidden;margin:8px 0 6px">
-        <div style="height:100%;width:{{ regime.rate }}%;background:{{ regime.color }};border-radius:4px"></div>
+        <div style="height:100%;width:{{ regime.rate }}%;background:var(--blue);border-radius:4px"></div>
       </div>
-      <div style="font-size:11.5px;color:var(--text-2);line-height:1.6">{{ regime.desc }}</div>
+      <div style="font-size:11.5px;color:var(--text-2);line-height:1.6">
+        이번 주 청약 상품 중 낙인·1차 조기상환 조건을 통과한 비율입니다.</div>
+      <div style="font-size:11px;color:var(--text-3);line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+        <b style="color:var(--text-2)">통과 조건</b><br>{{ regime.cond }}</div>
     </div>
     <div>
       <div style="font-size:12px;color:var(--text-3);font-weight:700;margin-bottom:8px">
         주요 지수 위치 <span style="font-weight:400">— 고점에 가깝고 많이 올랐을수록 신중</span></div>
       <div style="overflow-x:auto">
         <table>
-          <thead><tr><th>지수</th><th class="num">52주 고점 대비</th><th class="num">직전 1년</th></tr></thead>
+          <thead><tr><th>지수</th><th class="num">52주 고점 대비</th><th class="num">직전 1년 대비</th></tr></thead>
           <tbody>
             {% for i in regime.indexes %}
             <tr>
@@ -118,10 +120,10 @@
       </div>
       {% if regime.stocks %}
       <div style="font-size:12px;color:var(--text-3);font-weight:700;margin:14px 0 8px">
-        종목형 기초자산 <span style="font-weight:400">— 이번 주 상품에 많이 쓰인 순</span></div>
+        종목형 기초자산 <span style="font-weight:400">— 이번 주 다빈도 상품</span></div>
       <div style="overflow-x:auto">
         <table>
-          <thead><tr><th>기초자산</th><th class="num">이번 주</th><th class="num">52주 고점 대비</th><th class="num">직전 1년</th></tr></thead>
+          <thead><tr><th>기초자산</th><th class="num">이번 주</th><th class="num">52주 고점 대비</th><th class="num">직전 1년 대비</th></tr></thead>
           <tbody>
             {% for i in regime.stocks %}
             <tr>
@@ -138,9 +140,8 @@
     </div>
   </div>
   <p style="font-size:11.5px;color:var(--text-3);margin:12px 0 0;line-height:1.65">
-    통과율 = 이번 주 상품 중 낙인·1차 조기상환 조건을 통과한 비율. 10년 분기별 검증에서
-    통과율이 낮은 시기(&lt;5%)는 이후 1년 주식 수익률도 평균 −7.5%로 부진했고,
-    15~30%인 시기가 가장 좋았습니다(+52.2%). <b>ELS가 어려울 때 주식이 대안이 되지는 않았다</b>는 뜻이며,
+    10년 분기별 검증에서 조건 통과율과 이후 1년 주식 수익률은 같은 방향으로 움직였습니다(상관 +0.52).
+    <b>ELS 조건이 나쁜 시기는 주식도 부진했다</b>는 뜻이라, 한쪽이 어려울 때 다른 쪽이 대안이 되지는 않았습니다.
     투자 권유가 아니라 현재 위치를 읽는 참고 지표입니다.
   </p>
 </details>
