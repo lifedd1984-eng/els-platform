@@ -3,7 +3,7 @@
 <div id="pushWidget" data-vapid="{{ vapid_public_key }}" style="display:none">
   <span style="display:none">{% csrf_token %}</span>
   <button type="button" id="pushBtn" class="btn btn-sm btn-primary" style="white-space:nowrap">
-    <i class="fa-solid fa-bell"></i> <span id="pushLabel">알림 켜기</span>
+    <i class="fa-solid fa-bell"></i> <span id="pushLabel">알림 받기</span>
   </button>
   <div id="pushHint" style="display:none;font-size:11.5px;color:var(--text-3);margin-top:4px;max-width:240px;line-height:1.5"></div>
 </div>
@@ -38,8 +38,10 @@
     btn.className = "btn btn-sm" + (s === "off" ? " btn-primary" : "");
     btn.style.background = s === "on" ? "var(--blue-bg)" : (s === "blocked" ? "var(--bg)" : "");
     btn.style.color = s === "on" ? "var(--blue-dark)" : (s === "blocked" ? "var(--text-3)" : "");
-    icon.className = "fa-solid " + (s === "blocked" ? "fa-bell-slash" : "fa-bell");
-    label.textContent = s === "on" ? "알림 켜짐" : (s === "blocked" ? "알림 차단됨" : "알림 켜기");
+    /* 켜짐/꺼짐이 '켜짐 vs 켜기' 한 글자 차이라 구분이 안 됐다 — 아이콘까지 바꾼다 */
+    icon.className = "fa-solid " + (s === "on" ? "fa-circle-check"
+        : (s === "blocked" ? "fa-bell-slash" : "fa-bell"));
+    label.textContent = s === "on" ? "알림 켜짐" : (s === "blocked" ? "알림 차단됨" : "알림 받기");
     setHint(hintText);
   }
   function setHint(t) {
@@ -74,8 +76,16 @@
     render("blocked", BLOCKED_HINT);
   } else {
     getSub().then(function (sub) {
-      if (sub) { render("on"); post("/push/subscribe/", sub.toJSON()); }
-      else render("off");
+      if (!sub) { render("off"); return; }
+      /* 브라우저 구독이 살아있으면 '켜짐'. 서버 기록이 만료 정리 등으로 지워졌을
+         수 있어 한 번 다시 보내 되살린다(자가 치유). 끄기가 제대로 동작해야
+         이 재등록이 '꺼둔 알림을 되살리는' 부작용이 되지 않는다. */
+      render("on");
+      return post("/push/subscribe/", sub.toJSON());
+    }).catch(function () {
+      /* 구독 상태를 못 읽으면 버튼이 서버 렌더 기본값에 멈춰 상태를 잘못 보여준다.
+         꺼짐으로 되돌려 최소한 사용자가 다시 켤 수 있게 한다. */
+      render("off");
     });
   }
 
@@ -85,8 +95,23 @@
       btn.disabled = true;
       busy("끄는 중…");
       getSub().then(function (sub) {
-        if (sub) { post("/push/unsubscribe/", { endpoint: sub.endpoint }); sub.unsubscribe(); }
-        render("off", "알림을 껐어요");
+        if (!sub) { render("off", "알림을 껐어요"); return; }
+        var endpoint = sub.endpoint;
+        /* 순서가 중요하다 — 브라우저 구독 해지를 먼저 끝내고 서버 기록을 지운다.
+           해지가 실패했는데 '꺼짐'으로 그려버리면, 다음 방문에 구독이 그대로 남아
+           있어 버튼이 '켜짐'으로 되살아난다(원래 증상).
+           반대로 해지만 되고 서버 삭제가 실패하면 발송 때 404/410으로 core.push가
+           행을 지우므로 스스로 정리된다. */
+        return sub.unsubscribe().then(function (ok) {
+          if (ok === false) throw new Error("unsubscribe rejected");
+          return post("/push/unsubscribe/", { endpoint: endpoint });
+        }).then(function (res) {
+          if (!res.ok) throw new Error("server unsubscribe failed");
+          render("off", "알림을 껐어요");
+        });
+      }).catch(function () {
+        /* 실패를 숨기지 않는다 — 여전히 켜져 있음을 그대로 보여준다 */
+        render("on", "알림 끄기에 실패했어요. 잠시 후 다시 시도해주세요");
       }).finally(function () { btn.disabled = false; });
       return;
     }

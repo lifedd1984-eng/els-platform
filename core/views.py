@@ -330,7 +330,9 @@ def weekly(request):
 
         inv_assets = [
             (inv.amount, _asset_keys(inv.product.assets_raw))
-            for inv in Investment.objects.filter(status="보유중").select_related("product")
+            # 본인 보유 기준 — 전 회원 합산이면 남의 포트폴리오와의 중복률이 나온다
+            for inv in Investment.objects.filter(
+                user=request.user, status="보유중").select_related("product")
         ]
         total_held = sum(amt for amt, _ in inv_assets)
 
@@ -338,10 +340,12 @@ def weekly(request):
         show_overlap = request.user.is_authenticated and request.user.is_staff
         tracks = radar_tracks(monday, sunday)
         TRACK_META = {
-            "지수형": {"label": "지수형 TOP5", "sub": "1차 배리어 90 이하 · 고점 발행 아님 · "
-                      "낙인이 가장 낮은 30% 안에 드는 상품", "icon": "fa-shield-halved"},
-            "종목형": {"label": "종목형 TOP5", "sub": "1차 배리어 80 이하 · 고점 발행 아님 · "
-                      "낙인이 가장 낮은 30% 안에 드는 상품", "icon": "fa-rocket"},
+            "지수형": {"label": "지수형 TOP5",
+                      "sub": "1차 조기상환 90 이하 · 고점 회피(완만한 상승은 예외) · "
+                             "낙인이 가장 낮은 30% 미만", "icon": "fa-shield-halved"},
+            "종목형": {"label": "종목형 TOP5",
+                      "sub": "1차 조기상환 80 이하 · 고점 회피(완만한 상승은 예외) · "
+                             "낙인이 가장 낮은 30% 미만", "icon": "fa-rocket"},
         }
         for tier in ("지수형", "종목형"):
             items = []
@@ -1280,7 +1284,7 @@ def portfolio_export(request):
             (nxt["date"].strftime("%Y-%m-%d") if nxt else ""),
             (nxt["expected"] if nxt and nxt["expected"] else ""),
             p.loss_prob if p.loss_prob is not None else "",
-            (p.issue_date.strftime("%Y-%m-%d") if p.issue_date else ""),
+            (p.issued_on.strftime("%Y-%m-%d") if p.issued_on else ""),
             (p.expiry_date.strftime("%Y-%m-%d") if p.expiry_date else ""),
             badge,
         ])
@@ -1794,7 +1798,28 @@ def service_worker(request):
     return resp
 
 
-@login_required
+def _push_login_required(view):
+    """푸시 엔드포인트 전용 로그인 검사.
+
+    이 세 뷰는 fetch()만 호출한다. login_required는 미로그인 시 로그인 페이지로
+    302 리다이렉트하는데, fetch는 리다이렉트를 따라가 200(로그인 HTML)을 받는다.
+    그러면 클라이언트의 res.ok가 true가 되어 저장되지도 않은 구독을 '성공'으로
+    표시한다 — 리다이렉트 대신 403 JSON을 돌려줘야 클라이언트가 실패를 안다.
+    """
+    from functools import wraps
+
+    from django.http import JsonResponse
+
+    @wraps(view)
+    def _wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return JsonResponse({"ok": False, "error": "auth"}, status=403)
+        return view(request, *args, **kwargs)
+
+    return _wrapped
+
+
+@_push_login_required
 @require_POST
 def push_subscribe(request):
     """브라우저가 발급받은 푸시 구독 저장. 같은 endpoint 재등록 시 소유자·키 갱신."""
@@ -1820,7 +1845,7 @@ def push_subscribe(request):
     return JsonResponse({"ok": True})
 
 
-@login_required
+@_push_login_required
 @require_POST
 def push_unsubscribe(request):
     """알림 끄기 — endpoint 소유(브라우저)가 곧 증명이라 endpoint 기준으로 삭제."""
@@ -1837,7 +1862,7 @@ def push_unsubscribe(request):
     return JsonResponse({"ok": True})
 
 
-@login_required
+@_push_login_required
 @require_POST
 def push_test(request):
     """구독 직후 확인용 테스트 알림 1건."""

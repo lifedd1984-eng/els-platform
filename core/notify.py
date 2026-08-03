@@ -145,12 +145,9 @@ def notify_watchlist_deadline(stdout=None):
         "",
     ]
     for p in items:
-        badge = ""
-        r = p.radar
-        if r and r["tier"] == "아주 강한 신호":
-            badge = " · \U0001F535아주 강한"
-        elif r and r["tier"] == "강한 신호":
-            badge = " · \U0001F535강한"
+        # v7은 배지명이 "타겟 신호" 하나 — 구 배지명(아주 강한/강한) 비교는
+        # 항상 거짓이라 타겟 상품이 강조되지 않고 있었다 (2026-08-03)
+        badge = " · \U0001F535타겟" if p.radar else ""
         y = f"{p.yield_rate:g}" if p.yield_rate is not None else "-"
         lines.append(f"⏰ {p.issuer} {p.product_no} — 연 {y}% · 낙인{p.ki_display}{badge}")
     lines.append("")
