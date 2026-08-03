@@ -1,4 +1,5 @@
 import calendar as pycalendar
+import logging
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -13,6 +14,8 @@ from django.views.decorators.http import require_POST
 from .models import (
     ImportLog, Investment, Preset, Product, WatchItem, attach_peak_ratios,
 )
+
+logger = logging.getLogger(__name__)
 
 # 가족(운영진) 전용 — 공유 데이터(관심·프리셋·업로드)는 staff 계정만
 family_required = user_passes_test(lambda u: u.is_active and u.is_staff, login_url="/accounts/login/")
@@ -941,7 +944,7 @@ def portfolio(request):
             n = (name or "").strip()
             return _mkt_s.resolve_ticker(n) or n
 
-        _sa = _dd(lambda: {"name": None, "cur": None, "trigs": [], "amt": 0})
+        _sa = _dd(lambda: {"name": None, "cur": None, "cur_at": None, "trigs": [], "amt": 0})
         _inv_assets = _dd(list)   # inv_id → [(asset_key, trigger|None)]
         _inv_amt = {}
         _covered = set()
@@ -955,7 +958,17 @@ def portfolio(request):
             _a = _sa[_k]
             if _a["name"] is None:
                 _a["name"] = _mkt_s.shorten_asset_display(_s.asset_name.strip())
-            _a["cur"] = _s.current_price
+            # 티커로 합친 버킷에는 표기가 다른 행이 섞인다('Micron'/'Micron Technology').
+            # 그냥 덮어쓰면 마지막에 읽힌 행의 현재가가 자산 전체의 기준이 돼,
+            # 배치가 갱신하다 만 옛 값이 여유·손실 계산을 통째로 흔들 수 있다.
+            # 갱신 시각이 가장 최신인 행의 값을 채택한다.
+            if _a["cur"] is not None and _a["cur"] != _s.current_price:
+                logger.info("스트레스 테스트 현재가 불일치 자산=%s: %s(%s) vs %s(%s) — 최신값 채택",
+                            _k, _a["cur"], _a["cur_at"], _s.current_price, _s.updated_at)
+            if _a["cur"] is None or (_s.updated_at is not None
+                                     and (_a["cur_at"] is None or _s.updated_at > _a["cur_at"])):
+                _a["cur"] = _s.current_price
+                _a["cur_at"] = _s.updated_at
             _covered.add(_inv.id)
             _inv_amt[_inv.id] = _inv.amount
             trig = None
@@ -970,10 +983,12 @@ def portfolio(request):
 
         SHOCKS = (40, 50, 60, 70)
         rows = []
+        _shown = set()   # 3% 게이트를 통과해 실제로 표에 그려지는 자산 키
         for _k, _a in _sa.items():
             pct = _a["amt"] / total_invested * 100
             if pct < 3 or not _a["cur"] or not _a["trigs"]:
                 continue
+            _shown.add(_k)
             needs = [(1 - trig / _a["cur"]) * 100 for trig, _ in _a["trigs"]]
             amts = [amt for _, amt in _a["trigs"]]
             # 금액가중 평균 여유 — 대표값 (min은 가장 취약한 1건이라 대표성이 없다)
@@ -990,21 +1005,29 @@ def portfolio(request):
             # 합계는 투자 단위 union — 워스트오브 상품은 어느 자산이든 발동가를
             # 깨지면 낙인 1번이다. 자산 행 합산은 다중자산 투자를 중복 계상해
             # 이론상 상한(55%)을 넘는 값까지 만들었다 (레드팀 B [상1·상2])
+            # union 범위는 표에 그려진 자산(_shown)으로 제한한다. 3% 게이트에 걸려
+            # 행이 없는 자산까지 세면 <tfoot> '합계'가 바로 위 행들과 안 맞아,
+            # 같은 표 안에서 셈이 어긋난 것처럼 보인다.
             _cur = {k: _sa[k]["cur"] for k in _sa}
             tot = {}
             for d in SHOCKS:
                 knocked = 0
                 for _iid, _al in _inv_assets.items():
-                    if any(t is not None and _cur.get(k) and _cur[k] * (1 - d / 100) < t
-                           for k, t in _al):
+                    if any(k in _shown and t is not None and _cur.get(k)
+                           and _cur[k] * (1 - d / 100) < t for k, t in _al):
                         knocked += _inv_amt[_iid]
                 tot[d] = round(knocked / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
-            # '몰아 샀다면'(-60%): 전액을 각 자산의 가장 취약한 기준가에 샀다고 가정
-            _worst_trig = {k: max((t for t, _ in _sa[k]["trigs"]), default=None) for k in _sa}
+            # '몰아 샀다면'(-60%): 전액을 각 자산의 가장 취약한 기준가에 샀다고 가정.
+            # 자산 단위 _worst_trig만 보면 안 되고 투자별 발동가 t도 함께 봐야 한다 —
+            # t가 None인 노낙인 투자는 같은 기초자산의 낙인 상품이 아무리 위험해도
+            # 절대 낙인되지 않는데, 이를 빼먹으면 그 투자금까지 conc60에 얹혀
+            # '시기를 나눠 산 덕분에 N%p를 막았습니다'가 부풀려진다.
+            _worst_trig = {k: max((t for t, _ in _sa[k]["trigs"]), default=None)
+                           for k in _shown}
             conc_knocked = 0
             for _iid, _al in _inv_assets.items():
-                if any(_worst_trig.get(k) is not None and _cur.get(k)
-                       and _cur[k] * 0.40 < _worst_trig[k] for k, _ in _al):
+                if any(t is not None and _worst_trig.get(k) is not None and _cur.get(k)
+                       and _cur[k] * 0.40 < _worst_trig[k] for k, t in _al):
                     conc_knocked += _inv_amt[_iid]
             conc = round(conc_knocked / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
             rows.sort(key=lambda r: -r["losses"][60])

@@ -477,6 +477,10 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
     <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center" class="sim-grid">
       <div>
         <svg viewBox="0 0 400 230" style="width:100%">
+          <!-- 초록 안전구간은 배경이므로 반드시 기준선들보다 먼저 그린다.
+               SVG는 문서 순서대로 칠하기 때문에, 뒤에 있으면 100% 실선과
+               조기상환 85% 파란 점선을 덮어 기준선이 사라진다. -->
+          <rect x="112" y="14" width="278" height="171" fill="#E8F8F0" opacity="0.45"/>
           <line x1="112" y1="40" x2="390" y2="40" stroke="#E5E8EB" stroke-width="1"/>
           <text x="104" y="37" text-anchor="end" font-size="11" fill="#8B95A1">가입시점</text>
           <text x="104" y="52" text-anchor="end" font-size="10.5" font-weight="700" fill="#8B95A1">100%</text>
@@ -486,7 +490,6 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
           <line x1="112" y1="185" x2="390" y2="185" stroke="#E5503C" stroke-width="1.5" stroke-dasharray="6 3"/>
           <text x="104" y="182" text-anchor="end" font-size="11" fill="#E5503C" font-weight="700">낙인 기준</text>
           <text x="104" y="197" text-anchor="end" font-size="10.5" font-weight="700" fill="#E5503C">30%</text>
-          <rect x="112" y="14" width="278" height="171" fill="#E8F8F0" opacity="0.45"/>
           <text x="251" y="170" font-size="11" fill="#12B76A" font-weight="700" text-anchor="middle">낙인 기준 위면 원금 + 이자</text>
           <path d="M112 40 C 144 55, 168 90, 199 100 C 231 110, 255 80, 287 70 C 318 62, 350 58, 388 52"
                 fill="none" stroke="#4E5968" stroke-width="2.2" stroke-linecap="round"/>

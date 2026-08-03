@@ -80,6 +80,20 @@
   </form>
 </div>
 
+{% comment %}
+접이식 카드 공통 스타일 — 시장 국면·낙인대별·TOP5가 모두 .fold-card를 쓴다.
+예전엔 이 규칙이 ki_top5 블록 안에 있어서, 낙인 버킷에 걸리는 상품이 하나도
+없는 주간(운영: ?w=-11, ?w=-27)이면 통째로 빠졌다. 그러면 남은 카드들이
+summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드보다 앞에 둬야
+펼쳐진 순간부터 제 모양으로 그려진다.
+{% endcomment %}
+<style>
+  .fold-card summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:800;flex-wrap:wrap}
+  .fold-card summary::-webkit-details-marker{display:none}
+  .fold-chev{color:var(--text-3);transition:transform .15s}
+  details.fold-card[open] .fold-chev{transform:rotate(180deg)}
+</style>
+
 {% if regime %}
 <details class="card fold-card" data-fold="regimeFold" style="padding:14px 16px;margin-bottom:14px">
   <summary>
@@ -102,6 +116,12 @@
         <b style="color:var(--text-2)">통과 조건</b><br>{{ regime.cond }}</div>
     </div>
     <div>
+      {% comment %}
+      4개 지수가 전부 시세 조회에 실패하면 indexes가 빈 리스트가 된다.
+      _market_regime()이 500을 내지는 않으니 화면에는 머리글만 남은 빈 표가
+      그려졌다 — 아래 종목 표처럼 가드를 둔다.
+      {% endcomment %}
+      {% if regime.indexes %}
       <div style="font-size:12px;color:var(--text-3);font-weight:700;margin-bottom:8px">
         주요 지수 위치 <span style="font-weight:400">— 고점에 가깝고 많이 올랐을수록 신중</span></div>
       <div style="overflow-x:auto">
@@ -118,6 +138,7 @@
           </tbody>
         </table>
       </div>
+      {% endif %}
       {% if regime.stocks %}
       <div style="font-size:12px;color:var(--text-3);font-weight:700;margin:14px 0 8px">
         종목형 기초자산 <span style="font-weight:400">— 이번 주 다빈도 상품</span></div>
@@ -151,10 +172,6 @@
 {# ── 낙인대별 최고 수익 — 기본 펼침, 접기 상태는 localStorage에 저장 ── #}
 {% if ki_top5 %}
 <style>
-  .fold-card summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:800;flex-wrap:wrap}
-  .fold-card summary::-webkit-details-marker{display:none}
-  .fold-chev{color:var(--text-3);transition:transform .15s}
-  details.fold-card[open] .fold-chev{transform:rotate(180deg)}
   .kt-tabbtn.kt-on{background:var(--blue);border-color:var(--blue);color:#fff}
   .kt-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
   .kt-col{flex:1 1 200px;min-width:196px;display:flex;flex-direction:column;gap:6px}
@@ -208,29 +225,6 @@
   {% endfor %}
   {% include "core/_disclaimer_inline.html" %}
 </details>
-<script>
-(function(){
-  // 접기 상태 저장 — TOP5·낙인대별 공용 (data-fold 키로 localStorage)
-  document.querySelectorAll('details.fold-card[data-fold]').forEach(function(d){
-    var key = 'fold:' + d.dataset.fold;
-    try { if (localStorage.getItem(key) === 'closed') d.removeAttribute('open'); } catch(e){}
-    d.addEventListener('toggle', function(){
-      try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch(e){}
-    });
-  });
-  // 유형 탭 — summary 안에 있으므로 접힘 토글을 막는다
-  document.querySelectorAll('.kt-tabbtn').forEach(function(b){
-    b.addEventListener('click', function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      document.querySelectorAll('.kt-tabbtn').forEach(function(x){ x.classList.remove('kt-on'); });
-      document.querySelectorAll('.kt-pane').forEach(function(p){ p.style.display = 'none'; });
-      b.classList.add('kt-on');
-      document.getElementById(b.dataset.pane).style.display = '';
-    });
-  });
-})();
-</script>
 {% endif %}
 
 {% if recommendations %}
@@ -279,7 +273,37 @@
 </details>
 {% endif %}
 
-
+{% comment %}
+접기 상태 저장·유형 탭 — 모든 fold-card 뒤에 둔다.
+예전엔 ki_top5 블록 안(TOP5 카드보다 위)에 있어서 두 가지가 깨졌다.
+① 낙인 버킷이 빈 주간에는 스크립트 자체가 사라져 접기 상태가 저장되지 않았고,
+② 있더라도 실행 시점에 아래 TOP5 details가 아직 파싱 전이라 top5Fold는
+   querySelectorAll에 잡히지 않았다(그 카드만 상태 저장이 안 됐다).
+.kt-tabbtn은 낙인대별 카드가 없으면 빈 목록이라 그냥 지나간다.
+{% endcomment %}
+<script>
+(function(){
+  // 접기 상태 저장 — TOP5·낙인대별 공용 (data-fold 키로 localStorage)
+  document.querySelectorAll('details.fold-card[data-fold]').forEach(function(d){
+    var key = 'fold:' + d.dataset.fold;
+    try { if (localStorage.getItem(key) === 'closed') d.removeAttribute('open'); } catch(e){}
+    d.addEventListener('toggle', function(){
+      try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch(e){}
+    });
+  });
+  // 유형 탭 — summary 안에 있으므로 접힘 토글을 막는다
+  document.querySelectorAll('.kt-tabbtn').forEach(function(b){
+    b.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      document.querySelectorAll('.kt-tabbtn').forEach(function(x){ x.classList.remove('kt-on'); });
+      document.querySelectorAll('.kt-pane').forEach(function(p){ p.style.display = 'none'; });
+      b.classList.add('kt-on');
+      document.getElementById(b.dataset.pane).style.display = '';
+    });
+  });
+})();
+</script>
 
 {% if products %}
   {# ── 모바일(≤800px) 2줄 리스트 — 스타일·행 마크업은 base.html / _mobile_row.html 공용 ── #}
