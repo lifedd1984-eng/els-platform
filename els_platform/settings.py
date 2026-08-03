@@ -211,3 +211,45 @@ else:
 
 # 업로드 엑셀 임시 저장 폴더
 UPLOAD_DIR = BASE_DIR / "uploads"
+
+# ── 로깅 ─────────────────────────────────────────────────
+# 왜 필요한가
+#   기본값은 django.request 에러를 mail_admins로만 보내는데 ADMINS가 비어 있어
+#   그대로 버려진다. 2026-08-03에 /weekly/가 비로그인 방문자 전원에게 500을
+#   내며 10시간 죽어 있었는데, 저널에는 상태코드 500만 남고 트레이스백이
+#   어디에도 없어서 아무도 몰랐다. 실사용자 60명이 그 화면을 봤다.
+# 파일로 남기고, 500은 텔레그램으로도 즉시 올린다.
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "full": {"format": "[{asctime}] {levelname} {name} {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "full"},
+        "errfile": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": str(LOG_DIR / "django_error.log"),
+            "maxBytes": 5 * 1024 * 1024,
+            "backupCount": 5,
+            "formatter": "full",
+            "encoding": "utf-8",
+        },
+        # 500만 텔레그램으로. 4xx까지 보내면 크롤러 때문에 알림이 무의미해진다.
+        "telegram": {
+            "class": "core.logging_telegram.TelegramErrorHandler",
+            "level": "ERROR",
+        },
+    },
+    "loggers": {
+        "django.request": {
+            "handlers": ["errfile", "console", "telegram"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "core": {"handlers": ["errfile", "console"], "level": "INFO", "propagate": False},
+    },
+}
