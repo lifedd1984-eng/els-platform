@@ -12,9 +12,9 @@ Playwright(브라우저 컨텍스트)로 호출해 ELS/ELB 발행 이력을 대�
 확인했다(9999까지 단일 요청으로 확인됨) — 페이지를 한 건씩 넘길 필요 없이
 연도(또는 그 이하 구간)당 1~2회 요청으로 전체 발행 이력을 받을 수 있다.
 
-주의: Django ORM은 Playwright sync_playwright() 컨텍스트 안에서 호출하면
-asyncio 안전장치(SynchronousOnlyOperation)에 걸린다. 그래서 수집 단계에서는
-JSONL 원본 파일에만 쓰고, 브라우저를 완전히 닫은 뒤 별도 단계에서 DB에 저장한다.
+수집은 순수 requests로 한다 — 목록 화면을 한 번 GET해 세션 쿠키를 받으면
+서블릿을 그대로 호출할 수 있다(브라우저 불필요). 수집 단계는 JSONL 파일에만
+쓰고 DB 저장은 별도 단계에서 한다(원본 보존 + 재적재 가능).
 
 사용:
   python manage.py scrape_seibro_history --start-year 2003 --end-year 2026
@@ -105,14 +105,15 @@ class Command(BaseCommand):
 
     # ── 1단계: 수집 (JSONL 파일에만 저장, DB 접근 없음) ──
     def _scrape(self, start_year, end_year, delay):
-        from playwright.sync_api import sync_playwright
+        """서블릿을 requests로 직접 호출한다.
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
-            page.goto(LIST_URL, timeout=30000)
-            page.wait_for_timeout(1500)
-
+        예전엔 Playwright 브라우저 안에서 fetch를 실행했는데, 목록 화면을 한 번
+        GET해 세션 쿠키(WMONID/JSESSIONID)만 받으면 순수 requests로도 동일하게
+        동작한다(collect_seibro_detail과 같은 방식). EC2에 playwright가 없어
+        2026-07-20 이후 수집이 멈춰 있던 원인이라 브라우저 의존을 걷어냈다.
+        """
+        page = self._session()
+        try:
             for year in range(start_year, end_year + 1):
                 y_start = f"{year}0101"
                 y_end = f"{year}1231" if year < date.today().year else date.today().strftime("%Y%m%d")
@@ -127,20 +128,35 @@ class Command(BaseCommand):
                         count += len(rows)
                 self.stdout.write(f"[수집:{year}] {count}건 -> {out_path.name}")
 
-            browser.close()
+        finally:
+            page.close()
+
+    def _session(self):
+        """서블릿 호출용 requests 세션 (컨텍스트 매니저)."""
+        import requests
+
+        s = requests.Session()
+        s.headers.update({
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                           "AppleWebKit/537.36 (KHTML, like Gecko) "
+                           "Chrome/124.0.0.0 Safari/537.36"),
+            "Content-Type": "text/xml",
+            "Referer": LIST_URL,
+        })
+        s.get(LIST_URL, timeout=30)      # 세션 쿠키 확보
+        return s
+
+    @staticmethod
+    def _post(page, body):
+        """page = requests 세션. 서블릿 POST 후 본문 반환."""
+        url = API_PATH if API_PATH.startswith("http") else "https://seibro.or.kr" + API_PATH
+        r = page.post(url, data=body.encode("utf-8"), timeout=60)
+        r.raise_for_status()
+        return r.text
 
     def _get_count(self, page, start_s, end_s) -> int:
         body = COUNT_TEMPLATE.format(start=start_s, end=end_s)
-        result = page.evaluate(
-            """async (body) => {
-                const r = await fetch('%s', {
-                    method: 'POST', headers: {'Content-Type': 'text/xml'}, body,
-                });
-                return await r.text();
-            }"""
-            % API_PATH,
-            body,
-        )
+        result = self._post(page, body)
         m = re.search(r'LIST_CNT value="(\d+)"', result)
         return int(m.group(1)) if m else 0
 
@@ -168,16 +184,7 @@ class Command(BaseCommand):
 
     def _fetch_rows(self, page, start_s, end_s):
         body = REQ_TEMPLATE.format(start=start_s, end=end_s, end_page=MAX_PAGE_SIZE)
-        result = page.evaluate(
-            """async (body) => {
-                const r = await fetch('%s', {
-                    method: 'POST', headers: {'Content-Type': 'text/xml'}, body,
-                });
-                return await r.text();
-            }"""
-            % API_PATH,
-            body,
-        )
+        result = self._post(page, body)
         return [_parse_row(b) for b in RESULT_BLOCK_RE.findall(result)]
 
     # ── 2단계: JSONL -> DB (브라우저 종료 후, 별도) ──
