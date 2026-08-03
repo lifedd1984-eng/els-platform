@@ -495,6 +495,29 @@ class Product(models.Model):
         return self.real_issue_date or self.issue_date
 
     @property
+    def fixed_eval_dates(self):
+        """확정 평가일 [date, ...]. 쓸 수 없으면 None (= 근사 폴백해야 한다는 뜻).
+
+        Investment.schedule과 schedule_badge가 **반드시 이 하나만** 보도록 만든 헬퍼다.
+        예전엔 schedule은 파싱까지 해 보고 실패하면 근사로 떨어졌는데 schedule_badge는
+        개수만 세서 '확정'(배지 없음)을 냈다. 파싱이 깨지는 값
+        (제로패딩 없는 "2025-7-10", 원소가 None, 리스트가 아닌 문자열)이 들어오면
+        화면·엑셀에 근사 스케줄이 '확정'으로 찍혔다. (2026-08-04 검수)
+
+        개수가 배리어와 맞아야 한다 — 부분 일치는 회차 정렬이 어긋나 신뢰할 수 없다.
+        """
+        raw = self.eval_dates
+        # JSONField에 문자열이 그대로 들어간 경우 len()이 글자수라 개수 검사를 통과할 수 있다
+        if not isinstance(raw, (list, tuple)) or not raw:
+            return None
+        if len(raw) != len(self.barriers_raw or []):
+            return None
+        try:
+            return [date.fromisoformat(str(d)[:10]) for d in raw]
+        except (ValueError, TypeError):
+            return None
+
+    @property
     def term_months(self):
         """상품기간(발행일→만기일) 총 개월수. 둘 중 하나라도 없으면 None.
 
@@ -737,13 +760,9 @@ class Investment(models.Model):
             return []
         first = p.first_eval_months if p.first_eval_months else p.period_months
         interval = p.period_months
-        # 확정 평가일 — 회차 수가 배리어와 맞을 때만 사용(부분 일치는 신뢰 불가)
-        fixed = None
-        if p.eval_dates and len(p.eval_dates) == n_barriers:
-            try:
-                fixed = [date.fromisoformat(str(d)[:10]) for d in p.eval_dates]
-            except (ValueError, TypeError):
-                fixed = None
+        # 확정 평가일 — 판정은 Product.fixed_eval_dates 한 곳에서만 한다.
+        # 여기서 따로 파싱하면 schedule_badge와 결과가 갈린다(과거 사고).
+        fixed = p.fixed_eval_dates
         rows = []
         for n in range(1, n_barriers + 1):
             months = first + (n - 1) * interval
@@ -767,11 +786,14 @@ class Investment(models.Model):
         - 실제 평가일(eval_dates)이 없어 '기준일+N개월'로 근사한 경우 '추정'
           (근사는 실측과 -7~+3일 벌어진다 — 2026-08-03 보유 153종 대조)
         - 주기를 판정 못해 임의 추정한 경우도 '추정'
+
+        eval_dates가 있어도 날짜로 못 읽으면 schedule은 근사로 떨어진다.
+        그래서 개수만 세지 말고 schedule과 같은 헬퍼를 봐야 한다. (2026-08-04)
         """
         p = self.product
         if not p.barriers_raw or not p.period_months:
             return "확인필요"
-        if p.eval_dates and len(p.eval_dates) == len(p.barriers_raw or []):
+        if p.fixed_eval_dates:
             return None
         return "추정"
 

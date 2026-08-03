@@ -330,14 +330,18 @@ def fetch_price_on(ticker: str, target_date, back: int = 0):
 
 # ── 최초기준가격 산정일 ──────────────────────────────────────────────
 # 간이투자설명서 전수조사(18개사 72건) 결과: 최초기준가격평가일은 발행사별로 일관되며
-# 16개사는 '발행일 당일', 삼성증권·키움증권만 '발행일 −1영업일'(납입·배정일 종가)이다.
+# 대부분 '발행일 당일'이고 일부만 '발행일 −1영업일'(납입·배정일 종가)이다.
+# ⚠ 72건 표본으로는 삼성증권·키움증권 둘만 보였지만, 나중에 설명서 확정값 757건을
+#   전수로 다시 도출했더니 대신증권도 −1영업일이었다. 명단은 아래
+#   BASE_EVAL_BACK1_ISSUERS 한 곳만 보고 판단할 것. (2026-08-04 주석 정정)
 # Product.base_eval_date(설명서에서 파싱)가 있으면 그 날짜가 정답이고,
 # 없을 때만 issue_date + 발행사 규칙으로 근사한다.
 #
 # ⚠ issue_date는 이름과 달리 **청약종료일**이다(kofia_scraper가 같은 필드를 양쪽에 넣음).
 #   아래 일수는 18개사 76건의 간이투자설명서를 실제 파싱해 측정한 값이며,
-#   "발행일 기준" 관행(삼성·키움 = 발행일 −1영업일)과는 기준점이 달라 결과가 다르다.
-#   삼성·키움은 발행일이 청약종료일의 익영업일이라, 둘을 합치면 평가일 = 청약종료일(+0)이 된다.
+#   "발행일 기준" 관행(BASE_EVAL_BACK1_ISSUERS = 발행일 −1영업일)과는 기준점이 달라
+#   결과가 다르다. 이 발행사들은 발행일이 청약종료일의 익영업일이라,
+#   둘을 합치면 평가일 = 청약종료일(+0)이 된다.
 #   → 파생 추론 말고 이 실측표를 쓸 것.
 BASE_EVAL_OFFSET_DAYS = {          # issue_date(청약종료일) + N일 = 최초기준가격평가일
     "NH투자증권": 1,
@@ -416,7 +420,8 @@ def fetch_history(ticker: str, days: int = 365):
 
     # days를 키에 넣지 않으면 상품상세(365d)와 주간 고점대비(370d)가 서로의
     # 캐시를 덮어써 워커별 최초 호출이 그날의 데이터 창을 결정한다 (2026-08-03)
-    key = (ticker, days, _date.today())
+    today = _date.today()
+    key = (ticker, days, today)
     if key in _history_cache:
         return _history_cache[key]
     rows = []
@@ -426,5 +431,11 @@ def fetch_history(ticker: str, days: int = 365):
         rows = [(idx.date(), float(v)) for idx, v in closes.items()]
     except Exception:
         pass
+    # 날짜가 키에 있을 뿐 만료가 없어, 지난 날짜 항목이 워커 재시작 때까지 계속
+    # 쌓였다. days를 키에 넣으면서 항목 수가 2배가 됐고, 고유 티커 42개 × 창 2종
+    # × 370행이면 워커당 하루 약 2.5MB, 30일이면 75MB다. 새로 넣을 때 지난 날짜를
+    # 버린다 — 오늘 것만 남기면 되므로 LRU 같은 장치가 필요 없다. (2026-08-04)
+    for stale in [k for k in _history_cache if k[2] != today]:
+        del _history_cache[stale]
     _history_cache[key] = rows
     return rows

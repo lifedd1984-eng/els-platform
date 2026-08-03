@@ -147,6 +147,11 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------
     def _check_all(self):
+        """30편 전체 검사. 문제가 있으면 종료코드 1로 끝낸다.
+
+        예전엔 문제를 찾아도 0으로 끝나 CI·크론이 초록불을 봤다. 이 검사는
+        금칙어 게이트라 조용히 통과하면 안 된다. (2026-08-04)
+        """
         bad = 0
         for d in DRAFTS:
             problems = check(d["text"], d["day"])
@@ -164,6 +169,8 @@ class Command(BaseCommand):
         self.stdout.write(f"총 {len(DRAFTS)}편 / 문제 {bad}편")
         self.stdout.write("유형 배분: " + ", ".join(
             f"{k} {v}편" for k, v in sorted(types.items())))
+        if bad:
+            raise SystemExit(1)
 
     def _notify(self, text):
         try:

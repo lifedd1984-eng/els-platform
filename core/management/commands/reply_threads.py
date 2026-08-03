@@ -47,6 +47,10 @@ HOURLY_MAX = 15          # 최근 1시간 발송 상한
 RECENT_TEXT_N = 50       # 문구 중복 검사 대상 (최근 발송 N건)
 MAX_AGE_HOURS = 24       # 이보다 오래된 댓글은 이제 와서 답하지 않는다
 NOTIFY_MAX_PER_RUN = 20  # 밀린 B·C가 많아도 한 번에 이만큼만 알린다
+# 20건을 건별로 쏘면 텔레그램 분당 한도(같은 대화 ≈20건)에 그대로 닿는다.
+# 한도에 걸리면 send_message가 False를 주고 그 건은 new로 남아 다음 실행에서
+# 또 20건을 쏘는 악순환이 된다. 5건씩 한 메시지로 묶으면 최대 4통이라 여유가 있다.
+NOTIFY_BATCH_SIZE = 5
 
 
 class Command(BaseCommand):
@@ -182,14 +186,12 @@ class Command(BaseCommand):
             self.stdout.write("사람이 답할 댓글 없음")
             return
 
-        for row in rows:
-            head = ("개별 판단 요청 — 직접 답변 필요" if row.bucket == "C"
-                    else "사람 답변 필요")
-            body = (f"[스레드 댓글] {head}\n"
-                    f"@{row.username or '(작성자 미상)'}\n"
-                    f"{row.text[:400]}\n"
-                    f"분류 근거: {row.bucket_reason}\n"
-                    f"{row.permalink or '(링크 없음)'}")
+        notified = 0
+        # 묶음 단위로 보낸다. C가 섞인 묶음은 제목에 그대로 드러나야 하므로
+        # 항목별 머리말은 그대로 두고 앞에 묶음 안내만 붙인다.
+        for i in range(0, len(rows), NOTIFY_BATCH_SIZE):
+            chunk = rows[i:i + NOTIFY_BATCH_SIZE]
+            body = self._manual_message(chunk)
             if self.dry:
                 self.stdout.write("  ── 알림 예정 ──\n" + body)
                 continue
@@ -197,18 +199,46 @@ class Command(BaseCommand):
             # False만 돌려주는데, 예전에는 결과를 안 보고 notified로 닫아서
             # 텔레그램이 레이트리밋에 걸리면 컴플레인이 영영 묻혔다.
             # 실패하면 new로 남겨 다음 실행(10분 뒤)에 다시 시도한다. (2026-08-03)
+            # 묶음이 실패하면 그 묶음 전체가 new로 남는다 — 한 건이라도 묻히는
+            # 것보다 중복 알림이 낫다.
             if self._alert(body):
-                row.status = "notified"
-                row.save(update_fields=["status"])
+                for row in chunk:
+                    row.status = "notified"
+                    row.save(update_fields=["status"])
+                notified += len(chunk)
             else:
-                self.stdout.write(f"  알림 실패 — 다음 실행에서 재시도: @{row.username}")
+                self.stdout.write(
+                    f"  알림 실패 — 다음 실행에서 재시도: "
+                    + ", ".join(f"@{r.username}" for r in chunk))
 
         head = "[dry-run] " if self.dry else ""
+        msgs = (len(rows) + NOTIFY_BATCH_SIZE - 1) // NOTIFY_BATCH_SIZE
         left = ThreadsReply.objects.filter(bucket__in=buckets, status="new").count()
         if self.dry:                      # dry-run은 상태를 안 바꾸므로 직접 빼 준다
             left -= len(rows)
+            notified = len(rows)
         tail = f" (남은 {left}건은 다음 실행)" if left > 0 else ""
-        self.stdout.write(self.style.SUCCESS(f"{head}B·C 알림 {len(rows)}건{tail}"))
+        self.stdout.write(self.style.SUCCESS(
+            f"{head}B·C 알림 {notified}건 / 메시지 {msgs}통{tail}"))
+
+    @staticmethod
+    def _manual_message(chunk):
+        """B·C 댓글 묶음 하나를 텔레그램 메시지 한 통으로 만든다.
+
+        본문을 400자로 자르고 있어 한 건이 넉넉히 잡아도 700자 안쪽이라,
+        5건이면 텔레그램 상한(4,096자)에 닿지 않는다.
+        """
+        parts = []
+        for j, row in enumerate(chunk, 1):
+            head = ("개별 판단 요청 — 직접 답변 필요" if row.bucket == "C"
+                    else "사람 답변 필요")
+            num = f"({j}/{len(chunk)}) " if len(chunk) > 1 else ""
+            parts.append(f"{num}{head}\n"
+                         f"@{row.username or '(작성자 미상)'}\n"
+                         f"{row.text[:400]}\n"
+                         f"분류 근거: {row.bucket_reason}\n"
+                         f"{row.permalink or '(링크 없음)'}")
+        return f"[스레드 댓글] {len(chunk)}건\n\n" + "\n\n".join(parts)
 
     # ------------------------------------------------------------------
     def _close(self, row, reason):

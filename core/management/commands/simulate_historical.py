@@ -162,7 +162,10 @@ class Command(BaseCommand):
             return
 
         bars = [int(b) for b in issue.stepdown_barriers]
-        key = (tuple(tickers), tuple(bars), issue.ki, issue.period_months, issue.issue_date)
+        # first_eval_months가 결과를 바꾸므로 캐시 키에도 반드시 들어가야 한다.
+        # 빠뜨리면 1차 평가 시점만 다른 상품끼리 서로의 결과를 덮어쓴다.
+        key = (tuple(tickers), tuple(bars), issue.ki, issue.period_months,
+               issue.first_eval_months, issue.issue_date)
         # 손실확률·1년내 조기상환은 수익률과 무관(수익률은 회차 수익 표시에만 쓰임)
         # → 같은 구조·같은 발행일이면 결과가 동일하므로 재사용한다.
         cached = self._sim_cache.get(key)
@@ -184,6 +187,11 @@ class Command(BaseCommand):
             ki=issue.ki,
             is_no_ki=False,
             period_months=issue.period_months,
+            # 1차 평가가 이후 주기와 다른 상품은 이걸 안 넘기면 총기간이 짧게 잡혀
+            # 손실확률이 틀린다. simulate_products는 2026-08-03에 고쳤는데 여기는
+            # 남아 있었다 — 지금은 대상 데이터가 0건이라 영향이 없지만
+            # collect_seibro_detail 커버리지가 늘면 바로 문제가 된다. (2026-08-04)
+            first_eval_months=issue.first_eval_months,
             yield_rate=issue.yield_rate,
             sample_years=years,
         )

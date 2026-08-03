@@ -1,13 +1,80 @@
-from datetime import datetime, timedelta, timezone as dt_timezone
+from datetime import date, datetime, timedelta, timezone as dt_timezone
 from unittest import mock
 
+from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 
-from core.models import ThreadsReply
+from core.models import Investment, Product, ThreadsReply
 from core.threads_replies import (GREETING_REPLIES, SAMPLE_TEXTS, SERVICE_REPLIES,
                                   choose_reply, classify, is_approved,
                                   reply_delay_minutes)
+
+
+class ScheduleBadgeTest(TestCase):
+    """스케줄이 근사로 떨어졌는데 배지가 '확정'으로 나오지 않는지 본다.
+
+    예전엔 schedule은 date.fromisoformat을 실제로 돌려 보고 실패하면 근사로
+    떨어졌는데, schedule_badge는 eval_dates의 '개수'만 세서 배지 없음(=확정)을
+    냈다. 화면·엑셀 내려받기가 근사 날짜를 확정이라고 표시했다.
+    두 프로퍼티가 같은 헬퍼(Product.fixed_eval_dates)를 보는지가 이 테스트의 핵심이다.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="tester", password="x")
+
+    def _inv(self, eval_dates):
+        p = Product.objects.create(
+            issuer="테스트증권", product_no="1", yield_rate=6.0,
+            barriers_raw=[90, 85, 80], period_months=6, first_eval_months=6,
+            issue_date=date(2025, 1, 10), expiry_date=date(2026, 7, 10),
+            eval_dates=eval_dates)
+        return Investment.objects.create(
+            user=self.user, product=p, amount=10_000_000,
+            invested_at=date(2025, 1, 9))
+
+    def _근사로_떨어졌는데_추정_배지가_붙는다(self, inv):
+        p = inv.product
+        self.assertIsNone(p.fixed_eval_dates)
+        self.assertEqual(inv.schedule_badge, "추정")
+        # 근사 = 기준일 + N개월 (여기서는 2025-01-10 + 6/12/18개월)
+        self.assertEqual([r["date"] for r in inv.schedule],
+                         [date(2025, 7, 10), date(2026, 1, 10), date(2026, 7, 10)])
+
+    def test_제로패딩_없는_날짜는_확정으로_표시하지_않는다(self):
+        # "2025-7-10"은 ISO 형식이 아니라 date.fromisoformat이 거부한다
+        self._근사로_떨어졌는데_추정_배지가_붙는다(
+            self._inv(["2025-7-10", "2026-1-12", "2026-7-13"]))
+
+    def test_원소에_None이_섞이면_확정으로_표시하지_않는다(self):
+        self._근사로_떨어졌는데_추정_배지가_붙는다(
+            self._inv(["2025-07-11", None, "2026-07-13"]))
+
+    def test_리스트가_아닌_문자열은_확정으로_표시하지_않는다(self):
+        # JSONField에 문자열이 그대로 들어가면 len()이 글자수(3)라 개수 검사를 통과했다
+        self._근사로_떨어졌는데_추정_배지가_붙는다(self._inv("abc"))
+
+    def test_정상값은_확정이고_스케줄도_그_날짜를_쓴다(self):
+        inv = self._inv(["2025-07-11", "2026-01-12", "2026-07-13"])
+        self.assertIsNone(inv.schedule_badge)
+        self.assertEqual([r["date"] for r in inv.schedule],
+                         [date(2025, 7, 11), date(2026, 1, 12), date(2026, 7, 13)])
+
+    def test_개수가_배리어와_다르면_확정이_아니다(self):
+        inv = self._inv(["2025-07-11", "2026-01-12"])
+        self.assertEqual(inv.schedule_badge, "추정")
+
+    def test_배지와_스케줄은_언제나_같은_판단을_쓴다(self):
+        # 배지가 '확정'(None)인데 스케줄이 근사인 조합이 하나도 없어야 한다
+        cases = [None, [], "abc", ["2025-7-10", "2026-1-12", "2026-7-13"],
+                 ["2025-07-11", None, "2026-07-13"], ["2025-07-11", "2026-01-12"],
+                 ["2025-07-11", "2026-01-12", "2026-07-13"]]
+        for ev in cases:
+            inv = self._inv(ev)
+            근사 = [r["date"] for r in inv.schedule] == [
+                date(2025, 7, 10), date(2026, 1, 10), date(2026, 7, 10)]
+            self.assertEqual(inv.schedule_badge is None, not 근사, f"eval_dates={ev!r}")
 
 
 class ThreadsReplyClassifierTest(SimpleTestCase):
@@ -168,3 +235,47 @@ class ReplyThreadsCommandTest(TestCase):
         post, _ = self._run()
         texts = [c.args[0] for c in post.call_args_list]
         self.assertEqual(len(texts), len(set(texts)))
+
+    def test_BC_알림은_5건씩_묶어_보낸다(self):
+        # 20건을 건별로 쏘면 텔레그램 분당 한도(≈20건)에 그대로 닿는다
+        for i in range(20):
+            self._row(f"b{i}", "B", 60, "B:기본(A·C 신호 없음)", text=f"질문{i}")
+        _, tg = self._run()
+        self.assertEqual(tg.call_count, 4)                    # 20건 → 4통
+        bodies = [c.args[0] for c in tg.call_args_list]
+        for body in bodies:
+            self.assertLess(len(body), 4096)                  # 텔레그램 상한
+        합본 = "\n".join(bodies)
+        for i in range(20):                                   # 한 건도 빠지지 않는다
+            self.assertIn(f"질문{i}", 합본)
+        self.assertEqual(ThreadsReply.objects.filter(status="notified").count(), 20)
+
+    def test_묶음_발송이_실패하면_그_묶음은_new로_남는다(self):
+        for i in range(5):
+            self._row(f"b{i}", "B", 60, "B:기본(A·C 신호 없음)")
+        with mock.patch("django.utils.timezone.now", return_value=NOW), \
+             mock.patch("core.threads_api.post_reply"), \
+             mock.patch("core.telegram.send_message", return_value=False):
+            call_command("reply_threads", stdout=mock.MagicMock())
+        self.assertEqual(ThreadsReply.objects.filter(status="new").count(), 5)
+
+
+class PostThreadsDailyCheckTest(TestCase):
+    """--check-all이 문제를 찾고도 0으로 끝나면 크론이 초록불을 본다."""
+
+    def test_문제가_있으면_종료코드_1(self):
+        나쁜원고 = [{"day": 1, "type": "E", "text": "지금 들어가면 무조건 수익 납니다"}]
+        with mock.patch("core.management.commands.post_threads_daily.DRAFTS", 나쁜원고), \
+             mock.patch("core.management.commands.post_threads_daily.check",
+                        return_value=["금칙어: 무조건"]):
+            with self.assertRaises(SystemExit) as cm:
+                call_command("post_threads_daily", check_all=True,
+                             stdout=mock.MagicMock())
+        self.assertEqual(cm.exception.code, 1)
+
+    def test_문제가_없으면_예외없이_끝난다(self):
+        좋은원고 = [{"day": 1, "type": "E", "text": "오늘의 기록입니다"}]
+        with mock.patch("core.management.commands.post_threads_daily.DRAFTS", 좋은원고), \
+             mock.patch("core.management.commands.post_threads_daily.check",
+                        return_value=[]):
+            call_command("post_threads_daily", check_all=True, stdout=mock.MagicMock())

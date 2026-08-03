@@ -84,25 +84,36 @@ def extract_dates(text):
     return base, issued
 
 
-def _dates_sane(product, base, issued):
-    """추출한 날짜가 상품의 기간 안에 있는지 검증.
+# 청약종료일 대비 허용 창 — 실측 437건 분포는 0일 328건 / +1일 108건 / +3일 1건이라
+# +14일이면 충분히 넉넉하고, 다른 차수의 설명서(보통 한 달 이상 떨어짐)는 확실히 막는다.
+SANE_BACK_DAYS = 7
+SANE_FWD_DAYS = 14
 
-    발행일·기준가평가일은 청약 시작 이후, 만기 이전이어야 한다.
+
+def _dates_sane(product, base, issued):
+    """추출한 날짜가 이 상품의 청약종료일 근처인지 검증.
+
     같은 상품번호가 차수마다 재사용되는 발행사가 있어(메리츠 등) 다른 차수의
-    설명서를 읽으면 만기 뒤 발행일 같은 값이 들어온다. (2026-08-03)
+    설명서를 읽으면 엉뚱한 날짜가 들어온다. (2026-08-03)
+
+    경계는 둘 다 **청약종료일** 기준으로 잡는다. 예전엔 상한이 만기일이라
+    여유가 중앙값 1,098일이었고, 같은 상품번호의 다른 차수 날짜가 만기 안쪽이면
+    그대로 통과했다 — 가드가 사실상 없었다.
+    하한도 sub_start를 먼저 봤는데, sub_start가 발행일보다 미래인 상품이 있어
+    (유안타증권 등) 정상 날짜까지 기각됐다. 유안타는 상품마다 값이 달라
+    설명서 파싱이 반드시 필요한 발행사라 그대로 두면 못 채운다. (2026-08-04)
+
+    청약종료일이 아예 없으면 예전 상한(만기일)만 적용한다 — 없는 것보다 낫다.
     """
     from datetime import timedelta
 
-    lo = product.sub_start or product.sub_end
-    hi = product.expiry_date
-    for d in (base, issued):
-        if not d:
-            continue
-        if lo and d < lo - timedelta(days=7):
-            return False
-        if hi and d > hi:
-            return False
-    return True
+    anchor = product.sub_end or product.sub_start
+    if not anchor:
+        hi = product.expiry_date
+        return not (hi and any(d and d > hi for d in (base, issued)))
+    lo = anchor - timedelta(days=SANE_BACK_DAYS)
+    hi = anchor + timedelta(days=SANE_FWD_DAYS)
+    return all(lo <= d <= hi for d in (base, issued) if d)
 
 
 class Command(BaseCommand):

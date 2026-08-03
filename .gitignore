@@ -6,6 +6,9 @@
 # ── 데이터베이스 ──
 db.sqlite3
 db.sqlite3-journal
+# WAL 모드 부산물 — journal만 막아 두면 이 둘이 그대로 추적된다
+db.sqlite3-wal
+db.sqlite3-shm
 *.sqlite3
 
 # ── 수집 데이터 (개인정보/용량) ──
