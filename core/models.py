@@ -436,6 +436,10 @@ class Product(models.Model):
     # 표시용 발행일은 아래 issued_on 프로퍼티를 쓸 것 (2026-07-31 날짜 라벨 통일)
     base_eval_date = models.DateField("최초기준가격평가일", null=True, blank=True)
     real_issue_date = models.DateField("실제 발행일", null=True, blank=True)
+    # 실제 조기상환 평가일 목록 (SEIBro 확정값). 비어 있으면 '기준일+N개월' 근사로 폴백.
+    # 근사는 실측과 -7~+3일까지 벌어진다(보유 153종 대조: 정확 일치 8종뿐) —
+    # 평가일은 설명서에 개별 지정되는 값이라 공식으로 계산할 수 없다. (2026-08-03)
+    eval_dates = models.JSONField("조기상환 평가일(확정)", null=True, blank=True)
 
     currency = models.CharField("통화", max_length=5, default="KRW")
     description = models.TextField("상품설명 원문", blank=True)
@@ -711,6 +715,9 @@ class Investment(models.Model):
     def schedule(self):
         """조기상환 평가 스케줄 [{n, date, barrier, expected}] — 만기까지.
 
+        평가일은 product.eval_dates(SEIBro 확정값)를 최우선으로 쓴다.
+        없을 때만 '기준일 + N개월' 근사로 폴백 — 근사는 실측과 -7~+3일 벌어진다.
+
         비균등 스케줄 지원: first_eval_months(1차까지) + period_months(이후 간격).
         first_eval_months가 None이면 period_months와 동일(균등)해 기존과 결과 동일.
         회차 수는 배리어 개수로 확정한다(마지막 회차 = 만기).
@@ -725,10 +732,17 @@ class Investment(models.Model):
             return []
         first = p.first_eval_months if p.first_eval_months else p.period_months
         interval = p.period_months
+        # 확정 평가일 — 회차 수가 배리어와 맞을 때만 사용(부분 일치는 신뢰 불가)
+        fixed = None
+        if p.eval_dates and len(p.eval_dates) == n_barriers:
+            try:
+                fixed = [date.fromisoformat(str(d)[:10]) for d in p.eval_dates]
+            except (ValueError, TypeError):
+                fixed = None
         rows = []
         for n in range(1, n_barriers + 1):
             months = first + (n - 1) * interval
-            eval_date = _add_months(base, months)
+            eval_date = fixed[n - 1] if fixed else _add_months(base, months)
             barrier = barriers[n - 1]
             expected = expected_after_tax = None
             if p.yield_rate is not None:
@@ -745,15 +759,16 @@ class Investment(models.Model):
         """스케줄 신뢰도 배지 라벨. 확정이면 None.
 
         - 배리어/주기가 없어 스케줄을 못 만들면 '확인필요'
-        - 주기를 판정 못해 임의 추정한 경우 '추정'
-        - 텍스트 주기/규칙1/규칙2로 확정된 경우 None(배지 없음)
+        - 실제 평가일(eval_dates)이 없어 '기준일+N개월'로 근사한 경우 '추정'
+          (근사는 실측과 -7~+3일 벌어진다 — 2026-08-03 보유 153종 대조)
+        - 주기를 판정 못해 임의 추정한 경우도 '추정'
         """
         p = self.product
         if not p.barriers_raw or not p.period_months:
             return "확인필요"
-        if p.schedule_estimated:
-            return "추정"
-        return None
+        if p.eval_dates and len(p.eval_dates) == len(p.barriers_raw or []):
+            return None
+        return "추정"
 
     @property
     def next_evaluation(self):
