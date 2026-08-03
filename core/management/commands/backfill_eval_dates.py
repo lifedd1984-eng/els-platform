@@ -74,7 +74,14 @@ class Command(BaseCommand):
                 no_match += 1
                 continue
             dates = [str(d)[:10] for d in (h.eval_dates or [])]
-            if len(dates) != len(p.barriers_raw or []):
+            nb = len(p.barriers_raw or [])
+            # SEIBro eval_dates는 '조기상환' 평가일만 담고 만기 평가는 뺀다.
+            # (마지막 평가일 + 한 주기 = 만기일임을 보유 136종 전수로 확인)
+            if len(dates) == nb - 1:
+                exp = h.expiry_date or p.expiry_date
+                if exp:
+                    dates = dates + [str(exp)[:10]]
+            if len(dates) != nb:
                 skipped_count += 1
                 continue
             # 기존 근사 대비 얼마나 이동하는지 기록 (첫 회차 기준)
