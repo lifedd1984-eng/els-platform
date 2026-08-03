@@ -111,6 +111,15 @@ DATABASES = {
             'timeout': 30,
             # WAL: 읽기와 쓰기가 서로를 막지 않게 한다 (웹 요청 ↔ 배치 동시성)
             'init_command': 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;',
+            # 위 둘만으로는 부족했다. SQLite는 트랜잭션을 읽기로 시작했다가
+            # 쓰기로 승격할 때 그 사이 다른 연결이 쓰면, 교착을 피하려고
+            # busy_timeout을 무시하고 즉시 SQLITE_BUSY를 낸다. 그래서 30초를
+            # 기다리지 않고 7초 만에 죽었다.
+            # (2026-08-03 09:31 update_prices — 같은 시각 로그인 요청이 세션을
+            #  기록하면서 충돌. 배치 시각 09:30이 아침 접속과 겹친다.)
+            # IMMEDIATE는 트랜잭션 시작 시점에 쓰기 잠금을 먼저 잡는다. 이 경로는
+            # busy_timeout이 정상 적용되므로 최대 30초 대기 후 진행한다.
+            'transaction_mode': 'IMMEDIATE',
         },
     }
 }
