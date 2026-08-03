@@ -73,19 +73,31 @@ class Command(BaseCommand):
             if not h:
                 no_match += 1
                 continue
-            raw = [str(d)[:10] for d in (h.eval_dates or [])]
-            # SEIBro 응답에 같은 날짜가 두 번 실려 오는 상품이 있다(153종 중 17종).
-            # 중복을 그대로 두면 회차 수가 우연히 맞아떨어져 만기 보정이 건너뛰어지고
-            # 마지막 회차가 만기가 아닌 스케줄이 저장된다. 먼저 중복을 제거한다.
-            seen_d = set()
-            dates = [d for d in sorted(raw) if not (d in seen_d or seen_d.add(d))]
-            nb = len(p.barriers_raw or [])
-            # SEIBro eval_dates는 '조기상환' 평가일만 담고 만기 평가는 뺀다.
-            # (마지막 평가일 + 한 주기 = 만기일임을 보유 136종 전수로 확인)
+            # SEIBro는 (평가일, 배리어)를 같은 순서로 준다. 리자드 상품은 같은
+            # 날짜에 리자드 배리어 행이 하나 더 붙는다(예: 키움 1827의
+            # 80-80-75(L50)-75-70-60 → 3회차 날짜에 배리어 50 행이 추가).
+            # 이 행은 조기상환 회차가 아니므로 스케줄에서 제외한다 — 날짜만 보고
+            # 중복 제거하면 리자드 정보와 회차 정렬이 함께 깨진다.
+            raw_d = [str(d)[:10] for d in (h.eval_dates or [])]
+            raw_b = list(h.stepdown_barriers or [])
+            bars = [float(b) for b in (p.barriers_raw or [])]
+            nb = len(bars)
+            dates = []
+            if raw_b and len(raw_b) == len(raw_d):
+                prev_d = prev_b = None
+                for d, b in zip(raw_d, raw_b):
+                    # 같은 날짜인데 배리어가 더 낮으면 리자드 행
+                    if d == prev_d and prev_b is not None and float(b) < float(prev_b):
+                        continue
+                    dates.append(d)
+                    prev_d, prev_b = d, b
+            else:
+                dates = raw_d
+            # SEIBro eval_dates는 조기상환 평가일만 담고 만기 평가는 빠져 있다.
             exp = h.expiry_date or p.expiry_date
-            if len(dates) == nb - 1 and exp:
+            if exp and (not dates or dates[-1] != str(exp)[:10]) and len(dates) == nb - 1:
                 dates = dates + [str(exp)[:10]]
-            # 마지막 회차는 반드시 만기 평가여야 한다 — 아니면 목록이 불완전하다
+            # 회차 수가 배리어와 맞고 마지막이 만기여야 신뢰할 수 있다
             if len(dates) != nb or not exp or dates[-1] != str(exp)[:10]:
                 skipped_count += 1
                 continue
