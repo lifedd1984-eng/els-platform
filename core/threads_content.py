@@ -343,3 +343,24 @@ def check(text, day=None):
         if w in text and w not in allowed:
             problems.append(f"금칙 표현 '{w}'")
     return problems
+
+# ── 첨부 이미지 ────────────────────────────────────────────
+# 숫자가 주인공인 편에만 데이터 카드를 붙인다. 공감형에 붙이면 감정이 죽고
+# 광고로 읽힌다. 서비스 소개(13·14·24편)는 만든 이미지보다 실제 화면 캡처가
+# 설득력 있어 따로 준비한다. 카드 생성은 make_threads_cards (로컬 전용).
+CARD_DAYS = {3, 5, 7, 12, 16, 19, 20, 22, 23}
+
+
+def card_url(day):
+    """편 번호 -> 공개 이미지 URL. 카드가 없으면 None.
+
+    Meta 서버가 이 URL을 직접 가져가므로 외부에서 접근 가능해야 한다.
+    """
+    if day not in CARD_DAYS:
+        return None
+    from django.conf import settings
+    base = (settings.SITE_URL or "").rstrip("/")
+    if not base.startswith("https://"):
+        # http나 localhost면 Meta가 못 가져간다 — 이미지 없이 텍스트로 나간다
+        return None
+    return f"{base}/threads-card/{day}.png"

@@ -1776,6 +1776,24 @@ def pwa_icon(request, size):
     return resp
 
 
+def threads_card(request, day):
+    """스레드 게시용 데이터 카드 이미지.
+
+    Meta 서버가 게시 시점에 이 URL을 직접 가져간다. 인증을 걸면 안 되고,
+    캐시를 길게 줘야 재게시 때 원본 서버 부담이 없다.
+    """
+    from pathlib import Path
+
+    from django.conf import settings as _s
+    from django.http import FileResponse, Http404
+    path = Path(_s.BASE_DIR) / "core" / "assets" / "threads" / f"card_{day:02d}.png"
+    if not path.exists():
+        raise Http404
+    resp = FileResponse(open(path, "rb"), content_type="image/png")
+    resp["Cache-Control"] = "public, max-age=604800"
+    return resp
+
+
 def csrf_failure(request, reason=""):
     """CSRF 검증 실패 커스텀 처리 (settings.CSRF_FAILURE_VIEW).
 

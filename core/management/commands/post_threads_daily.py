@@ -30,7 +30,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from core.threads_content import DRAFTS, check
+from core.threads_content import DRAFTS, card_url, check
 
 STATE = Path(settings.BASE_DIR) / "logs" / "threads_posted.json"
 
@@ -103,9 +103,15 @@ class Command(BaseCommand):
                 f"게시됐습니다 — 중복 방지로 중단"))
             return
 
+        # 숫자가 주인공인 편에만 데이터 카드가 붙는다(threads_content.CARD_DAYS).
+        # 카드가 없으면 image_url이 None이라 텍스트 게시로 나간다.
+        img = card_url(draft["day"])
+        if img:
+            self.stdout.write(f"   첨부 이미지: {img}")
+
         from core.threads_api import post_text
         try:
-            post_id = post_text(draft["text"])
+            post_id = post_text(draft["text"], image_url=img)
         except Exception as e:
             msg = f"[스레드] {draft['day']}편 게시 실패 — {e}"
             self.stderr.write(self.style.ERROR(msg))

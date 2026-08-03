@@ -14,6 +14,7 @@
 """
 
 import os
+import time
 
 import requests
 
@@ -62,21 +63,32 @@ def fetch_user_id():
     return r.json()
 
 
-def post_text(text, reply_to_id=None):
-    """텍스트 스레드 1건 게시. 성공 시 게시물 id 반환.
+def post_text(text, reply_to_id=None, image_url=None):
+    """스레드 1건 게시. 성공 시 게시물 id 반환.
 
     reply_to_id를 주면 그 게시물/댓글에 달리는 답글이 된다.
+    image_url을 주면 이미지 게시물이 된다 — Meta 서버가 그 URL을 직접 가져가므로
+    반드시 외부에서 공개 접근이 되어야 한다(우리는 elsrader.site에서 서빙).
+    이미지 컨테이너는 처리에 시간이 걸려 발행 타임아웃을 넉넉히 준다.
     """
     uid, tok = _uid(), _token()
 
     data = {"media_type": "TEXT", "text": text, "access_token": tok}
+    if image_url:
+        data["media_type"] = "IMAGE"
+        data["image_url"] = image_url
     if reply_to_id:
         data["reply_to_id"] = reply_to_id
-    r = requests.post(f"{BASE}/{uid}/threads", timeout=20, data=data)
+    r = requests.post(f"{BASE}/{uid}/threads", timeout=30, data=data)
     r.raise_for_status()
     creation_id = r.json()["id"]
 
-    r = requests.post(f"{BASE}/{uid}/threads_publish", timeout=20,
+    if image_url:
+        # 이미지 컨테이너는 Meta가 원본을 내려받아 처리할 시간이 필요하다.
+        # 곧바로 발행하면 아직 준비 안 됐다는 오류가 난다(공식 권장 30초).
+        time.sleep(30)
+
+    r = requests.post(f"{BASE}/{uid}/threads_publish", timeout=30,
                       data={"creation_id": creation_id, "access_token": tok})
     r.raise_for_status()
     return r.json().get("id", "")
