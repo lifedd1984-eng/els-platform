@@ -279,3 +279,32 @@ class PostThreadsDailyCheckTest(TestCase):
              mock.patch("core.management.commands.post_threads_daily.check",
                         return_value=[]):
             call_command("post_threads_daily", check_all=True, stdout=mock.MagicMock())
+
+
+class TemplateCompileTest(TestCase):
+    """모든 템플릿이 컴파일되는지 확인.
+
+    왜 필요한가
+      Django 템플릿 문법 오류는 manage.py check도 기존 테스트도 잡지 못한다.
+      실제로 여러 줄 {# #} 주석(단일 행 전용이라 문법 오류)을 넣었는데 둘 다
+      통과했고, 렌더 시점에야 터졌다. 화면이 통째로 500이 되는 종류의 오류라
+      배포 전에 걸러야 한다. (2026-08-04)
+    """
+
+    def test_모든_템플릿이_컴파일된다(self):
+        from pathlib import Path
+
+        from django.conf import settings
+        from django.template.loader import get_template
+
+        root = Path(settings.BASE_DIR) / "core" / "templates" / "core"
+        names = sorted(p.name for p in root.glob("*.html"))
+        self.assertGreater(len(names), 10, "템플릿을 못 찾았다 — 경로 확인 필요")
+
+        broken = []
+        for name in names:
+            try:
+                get_template(f"core/{name}")
+            except Exception as e:
+                broken.append(f"{name}: {type(e).__name__} {e}")
+        self.assertEqual(broken, [], "컴파일 실패 템플릿:\n" + "\n".join(broken))
