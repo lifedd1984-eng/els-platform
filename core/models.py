@@ -1101,6 +1101,48 @@ class HistoricalYieldStat(models.Model):
         return f"{self.year} {'/'.join(self.assets[:2])} {self.margin_rate}%"
 
 
+class ThreadsReply(models.Model):
+    """스레드(@els_rader) 댓글 수집·응답 이력.
+
+    자동 응답은 A버킷(인사·서비스 안내)에만, 그것도 질문 내용을 전혀 반영하지
+    않는 정형 문구로만 나간다. 개별 사정이 반영된 답변은 미등록 투자자문업이
+    될 수 있어서다(대법원 2018도4413). 분류 규칙은 core/threads_replies.py.
+
+    bucket_reason을 남기는 이유
+      "이 댓글을 왜 A로 봤는가"를 사람이 되짚을 수 있어야 자동 응답 범위를
+      사후에 검증할 수 있다. 규칙을 고친 뒤 과거 분류가 어떻게 달라지는지도
+      이 값으로 비교한다.
+
+    replied_at을 따로 두는 이유
+      created_at은 수집 시각이라 발송 시각과 다르다. 시간당 발송 상한과
+      최근 문구 중복 검사는 발송 시각 기준이어야 한다.
+    """
+    BUCKETS = [("A", "A 정형응답 가능"), ("B", "B 사람 답변"), ("C", "C 개별판단 금지")]
+    STATUSES = [("new", "수집됨"), ("replied", "자동응답 완료"),
+                ("skipped", "발송 안 함"), ("notified", "알림 발송")]
+
+    reply_id = models.CharField("댓글 id", max_length=64, unique=True)
+    post_id = models.CharField("원 게시물 id", max_length=64, db_index=True)
+    username = models.CharField("작성자", max_length=100, blank=True)
+    text = models.TextField("본문", blank=True)
+    timestamp = models.DateTimeField("댓글 작성 시각", null=True, blank=True)
+    permalink = models.URLField("댓글 링크", max_length=300, blank=True)
+    bucket = models.CharField("버킷", max_length=1, choices=BUCKETS, db_index=True)
+    bucket_reason = models.CharField("분류 근거", max_length=120, blank=True)
+    status = models.CharField("상태", max_length=10, choices=STATUSES,
+                              default="new", db_index=True)
+    replied_text = models.TextField("발송한 문구", blank=True)
+    replied_at = models.DateTimeField("발송 시각", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+        indexes = [models.Index(fields=["status", "bucket"])]
+
+    def __str__(self):
+        return f"[{self.bucket}] @{self.username}: {self.text[:30]}"
+
+
 class PageView(models.Model):
     """접속 로그(자체 분석용) — 개인 식별 불가능한 일별 해시만 저장, 180일 보관."""
     date = models.DateField(db_index=True)
