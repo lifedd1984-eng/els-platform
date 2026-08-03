@@ -193,9 +193,15 @@ class Command(BaseCommand):
             if self.dry:
                 self.stdout.write("  ── 알림 예정 ──\n" + body)
                 continue
-            self._alert(body)
-            row.status = "notified"
-            row.save(update_fields=["status"])
+            # 발송에 성공했을 때만 닫는다. send_message는 실패해도 예외 없이
+            # False만 돌려주는데, 예전에는 결과를 안 보고 notified로 닫아서
+            # 텔레그램이 레이트리밋에 걸리면 컴플레인이 영영 묻혔다.
+            # 실패하면 new로 남겨 다음 실행(10분 뒤)에 다시 시도한다. (2026-08-03)
+            if self._alert(body):
+                row.status = "notified"
+                row.save(update_fields=["status"])
+            else:
+                self.stdout.write(f"  알림 실패 — 다음 실행에서 재시도: @{row.username}")
 
         head = "[dry-run] " if self.dry else ""
         left = ThreadsReply.objects.filter(bucket__in=buckets, status="new").count()
@@ -215,13 +221,15 @@ class Command(BaseCommand):
         row.save(update_fields=["status", "bucket_reason"])
 
     def _alert(self, text):
+        """텔레그램 발송. 실제로 보냈으면 True — 호출부가 이 값으로 상태를 정한다."""
         if self.dry:
-            return
+            return True
         try:
             from core.telegram import send_message
-            send_message(text)
+            return bool(send_message(text))
         except Exception as e:
             self.stderr.write(f"텔레그램 알림 실패: {e}")
+            return False
 
     def _print_samples(self):
         """분류기 점검 — 샘플 문장이 기대한 버킷으로 떨어지는지 본다."""

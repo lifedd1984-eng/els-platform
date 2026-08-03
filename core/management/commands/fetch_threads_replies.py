@@ -95,16 +95,22 @@ class Command(BaseCommand):
                         f"[{bucket}] {reason:28s} @{r.get('username', '')}: {preview}")
                     continue
 
-                ThreadsReply.objects.create(
+                # create가 아니라 get_or_create — 크론이 겹쳐 두 프로세스가 같은
+                # 댓글을 동시에 만나면 unique 위반으로 루프 전체가 죽는다.
+                # (2026-08-03 검수. 겹침 자체는 threads_replies.sh의 flock으로 막지만
+                #  수동 실행이 크론과 부딪히는 경우까지 여기서 흡수한다.)
+                ThreadsReply.objects.get_or_create(
                     reply_id=rid,
-                    post_id=post["id"],
-                    username=r.get("username") or "",
-                    text=text,
-                    timestamp=_parse_ts(r.get("timestamp")),
-                    permalink=r.get("permalink") or "",
-                    bucket=bucket,
-                    bucket_reason=reason,
-                    status="new",
+                    defaults=dict(
+                        post_id=post["id"],
+                        username=r.get("username") or "",
+                        text=text,
+                        timestamp=_parse_ts(r.get("timestamp")),
+                        permalink=r.get("permalink") or "",
+                        bucket=bucket,
+                        bucket_reason=reason,
+                        status="new",
+                    ),
                 )
 
         head = "[dry-run] " if dry else ""

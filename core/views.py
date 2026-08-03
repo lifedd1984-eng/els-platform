@@ -328,12 +328,17 @@ def weekly(request):
         def _asset_keys(raw):
             return {_mkt.resolve_ticker(a) or a for a in _mkt.split_assets(raw)}
 
-        inv_assets = [
-            (inv.amount, _asset_keys(inv.product.assets_raw))
-            # 본인 보유 기준 — 전 회원 합산이면 남의 포트폴리오와의 중복률이 나온다
-            for inv in Investment.objects.filter(
-                user=request.user, status="보유중").select_related("product")
-        ]
+        # 본인 보유 기준 — 전 회원 합산이면 남의 포트폴리오와의 중복률이 나온다.
+        # 익명 사용자에게는 조회 자체를 하지 않는다. user=AnonymousUser로 filter를
+        # 걸면 DB에 닿기도 전에 TypeError가 나서 /weekly/가 통째로 500이 됐다
+        # (2026-08-03, 비로그인 방문자 전원 영향. 어차피 결과는 staff에게만 쓴다).
+        inv_assets = []
+        if request.user.is_authenticated:
+            inv_assets = [
+                (inv.amount, _asset_keys(inv.product.assets_raw))
+                for inv in Investment.objects.filter(
+                    user=request.user, status="보유중").select_related("product")
+            ]
         total_held = sum(amt for amt, _ in inv_assets)
 
         # 중복도는 가족(staff) 계정에만 표시 — 외부인에게 보유 성향 노출 방지
