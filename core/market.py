@@ -348,6 +348,10 @@ BASE_EVAL_OFFSET_DAYS = {          # issue_date(청약종료일) + N일 = 최초
 # 상품마다 값이 달라 규칙화 불가 — 반드시 설명서를 파싱해야 하는 발행사
 BASE_EVAL_UNSTABLE_ISSUERS = {"유안타증권", "유진투자증권"}
 
+# issue_date가 '실제 발행일'인 행(엑셀 수입분)에 쓰는 규칙 —
+# 설명서 확정값 757건 전수에서 도출(예외 없음): 이 세 곳만 발행일 −1거래일
+BASE_EVAL_BACK1_ISSUERS = {"키움증권", "삼성증권", "대신증권"}
+
 
 def base_price_date(product):
     """상품의 최초기준가격 산정에 쓸 (기준일, 거래일 오프셋) 반환.
@@ -366,7 +370,18 @@ def base_price_date(product):
     base = getattr(product, "issue_date", None)
     if not base:
         return None, 0
-    days = BASE_EVAL_OFFSET_DAYS.get(getattr(product, "issuer", ""), 0)
+    issuer = getattr(product, "issuer", "")
+    # issue_date의 의미가 두 가지다:
+    #   ① KOFIA 수집분 — issue_date == sub_end (청약종료일). 오프셋 표가 이 기준이다.
+    #   ② 엑셀 수입분  — issue_date가 실제 발행일 (1,538건). 여기에 ①용 오프셋을
+    #      그대로 더하면 하루가 이중 가산돼 기준가가 1거래일 늦은 종가가 된다.
+    # 실제 발행일 기준 규칙은 설명서 확정값 757건 전수로 도출했다(예외 없음):
+    #   키움·삼성·대신 = 발행일 −1거래일 / 나머지 = 발행일 당일
+    sub_end = getattr(product, "sub_end", None)
+    if sub_end and base != sub_end:
+        back = 1 if issuer in BASE_EVAL_BACK1_ISSUERS else 0
+        return base, back
+    days = BASE_EVAL_OFFSET_DAYS.get(issuer, 0)
     # +N일 뒤가 휴장이면 fetch_price_on이 직전 거래일로 자동 보정한다
     return base + timedelta(days=days), 0
 
