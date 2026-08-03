@@ -410,7 +410,9 @@ def fetch_history(ticker: str, days: int = 365):
     import yfinance as yf
     from datetime import date as _date
 
-    key = (ticker, _date.today())
+    # days를 키에 넣지 않으면 상품상세(365d)와 주간 고점대비(370d)가 서로의
+    # 캐시를 덮어써 워커별 최초 호출이 그날의 데이터 창을 결정한다 (2026-08-03)
+    key = (ticker, days, _date.today())
     if key in _history_cache:
         return _history_cache[key]
     rows = []

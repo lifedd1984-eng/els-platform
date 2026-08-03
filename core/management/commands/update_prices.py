@@ -5,7 +5,7 @@
 레벨(%) = 현재가 / 최초기준가 × 100
   기준가 산정일은 market.base_price_date()가 정한다
   (설명서 파싱값 base_eval_date 우선, 없으면 issue_date + 발행사별 오프셋).
-버퍼(%p) = 레벨 - KI배리어  (워스트오브 = 가장 낮은 자산 기준)
+버퍼(%p) = 기준가 대비 % − 낙인  (가장 부진한 자산 기준)
 
 위험 구간:
   - 버퍼 ≤ 5%p  → '위험'
@@ -67,7 +67,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 f"[{inv.product.issuer} {inv.product.product_no}] "
-                f"워스트 레벨 {getattr(inv.worst_ki_status, 'level_pct', None)}% "
+                f"가장 부진한 자산 {getattr(inv.worst_ki_status, 'level_pct', None)}% "
                 f"/ KI버퍼 {inv.ki_buffer}%p"
             )
 

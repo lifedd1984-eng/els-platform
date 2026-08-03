@@ -84,6 +84,27 @@ def extract_dates(text):
     return base, issued
 
 
+def _dates_sane(product, base, issued):
+    """추출한 날짜가 상품의 기간 안에 있는지 검증.
+
+    발행일·기준가평가일은 청약 시작 이후, 만기 이전이어야 한다.
+    같은 상품번호가 차수마다 재사용되는 발행사가 있어(메리츠 등) 다른 차수의
+    설명서를 읽으면 만기 뒤 발행일 같은 값이 들어온다. (2026-08-03)
+    """
+    from datetime import timedelta
+
+    lo = product.sub_start or product.sub_end
+    hi = product.expiry_date
+    for d in (base, issued):
+        if not d:
+            continue
+        if lo and d < lo - timedelta(days=7):
+            return False
+        if hi and d > hi:
+            return False
+    return True
+
+
 class Command(BaseCommand):
     help = "간이투자설명서 PDF에서 최초기준가격평가일·실제 발행일 추출 후 저장"
 
@@ -139,6 +160,16 @@ class Command(BaseCommand):
                     fail_by_type[p.product_type] += 1
                     self._log(f"  [{p.id}] {p.issuer} {p.product_no}({p.product_type}) "
                               f"평가일 미검출")
+                elif not _dates_sane(p, base, issued):
+                    # 다른 차수의 설명서를 읽었거나 파싱이 어긋난 경우 —
+                    # 만기 뒤 발행일 같은 값이 들어가면 화면·계산이 통째로 망가진다
+                    # (실제 사고: 메리츠 4~5월 상품 4건에 8월 차수 날짜 주입)
+                    fail += 1
+                    fail_reasons["날짜 범위 이상"] += 1
+                    fail_by_type[p.product_type] += 1
+                    self._log(f"  [{p.id}] {p.issuer} {p.product_no} 날짜 범위 이상 "
+                              f"(청약 {p.sub_start}~{p.sub_end} / 만기 {p.expiry_date} "
+                              f"vs 기준일 {base} / 발행 {issued}) — 저장 안 함")
                 else:
                     fields = ["base_eval_date"]
                     p.base_eval_date = base

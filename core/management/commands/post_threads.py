@@ -18,13 +18,19 @@ def build_post():
     """이번 주 TOP5 스레드 본문 (500자 제한 고려해 간결하게)."""
     from core.models import radar_top5
 
-    top = radar_top5()
+    from core.models import radar_tracks
+
+    tracks = radar_tracks()
+    top = (tracks.get("지수형") or []) + (tracks.get("종목형") or [])
     if not top:
         return None
 
     today = date.today()
-    lines = [f"이번 주 ELS, 300여 개 중 조건 통과는 {len(top)}개",
-             f"({today:%m/%d} 기준 · 손실확률 0% · 1년내 상환확률 90%↑)", ""]
+    # v7 3중 게이트 기준으로 표기 — v6 시절의 '손실확률 0%·1년내 90%↑'는
+    # 현행 선별 조건이 아니다 (2026-08-03)
+    lines = [f"이번 주 ELS 타겟 신호 {len(top)}개",
+             f"({today:%m/%d} 기준 · 1차 조기상환 조건이 낮고 · 고점 발행이 아니며 · "
+             f"낙인이 가장 낮은 30% 미만)", ""]
     for i, p in enumerate(top, 1):
         ki = "노낙인" if p.is_no_ki else f"낙인{p.ki}%"
         lines.append(f"{i}. {p.issuer} · 연 {p.yield_rate:g}% · {ki}")

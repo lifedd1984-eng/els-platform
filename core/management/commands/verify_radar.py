@@ -120,7 +120,7 @@ class Command(BaseCommand):
                     self.stdout.write(
                         f"[{monday} {asset_type}] {p.issuer} {p.product_no} "
                         f"({tier}) 평가 {eval_date} 배리어 {barrier} "
-                        f"워스트 {worst_level} -> {label}"
+                        f"가장 부진한 자산 {worst_level} -> {label}"
                     )
 
         self.stdout.write(
