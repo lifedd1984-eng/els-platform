@@ -42,3 +42,7 @@ seibro_raw*/
 data/ticker_learned.json
 data/krx_master.json
 marketing/
+
+# ── 백업 (용량 — 2026-08-03 db.sqlite3.bak 339MB가 커밋에 딸려 들어간 적 있음) ──
+*.bak
+_radar_backup/

@@ -72,7 +72,11 @@ class Command(BaseCommand):
             msg = (f"발송 가능 시간이 아님 ({now:%H:%M} KST, "
                    f"{WINDOW_START:02d}:00~{WINDOW_END:02d}:00만 발송)")
             if not self.dry:
-                self.stdout.write(msg + " — 다음 실행으로 미룸")
+                self.stdout.write(msg + " — 자동 응답은 미루고 C버킷만 알림")
+                # C(개별 판단 요청·컴플레인)는 야간에도 즉시 알린다. 사기·환불·
+                # 고소 같은 글을 아침까지 8시간 모르고 있는 손해가 알림 소음보다
+                # 크다. B는 급하지 않으므로 아침 첫 실행 때 몰아서 나간다.
+                self._notify_manual(now, buckets=["C"])
                 return
             # dry-run은 점검용이라 시간대와 무관하게 계획을 보여준다
             self.stdout.write(f"[dry-run] {msg} — 점검을 위해 계속 진행")
@@ -170,9 +174,10 @@ class Command(BaseCommand):
     # ------------------------------------------------------------------
     # B·C버킷 알림
     # ------------------------------------------------------------------
-    def _notify_manual(self, now):
+    def _notify_manual(self, now, buckets=None):
+        buckets = buckets or ["B", "C"]
         rows = list(ThreadsReply.objects.filter(
-            bucket__in=["B", "C"], status="new").order_by("timestamp")[:NOTIFY_MAX_PER_RUN])
+            bucket__in=buckets, status="new").order_by("timestamp")[:NOTIFY_MAX_PER_RUN])
         if not rows:
             self.stdout.write("사람이 답할 댓글 없음")
             return
@@ -193,7 +198,7 @@ class Command(BaseCommand):
             row.save(update_fields=["status"])
 
         head = "[dry-run] " if self.dry else ""
-        left = ThreadsReply.objects.filter(bucket__in=["B", "C"], status="new").count()
+        left = ThreadsReply.objects.filter(bucket__in=buckets, status="new").count()
         if self.dry:                      # dry-run은 상태를 안 바꾸므로 직접 빼 준다
             left -= len(rows)
         tail = f" (남은 {left}건은 다음 실행)" if left > 0 else ""
