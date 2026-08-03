@@ -39,7 +39,7 @@ def _add_months(d: date, months: int) -> date:
 
 
 def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate,
-             sample_years=None):
+             sample_years=None, first_eval_months=None):
     """
     Parameters
     ----------
@@ -47,8 +47,12 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate,
     barriers : list[int]       회차별 조기상환 배리어 (예: [95,90,85,80,75,70])
     ki : int | None            낙인 배리어(%). is_no_ki=True면 무시.
     is_no_ki : bool
-    period_months : int        조기상환 평가 주기(개월)
+    period_months : int        조기상환 평가 주기(개월, 2차 이후 간격)
     yield_rate : float          연수익률(%)
+    first_eval_months : int | None
+                               1차 평가까지 개월수. None이면 period_months와 동일(균등).
+                               '6개월이후1개월단위'처럼 1차와 이후 간격이 다른 상품을
+                               균등으로 계산하면 만기·평가월이 통째로 어긋난다.
     sample_years : int | None  가상 발행일 표본 구간(년). 마지막 유효 발행일
                                (데이터 끝 − 상품기간)에서 거슬러 이 기간만 표본으로.
                                None이면 데이터 전 구간 사용.
@@ -63,7 +67,8 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate,
         return {"available": False, "reason": "기초자산 시세 데이터 부족"}
 
     n_rounds = len(barriers)
-    total_months = period_months * n_rounds
+    first = first_eval_months or period_months
+    total_months = first + period_months * (n_rounds - 1)
 
     dates = list(prices.index.date) if hasattr(prices.index, "date") else list(prices.index)
     ordinals = np.array([d.toordinal() for d in dates])
@@ -79,8 +84,8 @@ def simulate(prices, barriers, ki, is_no_ki, period_months, yield_rate,
         min_start = _add_months(last_valid_start, -sample_years * 12)
         start_i = int(np.searchsorted(ordinals, min_start.toordinal(), side="left"))
 
-    # 각 회차 평가일까지 필요한 개월수
-    eval_months = [period_months * n for n in range(1, n_rounds + 1)]
+    # 각 회차 평가일까지 필요한 개월수 (1차는 first, 이후 period_months 간격)
+    eval_months = [first + period_months * n for n in range(n_rounds)]
 
     round_counts = [0] * n_rounds       # 회차별 조기상환 건수
     maturity_noki = 0                    # 만기 무손실(최대쿠폰)
@@ -232,6 +237,7 @@ def simulate_product(product, period_years=20):
         period_months=product.period_months,
         yield_rate=product.yield_rate,
         sample_years=period_years,
+        first_eval_months=product.first_eval_months,
     )
 
 
