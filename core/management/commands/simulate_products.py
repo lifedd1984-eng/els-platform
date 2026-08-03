@@ -205,6 +205,11 @@ class Command(BaseCommand):
             ki=product.ki,
             is_no_ki=product.is_no_ki,
             period_months=product.period_months,
+            # 1차 평가가 이후 주기와 다른 상품(예: 3개월 뒤 첫 평가, 이후 1개월)이
+            # 48건 있다. 이걸 안 넘기면 총기간이 짧게 잡혀 손실확률이 틀린 채로
+            # 매일 배치가 덮어쓴다 — fd4b519가 simulate에만 반영되고 호출부에는
+            # 안 들어와 있었다 (2026-08-03 검수).
+            first_eval_months=product.first_eval_months,
             yield_rate=product.yield_rate,
             # 표본 구간 = 마지막 유효 발행일 기준 years년
             # (시세는 years+4년 조회해 상품기간만큼 뒤가 잘려도 20년 확보)

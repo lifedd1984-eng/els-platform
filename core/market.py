@@ -377,8 +377,12 @@ def base_price_date(product):
     #      그대로 더하면 하루가 이중 가산돼 기준가가 1거래일 늦은 종가가 된다.
     # 실제 발행일 기준 규칙은 설명서 확정값 757건 전수로 도출했다(예외 없음):
     #   키움·삼성·대신 = 발행일 −1거래일 / 나머지 = 발행일 당일
+    # sub_end가 비어 있어도 ②다. 엑셀 수입분 369건이 여기 해당하고(전건이
+    # product_code 없음 = KOFIA 미수집분), 예전 조건 `sub_end and base != sub_end`는
+    # None에서 단락돼 ①의 오프셋 표로 떨어졌다. 138건이 하루씩 어긋났고 보유
+    # 상품에서 최대 4.9%p까지 레벨이 틀렸다 (2026-08-03 검수).
     sub_end = getattr(product, "sub_end", None)
-    if sub_end and base != sub_end:
+    if sub_end != base:
         back = 1 if issuer in BASE_EVAL_BACK1_ISSUERS else 0
         return base, back
     days = BASE_EVAL_OFFSET_DAYS.get(issuer, 0)
