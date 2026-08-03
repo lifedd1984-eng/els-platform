@@ -93,6 +93,15 @@ class Command(BaseCommand):
         self.stdout.write(f"── {draft['day']}편 ({draft['type']}) · {n}자 ──")
         self.stdout.write(draft["text"])
 
+        # 숫자가 주인공인 편에만 데이터 카드가 붙는다(threads_content.CARD_DAYS).
+        # 카드가 없으면 image_url이 None이라 텍스트 게시로 나간다.
+        # 이 계산을 dry-run보다 앞에 두는 이유: 이미지는 금칙어 검사(check)를
+        # 통과하지 않는 유일한 발행 경로라, 어느 편에 뭐가 붙는지 사람이 미리
+        # 눈으로 볼 수 있어야 한다. dry-run이 이걸 안 보여주면 첨부 사고를
+        # 게시 후에야 발견하게 된다. (2026-08-03)
+        img = card_url(draft["day"])
+        self.stdout.write(f"   첨부 이미지: {img or '없음 (텍스트 게시)'}")
+
         if opts["dry_run"]:
             self.stdout.write(self.style.WARNING("\n[dry-run] 게시하지 않았습니다"))
             return
@@ -102,12 +111,6 @@ class Command(BaseCommand):
                 f"\n{draft['day']}편은 이미 {state[str(draft['day'])]['posted_at']}에 "
                 f"게시됐습니다 — 중복 방지로 중단"))
             return
-
-        # 숫자가 주인공인 편에만 데이터 카드가 붙는다(threads_content.CARD_DAYS).
-        # 카드가 없으면 image_url이 None이라 텍스트 게시로 나간다.
-        img = card_url(draft["day"])
-        if img:
-            self.stdout.write(f"   첨부 이미지: {img}")
 
         from core.threads_api import post_text
         try:
