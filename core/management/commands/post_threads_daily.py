@@ -30,7 +30,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from core.threads_content import DRAFTS, card_url, check
+from core.threads_content import DRAFTS, card_url, check, slot_of
 
 STATE = Path(settings.BASE_DIR) / "logs" / "threads_posted.json"
 
@@ -63,6 +63,8 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true")
         parser.add_argument("--day", type=int, default=0, help="특정 편 강제 게시")
+        parser.add_argument("--slot", choices=["evening", "morning"], default="",
+                            help="이 시간대에 해당하는 편만 게시 (크론 두 개가 공유)")
         parser.add_argument("--check-all", action="store_true",
                             help="30편 전체 금칙어·글자수 검사만")
 
@@ -81,6 +83,15 @@ class Command(BaseCommand):
             if not draft:
                 self.stdout.write("30편 전부 게시 완료 — 다음 계획이 필요합니다")
                 return
+
+        # 크론 두 개(저녁·아침)가 같은 명령을 부르므로, 이번 편이 내 시간대가
+        # 아니면 조용히 물러난다. 이래야 15편부터 아침으로 넘어가는 A/B 전환에
+        # 사람 손이 안 든다.
+        if opts["slot"] and slot_of(draft["day"]) != opts["slot"]:
+            self.stdout.write(
+                f"{draft['day']}편은 {slot_of(draft['day'])} 시간대 — "
+                f"{opts['slot']} 실행이라 건너뜀")
+            return
 
         problems = check(draft["text"], draft["day"])
         if problems:
