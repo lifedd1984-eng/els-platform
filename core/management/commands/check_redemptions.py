@@ -93,8 +93,8 @@ class Command(BaseCommand):
                     exp_txt = f"{expected:,}원" if expected else "-"
                     telegram.send_message(
                         f"[조기상환 예정] {p.issuer} {p.product_no}\n"
-                        f"{row['n']}회차({row['date']:%m.%d}) 배리어 {row['barrier']}% 충족 "
-                        f"(워스트 {worst_level}%)\n"
+                        f"{row['n']}회차({row['date']:%m.%d}) 조기상환 기준 {row['barrier']}% 충족\n"
+                        f"가장 부진한 자산 {worst_level}% (기준가 대비)\n"
                         f"예상상환금: {exp_txt}\n"
                         f"증권사 확인 후 포트폴리오에서 상환 처리하세요.\n"
                         f"{settings.SITE_URL}/portfolio/"

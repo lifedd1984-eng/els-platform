@@ -104,6 +104,14 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        # SQLite 기본값은 잠금을 만나면 즉시 실패한다. 새벽 배치가 도는 동안
+        # 수동 작업(백필·수집)이 겹치면 'database is locked'로 배치가 죽는다
+        # (2026-08-03 update_prices 실패). 최대 30초 대기 후 재시도한다.
+        'OPTIONS': {
+            'timeout': 30,
+            # WAL: 읽기와 쓰기가 서로를 막지 않게 한다 (웹 요청 ↔ 배치 동시성)
+            'init_command': 'PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;',
+        },
     }
 }
 
