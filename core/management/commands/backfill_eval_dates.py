@@ -73,15 +73,20 @@ class Command(BaseCommand):
             if not h:
                 no_match += 1
                 continue
-            dates = [str(d)[:10] for d in (h.eval_dates or [])]
+            raw = [str(d)[:10] for d in (h.eval_dates or [])]
+            # SEIBro 응답에 같은 날짜가 두 번 실려 오는 상품이 있다(153종 중 17종).
+            # 중복을 그대로 두면 회차 수가 우연히 맞아떨어져 만기 보정이 건너뛰어지고
+            # 마지막 회차가 만기가 아닌 스케줄이 저장된다. 먼저 중복을 제거한다.
+            seen_d = set()
+            dates = [d for d in sorted(raw) if not (d in seen_d or seen_d.add(d))]
             nb = len(p.barriers_raw or [])
             # SEIBro eval_dates는 '조기상환' 평가일만 담고 만기 평가는 뺀다.
             # (마지막 평가일 + 한 주기 = 만기일임을 보유 136종 전수로 확인)
-            if len(dates) == nb - 1:
-                exp = h.expiry_date or p.expiry_date
-                if exp:
-                    dates = dates + [str(exp)[:10]]
-            if len(dates) != nb:
+            exp = h.expiry_date or p.expiry_date
+            if len(dates) == nb - 1 and exp:
+                dates = dates + [str(exp)[:10]]
+            # 마지막 회차는 반드시 만기 평가여야 한다 — 아니면 목록이 불완전하다
+            if len(dates) != nb or not exp or dates[-1] != str(exp)[:10]:
                 skipped_count += 1
                 continue
             # 기존 근사 대비 얼마나 이동하는지 기록 (첫 회차 기준)
