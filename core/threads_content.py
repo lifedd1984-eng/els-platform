@@ -317,8 +317,22 @@ BANNED_PHRASES = [
 ]
 
 
-def check(text):
+# 검토 완료 예외 — 금칙어가 '권유'가 아니라 '인용·거절'로 쓰인 경우다.
+# 검사기를 느슨하게 고치면 진짜 권유 문장도 통과하므로, 규칙은 그대로 두고
+# 사람이 확인한 건만 편 번호로 열어준다. 원고를 고치면 예외도 다시 봐야 한다.
+REVIEWED_EXCEPTIONS = {
+    # "지금 들어가야 되는 거 아니냐" — 시장 분위기를 옮긴 인용문이다.
+    # 화자는 계정이 아니라 제3자이고, 뒤에서 "아무도 확신이 없다"로 닫는다.
+    8: ["지금 들어가"],
+    # "'지금 들어가도 되냐'는 질문에는 답을 못 하겠다" — 권유가 아니라
+    # 개별 판단 요청을 명시적으로 거절하는 문장이다. 자문업 경계 방어에 해당한다.
+    13: ["지금 들어가"],
+}
+
+
+def check(text, day=None):
     """게시 전 검사. 통과하면 빈 리스트, 걸리면 사유 목록."""
+    allowed = REVIEWED_EXCEPTIONS.get(day, [])
     problems = []
     if len(text) > 500:
         problems.append(f"본문 {len(text)}자 — 스레드 500자 제한 초과")
@@ -326,6 +340,6 @@ def check(text):
         if w in text:
             problems.append(f"발행사명 '{w}' — 금소법 제22조 제1항 상품광고")
     for w in BANNED_PHRASES:
-        if w in text:
+        if w in text and w not in allowed:
             problems.append(f"금칙 표현 '{w}'")
     return problems

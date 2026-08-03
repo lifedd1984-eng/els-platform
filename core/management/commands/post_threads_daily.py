@@ -82,7 +82,7 @@ class Command(BaseCommand):
                 self.stdout.write("30편 전부 게시 완료 — 다음 계획이 필요합니다")
                 return
 
-        problems = check(draft["text"])
+        problems = check(draft["text"], draft["day"])
         if problems:
             msg = f"[스레드] {draft['day']}편 게시 중단 — " + " / ".join(problems)
             self.stderr.write(self.style.ERROR(msg))
@@ -129,7 +129,7 @@ class Command(BaseCommand):
     def _check_all(self):
         bad = 0
         for d in DRAFTS:
-            problems = check(d["text"])
+            problems = check(d["text"], d["day"])
             n = len(d["text"])
             if problems:
                 bad += 1
