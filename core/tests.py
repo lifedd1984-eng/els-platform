@@ -456,3 +456,204 @@ class ProductCodeBackfillTest(TestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command("backfill_product_code", "--dry-run", "--apply")
+
+
+class BasePriceDateTest(SimpleTestCase):
+    """최초기준가격 산정일 규칙 — 확정값 798건 전수검증으로 굳힌 규칙(2026-08-05)."""
+
+    class _P:
+        def __init__(self, **kw):
+            self.issuer = kw.get("issuer", "")
+            self.issue_date = kw.get("issue_date")
+            self.sub_end = kw.get("sub_end")
+            self.base_eval_date = kw.get("base_eval_date")
+            self.real_issue_date = kw.get("real_issue_date")
+
+    def _d(self, **kw):
+        from core import market
+        return market.base_price_date(self._P(**kw))
+
+    def test_거래일_오프셋은_언제나_0이다(self):
+        # back=1은 자산별 거래소 달력을 타서 해외자산에서 어긋났다 — 폐지했다.
+        for kw in (dict(issuer="키움증권", issue_date=date(2026, 5, 4), sub_end=date(2026, 4, 30)),
+                   dict(issuer="삼성증권", issue_date=date(2026, 5, 4)),
+                   dict(issuer="대신증권", issue_date=date(2026, 5, 4)),
+                   dict(issuer="NH투자증권", issue_date=date(2026, 7, 24),
+                        sub_end=date(2026, 7, 24))):
+            self.assertEqual(self._d(**kw)[1], 0)
+
+    def test_설명서_확정값이_언제나_최우선이다(self):
+        got, _ = self._d(issuer="키움증권", issue_date=date(2026, 5, 4),
+                         sub_end=date(2026, 4, 30), base_eval_date=date(2026, 4, 29))
+        self.assertEqual(got, date(2026, 4, 29))
+
+    def test_키움삼성대신은_청약마감일이_기준일이다(self):
+        for issuer in ("키움증권", "삼성증권", "대신증권"):
+            got, _ = self._d(issuer=issuer, issue_date=date(2026, 5, 4),
+                             sub_end=date(2026, 4, 30))
+            self.assertEqual(got, date(2026, 4, 30), issuer)
+
+    def test_청약마감일이_없으면_발행일_직전영업일이다(self):
+        # 2026-05-04는 월요일 → 직전 영업일은 5/1(금)
+        self.assertEqual(self._d(issuer="키움증권", issue_date=date(2026, 5, 4))[0],
+                         date(2026, 5, 1))
+        # 2026-05-11(월) → 5/8(금). 주말은 건너뛴다.
+        self.assertEqual(self._d(issuer="삼성증권", issue_date=date(2026, 5, 11))[0],
+                         date(2026, 5, 8))
+
+    def test_그밖의_발행사는_실제발행일이_기준일이다(self):
+        got, _ = self._d(issuer="한화투자증권", issue_date=date(2026, 5, 4),
+                         sub_end=date(2026, 4, 30), real_issue_date=date(2026, 5, 6))
+        self.assertEqual(got, date(2026, 5, 6))
+        # real_issue_date가 없으면 issue_date가 곧 실제 발행일(엑셀 수입분)
+        got, _ = self._d(issuer="한화투자증권", issue_date=date(2026, 5, 4),
+                         sub_end=date(2026, 4, 30))
+        self.assertEqual(got, date(2026, 5, 4))
+
+    def test_KOFIA_수집분은_기존_오프셋표를_그대로_쓴다(self):
+        # issue_date == sub_end 인 행만 오프셋 대상. 이번 검증에서 교차확인이 안 돼 유지.
+        self.assertEqual(self._d(issuer="NH투자증권", issue_date=date(2026, 7, 24),
+                                 sub_end=date(2026, 7, 24))[0], date(2026, 7, 25))
+        self.assertEqual(self._d(issuer="신한투자증권", issue_date=date(2026, 7, 24),
+                                 sub_end=date(2026, 7, 24))[0], date(2026, 7, 24))
+
+    def test_규칙화_불가_발행사는_옛_로직_그대로다(self):
+        # 유안타·유진은 어느 규칙에도 안 맞아 손대지 않았다 (조 팀장 판단 대기)
+        for issuer in ("유안타증권", "유진투자증권"):
+            self.assertEqual(self._d(issuer=issuer, issue_date=date(2026, 5, 4),
+                                     sub_end=date(2026, 4, 30))[0], date(2026, 5, 4), issuer)
+            self.assertEqual(self._d(issuer=issuer, issue_date=date(2026, 7, 24),
+                                     sub_end=date(2026, 7, 24))[0], date(2026, 7, 24), issuer)
+
+    def test_발행일이_없으면_기준일도_없다(self):
+        self.assertEqual(self._d(issuer="키움증권"), (None, 0))
+
+
+class DisclosedRefPriceTest(SimpleTestCase):
+    """SEIBro 공시 기준가 매칭 — 틀린 값을 넣느니 폴백하는 쪽이 언제나 낫다."""
+
+    def _m(self, assets_raw, seibro):
+        from core import market
+        return market.disclosed_asset_prices(assets_raw, seibro)
+
+    def test_이름이_달라도_ISIN으로_맞춘다(self):
+        # 서비스 'Micron' ↔ 공시 'MICRON TECHNOLOGY INC' — 이름으론 못 맞춘다.
+        # 순서가 서로 뒤집혀 있어도 티커로 대응하므로 상관없다.
+        got = self._m("Broadcom , Micron", [
+            {"name": "MICRON TECHNOLOGY INC", "isin": "US5951121038", "std_price": "517.16"},
+            {"name": "BROADCOM INC EXOF 005644980 SG9999014823", "isin": "US11135F1012",
+             "std_price": "417.43"}])
+        self.assertEqual(got["Micron"][0], 517.16)
+        self.assertEqual(got["Broadcom"][0], 417.43)
+
+    def test_국내지수는_공시값을_쓰지_않는다(self):
+        # 서비스는 KODEX200 ETF(지수의 약 100배)를 현재가로 쓴다. 공시는 지수 포인트라
+        # 그대로 넣으면 스케일이 깨진다. 레벨은 비율이라 폴백으로도 정확하다.
+        got = self._m("KOSPI200 Index/Micron Technology", [
+            {"name": "코스피 200지수", "isin": "KSD101000028", "std_price": "1126.33"},
+            {"name": "MICRON TECHNOLOGY INC", "isin": "US5951121038", "std_price": "990.21"}])
+        from core import market
+        self.assertEqual(got["KOSPI200 Index"], (None, market.REF_SKIP_PROXY))
+        self.assertEqual(got["Micron Technology"][0], 990.21)
+
+    def test_공시값이_0이면_미확보로_본다(self):
+        from core import market
+        got = self._m("Micron", [{"name": "MICRON TECHNOLOGY INC",
+                                  "isin": "US5951121038", "std_price": "0.0"}])
+        self.assertEqual(got["Micron"], (None, market.REF_SKIP_ZERO))
+
+    def test_자산_개수가_다르면_상품_전체를_폴백한다(self):
+        from core import market
+        got = self._m("Palantir , Micron", [
+            {"name": "DOW JONES EURO STOXX 50 INDEX", "isin": "KSD310000145",
+             "std_price": "4113.19"},
+            {"name": "S&P 500 Index", "isin": "KSD310000568", "std_price": "4380.26"},
+            {"name": "기아", "isin": "KR7000270009", "std_price": "79500"}])
+        self.assertEqual({v[1] for v in got.values()}, {market.REF_SKIP_UNMATCHED})
+
+    def test_자산이_1대1로_대응되지_않으면_폴백한다(self):
+        # 같은 상품번호를 다른 상품이 쓰는 오매칭을 이 검사가 막는다
+        from core import market
+        got = self._m("Tesla , Micron", [
+            {"name": "DOW JONES EURO STOXX 50 INDEX", "isin": "KSD310000145",
+             "std_price": "3885.32"},
+            {"name": "S&P 500 Index", "isin": "KSD310000568", "std_price": "4411.67"}])
+        self.assertEqual({v[1] for v in got.values()}, {market.REF_SKIP_UNMATCHED})
+
+    def test_공시값이_시세와_동떨어지면_기각한다(self):
+        # SEIBro가 최초기준가격을 지수화 기준점(1·100·1000)으로 공시하는 상품이 있다
+        from core import market
+        self.assertEqual(market.pick_ref_price(517.16, 542.21), (517.16, "공시"))
+        self.assertEqual(market.pick_ref_price(1.0, 542.21), (542.21, "폴백"))
+        self.assertEqual(market.pick_ref_price(None, 542.21), (542.21, "폴백"))
+        # 비교할 폴백이 없으면 정규화 상수만 걸러내고 공식값을 쓴다
+        self.assertEqual(market.pick_ref_price(517.16, None), (517.16, "공시"))
+        self.assertEqual(market.pick_ref_price(100.0, None), (None, "폴백"))
+
+
+class RefreshRefPriceCommandTest(TestCase):
+    """refresh_ref_price — 기본이 dry-run이고 --apply 없이는 절대 저장하지 않는다."""
+
+    def setUp(self):
+        from core.models import KnockInStatus
+        self.user = get_user_model().objects.create_user("reftester", password="x")
+        self.product = Product.objects.create(
+            issuer="삼성증권", product_no="31255", product_code="KR6SS0008FQ0",
+            assets_raw="Micron Technology", ki=50,
+            issue_date=date(2026, 7, 23), sub_end=date(2026, 7, 23))
+        HistoricalIssue.objects.create(
+            isin="KR6SS0008FQ0", name="삼성증권31255(ELS)", issuer="삼성증권",
+            product_type="ELS", issue_date=date(2026, 7, 24),
+            assets=[{"name": "MICRON TECHNOLOGY INC", "isin": "US5951121038",
+                     "std_price": "990.21"}])
+        self.inv = Investment.objects.create(
+            user=self.user, product=self.product, amount=10_000_000,
+            invested_at=date(2026, 7, 23), status="보유중")
+        self.st = KnockInStatus.objects.create(
+            investment=self.inv, asset_name="Micron Technology", ticker="MU",
+            ref_price=900.0, current_price=810.0, level_pct=90.0)
+
+    def _run(self, *args):
+        from io import StringIO
+        out = StringIO()
+        call_command("refresh_ref_price", "--no-fetch", *args, stdout=out)
+        return out.getvalue()
+
+    def test_dry_run은_보고만_하고_저장하지_않는다(self):
+        text = self._run()
+        self.assertIn("DRY-RUN", text)
+        self.assertIn("공시값 채택       1", text)
+        self.st.refresh_from_db()
+        self.assertEqual(self.st.ref_price, 900.0)      # 그대로
+        self.assertEqual(self.st.level_pct, 90.0)
+
+    def test_apply를_주면_공시값으로_저장된다(self):
+        self._run("--apply")
+        self.st.refresh_from_db()
+        self.assertEqual(self.st.ref_price, 990.21)
+        self.assertEqual(self.st.level_pct, round(810.0 / 990.21 * 100, 1))
+
+    def test_원인을_공시채택과_폴백규칙으로_나눠_센다(self):
+        text = self._run()
+        self.assertIn("공시채택  기준가 1건", text)
+        self.assertIn("폴백규칙  기준가 0건", text)
+
+    def test_낙인_판정이_뒤집히면_따로_보고한다(self):
+        # 레벨 90 → 81.8 이면 KI 85 기준으로 '미돌파 → 돌파'가 된다
+        self.product.ki = 85
+        self.product.save(update_fields=["ki"])
+        text = self._run()
+        self.assertIn("낙인 돌파(레벨 ≤ KI) 판정이 뒤집히는 투자: 1건", text)
+        self.assertIn("미돌파 → 돌파", text)
+
+    def test_상품코드가_없으면_폴백을_유지한다(self):
+        self.product.product_code = ""
+        self.product.save(update_fields=["product_code"])
+        text = self._run()
+        self.assertIn("공시값 채택       0", text)
+        self.assertIn("코드없음", text)
+
+    def test_dry_run과_apply를_함께_주면_거부한다(self):
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            call_command("refresh_ref_price", "--dry-run", "--apply")

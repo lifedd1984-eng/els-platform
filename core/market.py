@@ -329,69 +329,94 @@ def fetch_price_on(ticker: str, target_date, back: int = 0):
 
 
 # ── 최초기준가격 산정일 ──────────────────────────────────────────────
-# 간이투자설명서 전수조사(18개사 72건) 결과: 최초기준가격평가일은 발행사별로 일관되며
-# 대부분 '발행일 당일'이고 일부만 '발행일 −1영업일'(납입·배정일 종가)이다.
-# ⚠ 72건 표본으로는 삼성증권·키움증권 둘만 보였지만, 나중에 설명서 확정값 757건을
-#   전수로 다시 도출했더니 대신증권도 −1영업일이었다. 명단은 아래
-#   BASE_EVAL_BACK1_ISSUERS 한 곳만 보고 판단할 것. (2026-08-04 주석 정정)
-# Product.base_eval_date(설명서에서 파싱)가 있으면 그 날짜가 정답이고,
-# 없을 때만 issue_date + 발행사 규칙으로 근사한다.
+# 설명서 확정값(base_eval_date) 798건 전수 + SEIBro 공시 기준가 역매칭 1,156쌍
+# 가격대조로 확정한 규칙이다. (2026-08-05 전수검증)
 #
-# ⚠ issue_date는 이름과 달리 **청약종료일**이다(kofia_scraper가 같은 필드를 양쪽에 넣음).
-#   아래 일수는 18개사 76건의 간이투자설명서를 실제 파싱해 측정한 값이며,
-#   "발행일 기준" 관행(BASE_EVAL_BACK1_ISSUERS = 발행일 −1영업일)과는 기준점이 달라
-#   결과가 다르다. 이 발행사들은 발행일이 청약종료일의 익영업일이라,
-#   둘을 합치면 평가일 = 청약종료일(+0)이 된다.
-#   → 파생 추론 말고 이 실측표를 쓸 것.
+# ⚠ 예전엔 '기준일 + back(거래일 오프셋)'으로 하루를 되짚었는데 **그게 버그의 근원**이었다.
+#   back=1은 자산마다 제 거래소 달력을 타기 때문에, 한국은 휴장인데 해외는 개장한 날
+#   (5/1 근로자의날, 7/17 제헌절 등)이 사이에 끼면 엉뚱한 날 종가를 집었다.
+#   발행일 자체가 해외 휴장일(성금요일 등)이면 하루 더 밀렸다.
+#   실측 정확도 — 국내자산은 어떤 gap에서도 100%였지만 해외자산은
+#   gap 2일에서 10%, gap 4일에서 38%까지 무너졌다.
+#   → back을 없애고 **기준일을 날짜 하나로 확정**한 뒤 자산마다 '그 날짜 이하의
+#     마지막 종가'를 쓰면 전 구간 100%가 된다.
+#     재검증: 확정값 798/798(100%), 가격대조 90.5%(현행 78.2%), 개선 142쌍·악화 0쌍.
 BASE_EVAL_OFFSET_DAYS = {          # issue_date(청약종료일) + N일 = 최초기준가격평가일
     "NH투자증권": 1,
     "미래에셋증권": 1,
     "한화투자증권": 1,
     "현대차증권": 1,
 }                                   # 그 외 12개사는 +0일
-# 상품마다 값이 달라 규칙화 불가 — 반드시 설명서를 파싱해야 하는 발행사
+# 상품마다 값이 달라 규칙화 불가 — 반드시 설명서를 파싱해야 하는 발행사.
+# 전수검증에서 어느 규칙에도 안 맞았고 추론 정확도가 사실상 0%다.
+# ⚠ 그렇다고 기준가를 None으로 두면 화면에서 레벨이 사라진다 —
+#   사용자에게 보이는 변화라 조 팀장 판단 사항이다. 지금은 옛 로직 그대로 둔다.
 BASE_EVAL_UNSTABLE_ISSUERS = {"유안타증권", "유진투자증권"}
 
-# issue_date가 '실제 발행일'인 행(엑셀 수입분)에 쓰는 규칙 —
-# 설명서 확정값 757건 전수에서 도출(예외 없음): 이 세 곳만 발행일 −1거래일
-BASE_EVAL_BACK1_ISSUERS = {"키움증권", "삼성증권", "대신증권"}
+# 기준일 = 청약마감일(=배정일). 설명서 확정값 174건 전수에서 예외 없이 일치했고
+# 가격대조 일치율도 100%다. (옛 이름 BASE_EVAL_BACK1_ISSUERS — '발행일 −1거래일'로
+# 근사하던 시절의 이름이라, 규칙이 날짜 확정으로 바뀌면서 이름도 바꿨다.)
+BASE_EVAL_SUBEND_ISSUERS = {"키움증권", "삼성증권", "대신증권"}
+
+
+def prev_business_day(d):
+    """직전 영업일 (주말만 건너뛴다).
+
+    공휴일까지 볼 필요는 없다 — fetch_price_on이 '그 날짜 이하 마지막 종가'를 주므로
+    휴장일을 집어도 자동으로 직전 거래일 종가로 내려간다.
+    """
+    from datetime import timedelta
+    d = d - timedelta(days=1)
+    while d.weekday() >= 5:        # 5=토, 6=일
+        d -= timedelta(days=1)
+    return d
 
 
 def base_price_date(product):
-    """상품의 최초기준가격 산정에 쓸 (기준일, 거래일 오프셋) 반환.
+    """상품의 최초기준가격 산정일 → (기준일, 0). 기준일이 없으면 (None, 0).
 
     반환값을 그대로 fetch_price_on(ticker, 기준일, back=오프셋)에 넘기면 된다.
-    기준일이 없으면 (None, 0).
 
-    ⚠ 오프셋은 '기준가'에만 적용한다. 조기상환 평가일 시세 조회에는 절대 쓰지 말 것
-      (평가일 종가는 지금도 증권사 고시값과 일치한다).
+    ⚠ 두 번째 값(거래일 오프셋)은 **항상 0**이다. 위 주석대로 오프셋 자체가 버그의
+      근원이라 폐지했다. 호출부(peak_as_of·views 차트·check_redemptions·verify_radar)가
+      아직 2튜플을 풀어 쓰고 있어 형태만 남겨 뒀다 — back=0은 '그 날짜 이하 마지막 종가'
+      라는 새 규칙과 정확히 같은 의미다. 호출부 정리는 별도 작업.
     """
     from datetime import timedelta
 
+    # ① 설명서에서 파싱한 확정값이 언제나 정답 (798건 전수 100%)
     base = getattr(product, "base_eval_date", None)
     if base:
         return base, 0
-    base = getattr(product, "issue_date", None)
-    if not base:
+
+    issue = getattr(product, "issue_date", None)
+    if not issue:
         return None, 0
     issuer = getattr(product, "issuer", "")
-    # issue_date의 의미가 두 가지다:
-    #   ① KOFIA 수집분 — issue_date == sub_end (청약종료일). 오프셋 표가 이 기준이다.
-    #   ② 엑셀 수입분  — issue_date가 실제 발행일 (1,538건). 여기에 ①용 오프셋을
-    #      그대로 더하면 하루가 이중 가산돼 기준가가 1거래일 늦은 종가가 된다.
-    # 실제 발행일 기준 규칙은 설명서 확정값 757건 전수로 도출했다(예외 없음):
-    #   키움·삼성·대신 = 발행일 −1거래일 / 나머지 = 발행일 당일
-    # sub_end가 비어 있어도 ②다. 엑셀 수입분 369건이 여기 해당하고(전건이
-    # product_code 없음 = KOFIA 미수집분), 예전 조건 `sub_end and base != sub_end`는
-    # None에서 단락돼 ①의 오프셋 표로 떨어졌다. 138건이 하루씩 어긋났고 보유
-    # 상품에서 최대 4.9%p까지 레벨이 틀렸다 (2026-08-03 검수).
     sub_end = getattr(product, "sub_end", None)
-    if sub_end != base:
-        back = 1 if issuer in BASE_EVAL_BACK1_ISSUERS else 0
-        return base, back
-    days = BASE_EVAL_OFFSET_DAYS.get(issuer, 0)
-    # +N일 뒤가 휴장이면 fetch_price_on이 직전 거래일로 자동 보정한다
-    return base + timedelta(days=days), 0
+
+    # ② 규칙화 불가 발행사 — 옛 로직 그대로 (둘 다 back=0·issue_date였다)
+    if issuer in BASE_EVAL_UNSTABLE_ISSUERS:
+        return issue, 0
+
+    # ③ 기준일 = 청약마감일(배정일) 발행사
+    if issuer in BASE_EVAL_SUBEND_ISSUERS:
+        # sub_end가 비어 있으면 issue_date는 '실제 발행일'(엑셀 수입분)이므로
+        # 그 직전 영업일이 배정일이다.
+        return (sub_end or prev_business_day(issue)), 0
+
+    # ④ 그 외 — 기준일 = 실제 발행일
+    real = getattr(product, "real_issue_date", None)
+    if real:
+        return real, 0
+    # issue_date의 의미가 두 가지다:
+    #   · 엑셀 수입분 — issue_date가 곧 실제 발행일 (sub_end와 다르거나 sub_end가 없다)
+    #   · KOFIA 수집분 — issue_date == sub_end (청약종료일). 이때만 오프셋 표를 쓴다.
+    # KOFIA분 오프셋 표는 이번 검증에서 교차확인이 안 됐고 확정값 기준 현행 정확도가
+    # 95%라 그대로 둔다 (2026-08-05).
+    if issue != sub_end:
+        return issue, 0
+    return issue + timedelta(days=BASE_EVAL_OFFSET_DAYS.get(issuer, 0)), 0
 
 
 # 기준가로 쓸 수 없는 정규화 공시값 — SEIBro가 일부 상품의 최초기준가격을
@@ -408,6 +433,258 @@ def is_normalized_std_price(std_price, market_price, tol: float = 0.2):
         return True
     ratio = sp / mp
     return not (1 - tol <= ratio <= 1 + tol)
+
+
+# ── SEIBro 기초자산 → 티커 ────────────────────────────────────────────
+# SEIBro(HistoricalIssue)는 서비스와 표기 체계가 완전히 다르다
+# ("에스케이하이닉스", "TESLA INC", "코스피 200지수"). 그래서 이름 대신
+# **자산 ISIN**을 1순위로 쓴다 (KR7xxxxxx00y → xxxxxx.KS, 지수는 직접 매핑).
+# ※ 원래 core.hist_radar에 있던 것을 옮겼다 — 기준가 결정(아래)이 백테스트 전용
+#   모듈에 의존하면 안 되기 때문. hist_radar는 이 이름들을 그대로 재수출한다.
+#
+# ⚠ 레버리지·Quanto·KRW Hedged·Decrement·증권사 자체지수는 **일부러 넣지 않았다**.
+#   기초지수와 레벨 궤적이 달라(FX·배당조정) 기준가 대비 비율이 어긋난다.
+#   → 티커미해결로 빠져 폴백되는 편이 오판보다 낫다.
+INDEX_ISIN_TICKER = {
+    "KSD101000028": "069500.KS",   # 코스피 200지수 (지수 ^KS200은 nan → KODEX200 ETF)
+    "KSD102000045": "229200.KS",   # 코스닥 150지수
+    "KSD310000145": "^STOXX50E",   # DOW JONES EURO STOXX 50
+    "KSD310000568": "^GSPC",       # S&P 500
+    "KSD310000679": "^GSPC",       # SPX (같은 지수 다른 표기)
+    "KSD310000306": "^HSCE",       # HSCEI
+    "KSD310000319": "^HSI",        # 항셍
+    "KSD310000499": "^N225",       # NIKKEI 225
+    "KSD310000103": "000300.SS",   # CSI 300
+    "KSD310000110": "^GDAXI",      # DAX
+    "KSD310000076": "^FCHI",       # CAC 40
+    "KSD310000228": "^FTSE",       # FTSE 100
+    "KSD310000471": "^NDX",        # NASDAQ 100
+    "KSD310000622": "^AXJO",       # S&P/ASX 200
+    "KSD310000025": "^AXJO",       # ASX 200
+    "KSD310000867": "^TWII",       # TWSE
+    "KSD310000204": "^SX7E",       # EURO STOXX BANKS
+}
+
+# 해외 개별종목 — SEIBro 표기(대문자·법인격 포함)가 서비스 표기와 달라 별도 매핑.
+# 키는 소문자·공백정규화된 이름.
+FOREIGN_NAME_TICKER = {
+    "tesla inc": "TSLA", "tesla motors inc.": "TSLA", "tesla inc.": "TSLA",
+    "nvidia corp": "NVDA", "nvidia corporation": "NVDA",
+    "advanced micro devices inc": "AMD",
+    "palantir technologies inc cl a": "PLTR",
+    "micron technology inc": "MU",
+    "apple inc": "AAPL",
+    "amazon.com inc": "AMZN", "amazon com inc": "AMZN",
+    "netflix inc": "NFLX",
+    "meta platforms inc cl a": "META", "facebook inc cl a": "META",
+    "intel corp": "INTC",
+    "alphabet inc cl a": "GOOGL", "alphabet inc cl c": "GOOG",
+    "google inc cl a": "GOOGL", "google inc cl c": "GOOG",
+    "broadcom inc": "AVGO", "broadcom corp": "AVGO", "broadcom limited": "AVGO",
+    "microsoft corp": "MSFT",
+    "boeing co": "BA",
+    "starbucks corp": "SBUX",
+    "qualcomm inc": "QCOM",
+    "oracle corp": "ORCL",
+    "general motors co": "GM",
+    "bank of america corp": "BAC",
+    "gilead sciences inc": "GILD",
+    "walt disney co": "DIS",
+    "nike inc cl b": "NKE",
+    "electronic arts inc": "EA",
+    "eli lilly & co": "LLY", "eli lilly and company": "LLY",
+    "activision blizzard inc": "ATVI",
+    "arm holdings plc sponsored adr": "ARM",
+    "tencent holdings ltd adr": "TCEHY",
+    "alibaba group holding ltd adr": "BABA",
+    "weibo corp adr": "WB",
+    "jd.com inc adr": "JD",
+    "baidu inc adr": "BIDU",
+    "visa inc cl a": "V",
+    "johnson & johnson": "JNJ",
+    "pfizer inc": "PFE",
+    "salesforce inc": "CRM", "salesforce.com inc": "CRM",
+    "adobe inc": "ADBE",
+    "advanced micro devices, inc.": "AMD",
+    "coupang inc cl a": "CPNG",
+    "applied materials inc": "AMAT",
+}
+
+# SEIBro 이름 꼬리표(거래소 코드·ISIN이 붙어 오는 경우) 제거용
+_TAIL_RE = re.compile(r"\s+(?:EXOF|CHAN)\s+\S+.*$", re.IGNORECASE)
+_KR7_RE = re.compile(r"^KR7(\d{6})\d{3}$")
+
+
+def _norm_name(name: str) -> str:
+    """SEIBro 자산명 정규화 — 꼬리표 제거 + 공백 축약 + 소문자."""
+    n = _TAIL_RE.sub("", (name or "").strip())
+    return re.sub(r"\s+", " ", n).strip().lower()
+
+
+def resolve_seibro_ticker(asset: dict):
+    """SEIBro assets의 한 원소({name, isin, std_price}) → 티커. 실패 시 None.
+
+    ISIN(기계값) → 이름 매핑 → resolve_ticker(서비스 티커맵) 순으로 시도한다.
+    """
+    if not isinstance(asset, dict):
+        return None
+    isin = (asset.get("isin") or "").strip().upper()
+    if isin in INDEX_ISIN_TICKER:
+        return INDEX_ISIN_TICKER[isin]
+    m = _KR7_RE.match(isin)
+    if m:
+        # 국내 상장주 — 표준코드에서 종목코드 6자리를 뽑아낸다(우선주 포함).
+        # 코스닥 종목은 .KS가 비어 나오므로 PriceStore가 .KQ로 자동 재시도한다.
+        return f"{m.group(1)}.KS"
+
+    name = asset.get("name") or ""
+    key = _norm_name(name)
+    if key in FOREIGN_NAME_TICKER:
+        return FOREIGN_NAME_TICKER[key]
+    # 마지막으로 서비스 티커맵(부분일치·학습티커 포함)에 맡긴다
+    return resolve_ticker(_TAIL_RE.sub("", name).strip()) or None
+
+
+# ── 최초기준가격 결정 순서 ────────────────────────────────────────────
+# ① SEIBro 공시 최초기준가격(std_price) — 발행사가 신고한 **공식값**. 있으면 무조건 이것.
+# ② 없거나 못 믿을 값이면 → 폴백 = base_price_date()가 정한 기준일의 종가.
+#
+# ⚠ ②를 갈아끼울 지점은 fallback_ref_basis() **한 곳뿐**이다.
+#   update_prices / refresh_ref_price 모두 이 함수만 부르므로 여기만 고치면 전부 따라온다.
+#
+# 배경(2026-08-04~05 실측): 추론이 키움증권 물량에서 하루씩 어긋나 보유 자산의
+#   기준가가 ±1~8% 틀어졌다. 방향이 양쪽이라 어떤 건은 레벨이 실제보다
+#   **높게(안전하게)** 표시됐다 — 공시값을 최우선으로 두는 이유다.
+#   ②의 날짜 규칙 자체도 전수검증으로 바로잡았다(base_price_date 주석 참고).
+
+# 서비스가 지수 대신 ETF를 프록시로 쓰는 티커.
+# 공시값은 지수 포인트(예: 코스피200 1126.33)인데 서비스 현재가는 ETF 가격이라
+# 스케일이 ~100배 어긋난다. 레벨은 '현재가/기준가' 비율이라 **폴백(같은 ETF 종가)**
+# 으로 계산하면 정확하다 — 그래서 여기에만 공시값을 넣지 않는다.
+PROXY_INDEX_TICKERS = {"069500", "229200"}
+
+# 시세 비교가 불가능할 때 기각할 정규화 상수 — SEIBro가 일부 상품의 최초기준가격을
+# 실제 가격이 아니라 지수화 기준점으로 공시한다(실측: 1.00 / 100 / 1000 / 10000).
+_NORMALIZED_CONSTANTS = {1.0, 10.0, 100.0, 1000.0, 10000.0}
+
+# 공시값을 못 쓴 사유 코드 (집계·디버깅용)
+REF_SKIP_NO_CODE = "코드없음"        # Product.product_code 비어 있음
+REF_SKIP_NO_ISSUE = "이력없음"       # product_code로 HistoricalIssue를 못 찾음
+REF_SKIP_UNMATCHED = "대응불가"      # 자산 개수 불일치·티커 미해결·중복 등 모호
+REF_SKIP_PROXY = "지수프록시"        # 국내 지수(서비스는 ETF 프록시) → 일부러 제외
+REF_SKIP_ZERO = "공시0"              # std_price 결측 또는 0
+REF_SKIP_NORMALIZED = "정규화값"     # 시세와 동떨어진 지수화 기준점 → 기각
+
+
+def _cmp_ticker(ticker: str) -> str:
+    """비교용 티커 키 — 국내 종목의 .KS/.KQ 접미사 차이를 흡수한다.
+
+    SEIBro ISIN은 시장 구분 없이 항상 .KS를 주는데 서비스 티커맵은 코스닥을
+    .KQ로 들고 있어, 접미사를 그대로 비교하면 같은 종목이 어긋난다.
+    """
+    t = (ticker or "").strip()
+    return t[:-3] if re.match(r"^\d{6}\.(KS|KQ|KN)$", t) else t.upper()
+
+
+def disclosed_asset_prices(assets_raw: str, seibro_assets):
+    """서비스 자산명 → (공시 기준가|None, 사유) 매핑.
+
+    자산 대응은 **티커**로 맞춘다 — 서비스는 'Micron', SEIBro는
+    'MICRON TECHNOLOGY INC'처럼 표기가 전혀 달라 이름 비교가 불가능하기 때문.
+    SEIBro는 자산 ISIN을 함께 주므로(US5951121038 등) 그쪽이 훨씬 안전하다.
+
+    다음 중 하나라도 걸리면 **상품 전체를 폴백**한다 (틀린 값을 넣는 게 최악):
+      · 자산 개수가 서로 다름
+      · 어느 한쪽이라도 티커를 못 붙임
+      · 같은 티커가 둘 이상 → 어느 자산에 붙일지 모호
+      · 1:1 대응이 안 됨
+    """
+    names = split_assets(assets_raw)
+    if not names:
+        return {}
+    if not seibro_assets or not isinstance(seibro_assets, (list, tuple)):
+        return {n: (None, REF_SKIP_NO_ISSUE) for n in names}
+    if len(names) != len(seibro_assets):
+        return {n: (None, REF_SKIP_UNMATCHED) for n in names}
+
+    svc = []                       # [(서비스 자산명, 비교키)]
+    for n in names:
+        tk = resolve_ticker(n)
+        if not tk:
+            return {n2: (None, REF_SKIP_UNMATCHED) for n2 in names}
+        svc.append((n, _cmp_ticker(tk)))
+    if len({k for _, k in svc}) != len(svc):
+        return {n: (None, REF_SKIP_UNMATCHED) for n in names}
+
+    sei = {}                       # 비교키 → SEIBro 자산 dict
+    for a in seibro_assets:
+        tk = resolve_seibro_ticker(a)
+        if not tk:
+            return {n: (None, REF_SKIP_UNMATCHED) for n in names}
+        key = _cmp_ticker(tk)
+        if key in sei:
+            return {n: (None, REF_SKIP_UNMATCHED) for n in names}
+        sei[key] = a
+    if any(k not in sei for _, k in svc):
+        return {n: (None, REF_SKIP_UNMATCHED) for n in names}
+
+    out = {}
+    for name, key in svc:
+        if key in PROXY_INDEX_TICKERS:
+            out[name] = (None, REF_SKIP_PROXY)
+            continue
+        raw = sei[key].get("std_price")
+        try:
+            price = float(str(raw).replace(",", "").strip())
+        except (TypeError, ValueError):
+            price = 0.0
+        out[name] = (price, "") if price > 0 else (None, REF_SKIP_ZERO)
+    return out
+
+
+def disclosed_ref_prices(product):
+    """상품의 SEIBro 공시 최초기준가격 {서비스 자산명: (기준가|None, 사유)}.
+
+    연결 키는 Product.product_code == HistoricalIssue.isin 하나뿐이다.
+    (product_code가 비어 있는 상품이 아직 많아 커버리지가 낮다 — 백필이 채우면
+     여기 손대지 않아도 커버리지가 자동으로 올라간다.)
+    """
+    names = split_assets(getattr(product, "assets_raw", "") or "")
+    code = (getattr(product, "product_code", "") or "").strip()
+    if not code:
+        return {n: (None, REF_SKIP_NO_CODE) for n in names}
+    from core.models import HistoricalIssue      # 지연 임포트 (market은 django-free 유지)
+    assets = (HistoricalIssue.objects.filter(isin=code)
+              .values_list("assets", flat=True).first())
+    if assets is None:
+        return {n: (None, REF_SKIP_NO_ISSUE) for n in names}
+    return disclosed_asset_prices(getattr(product, "assets_raw", "") or "", assets)
+
+
+def fallback_ref_basis(product):
+    """폴백 기준가의 (기준일, 거래일 오프셋). fetch_price_on에 그대로 넘기면 된다.
+
+    ⚠ **기준가 결정 순서 ②의 유일한 교체 지점.**
+      폴백 규칙이 또 바뀌면 이 함수(와 그 아래 base_price_date) 몸통만 고치면
+      update_prices와 refresh_ref_price가 함께 따라온다. 호출부는 손댈 필요 없다.
+    """
+    return base_price_date(product)
+
+
+def pick_ref_price(disclosed, fallback):
+    """기준가 최종 결정 → (기준가, 출처). 출처는 '공시' 또는 '폴백'.
+
+    공시값이 시세와 동떨어지면(정규화 기준점) 기각하고 폴백한다.
+    비교할 폴백 시세가 아예 없으면 정규화 상수만 걸러내고 공시값을 쓴다 —
+    아무 값도 없는 것보다 공식값이 낫다.
+    """
+    if disclosed and disclosed > 0:
+        if fallback is None:
+            if float(disclosed) not in _NORMALIZED_CONSTANTS:
+                return float(disclosed), "공시"
+        elif not is_normalized_std_price(disclosed, fallback):
+            return float(disclosed), "공시"
+    return fallback, "폴백"
 
 
 _history_cache = {}  # (ticker, date.today()) → [(date, close), ...]

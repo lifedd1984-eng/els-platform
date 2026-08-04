@@ -3,8 +3,10 @@
 위험 구간 진입 시 텔레그램 경보를 발송한다.
 
 레벨(%) = 현재가 / 최초기준가 × 100
-  기준가 산정일은 market.base_price_date()가 정한다
-  (설명서 파싱값 base_eval_date 우선, 없으면 issue_date + 발행사별 오프셋).
+  기준가는 두 단계로 정한다 (market.pick_ref_price):
+    ① SEIBro 공시 최초기준가격(std_price) — 발행사가 신고한 공식값. 있으면 이것.
+    ② 없으면 폴백 — market.fallback_ref_basis()가 준 기준일 이하의 마지막 종가
+       (설명서 확정값 base_eval_date 우선, 없으면 발행사별 규칙).
 버퍼(%p) = 기준가 대비 % − 낙인  (가장 부진한 자산 기준)
 
 위험 구간:
@@ -41,13 +43,15 @@ class Command(BaseCommand):
 
         for inv in holdings:
             p = inv.product
-            # 기준가 산정일 + 거래일 오프셋 (발행사별 −1영업일 규칙 반영)
-            base_date, back = market.base_price_date(p)
+            # ① SEIBro 공시 기준가 (상품당 1회 조회)
+            disclosed = market.disclosed_ref_prices(p)
+            # ② 폴백 기준일 + 거래일 오프셋 — 규칙 교체는 fallback_ref_basis() 한 곳에서만
+            base_date, back = market.fallback_ref_basis(p)
             if not base_date:
                 base_date, back = inv.invested_at, 0
             for asset in market.split_assets(p.assets_raw):
                 ticker = market.resolve_ticker(asset)
-                cur = ref = None
+                cur = fallback = None
                 if ticker:
                     if ticker not in current_cache:
                         current_cache[ticker] = market.fetch_current_price(ticker)
@@ -56,7 +60,9 @@ class Command(BaseCommand):
                         key = (ticker, base_date, back)
                         if key not in ref_cache:
                             ref_cache[key] = market.fetch_price_on(ticker, base_date, back=back)
-                        ref = ref_cache[key]
+                        fallback = ref_cache[key]
+                # 폴백 시세는 공시값 검증(정규화 기준점 걸러내기)에도 쓰이므로 항상 구한다
+                ref, _src = market.pick_ref_price(disclosed.get(asset, (None, ""))[0], fallback)
 
                 level = round(cur / ref * 100, 1) if (cur and ref) else None
                 KnockInStatus.objects.update_or_create(

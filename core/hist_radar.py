@@ -20,7 +20,6 @@ SEIBro 전수수집분(HistoricalIssue)은 현 서비스(Product)와 표기 체�
      현 서비스 로직(core.models)은 절대 건드리지 않는다 — 이 모듈은 과거 재현 전용.
 """
 
-import re
 import time
 from bisect import bisect_left
 from datetime import date, timedelta
@@ -65,105 +64,16 @@ GATE_MIN_SAMPLE = 100     # 윈도우 표본이 이 미만이면 확장 윈도�
 # ──────────────────────────────────────────────────────────────
 # 1. 기초자산 → 티커
 # ──────────────────────────────────────────────────────────────
-# 주요 지수 (SEIBro 자산 ISIN 기준 — 이름 표기 흔들림에 영향받지 않는다).
-# ⚠ 레버리지·Quanto·KRW Hedged·Decrement·증권사 자체지수는 **일부러 넣지 않았다**.
-#   기초지수와 레벨 궤적이 달라(FX·배당조정) 기준가 대비 비율이 어긋난다.
-#   → 티커미해결로 빠져 표본에서 제외되는 편이 오판보다 낫다.
-INDEX_ISIN_TICKER = {
-    "KSD101000028": "069500.KS",   # 코스피 200지수 (지수 ^KS200은 nan → KODEX200 ETF, market.py와 동일)
-    "KSD102000045": "229200.KS",   # 코스닥 150지수
-    "KSD310000145": "^STOXX50E",   # DOW JONES EURO STOXX 50
-    "KSD310000568": "^GSPC",       # S&P 500
-    "KSD310000679": "^GSPC",       # SPX (같은 지수 다른 표기)
-    "KSD310000306": "^HSCE",       # HSCEI
-    "KSD310000319": "^HSI",        # 항셍
-    "KSD310000499": "^N225",       # NIKKEI 225
-    "KSD310000103": "000300.SS",   # CSI 300
-    "KSD310000110": "^GDAXI",      # DAX
-    "KSD310000076": "^FCHI",       # CAC 40
-    "KSD310000228": "^FTSE",       # FTSE 100
-    "KSD310000471": "^NDX",        # NASDAQ 100
-    "KSD310000622": "^AXJO",       # S&P/ASX 200
-    "KSD310000025": "^AXJO",       # ASX 200
-    "KSD310000867": "^TWII",       # TWSE
-    "KSD310000204": "^SX7E",       # EURO STOXX BANKS
-}
-
-# 해외 개별종목 — SEIBro 표기(대문자·법인격 포함)가 서비스 표기와 달라 별도 매핑.
-# 키는 소문자·공백정규화된 이름.
-FOREIGN_NAME_TICKER = {
-    "tesla inc": "TSLA", "tesla motors inc.": "TSLA", "tesla inc.": "TSLA",
-    "nvidia corp": "NVDA", "nvidia corporation": "NVDA",
-    "advanced micro devices inc": "AMD",
-    "palantir technologies inc cl a": "PLTR",
-    "micron technology inc": "MU",
-    "apple inc": "AAPL",
-    "amazon.com inc": "AMZN", "amazon com inc": "AMZN",
-    "netflix inc": "NFLX",
-    "meta platforms inc cl a": "META", "facebook inc cl a": "META",
-    "intel corp": "INTC",
-    "alphabet inc cl a": "GOOGL", "alphabet inc cl c": "GOOG",
-    "google inc cl a": "GOOGL", "google inc cl c": "GOOG",
-    "broadcom inc": "AVGO", "broadcom corp": "AVGO", "broadcom limited": "AVGO",
-    "microsoft corp": "MSFT",
-    "boeing co": "BA",
-    "starbucks corp": "SBUX",
-    "qualcomm inc": "QCOM",
-    "oracle corp": "ORCL",
-    "general motors co": "GM",
-    "bank of america corp": "BAC",
-    "gilead sciences inc": "GILD",
-    "walt disney co": "DIS",
-    "nike inc cl b": "NKE",
-    "electronic arts inc": "EA",
-    "eli lilly & co": "LLY", "eli lilly and company": "LLY",
-    "activision blizzard inc": "ATVI",
-    "arm holdings plc sponsored adr": "ARM",
-    "tencent holdings ltd adr": "TCEHY",
-    "alibaba group holding ltd adr": "BABA",
-    "weibo corp adr": "WB",
-    "jd.com inc adr": "JD",
-    "baidu inc adr": "BIDU",
-    "visa inc cl a": "V",
-    "johnson & johnson": "JNJ",
-    "pfizer inc": "PFE",
-    "salesforce inc": "CRM", "salesforce.com inc": "CRM",
-    "adobe inc": "ADBE",
-    "advanced micro devices, inc.": "AMD",
-    "coupang inc cl a": "CPNG",
-}
-
-# SEIBro 이름 꼬리표(거래소 코드·ISIN이 붙어 오는 경우) 제거용
-_TAIL_RE = re.compile(r"\s+(?:EXOF|CHAN)\s+\S+.*$", re.IGNORECASE)
-_KR7_RE = re.compile(r"^KR7(\d{6})\d{3}$")
-
-
-def _norm_name(name: str) -> str:
-    """이름 정규화 — 꼬리표 제거 + 공백 축약 + 소문자."""
-    n = _TAIL_RE.sub("", (name or "").strip())
-    return re.sub(r"\s+", " ", n).strip().lower()
-
-
-def resolve_asset_ticker(asset: dict):
-    """HistoricalIssue.assets의 한 원소({name, isin, std_price}) → 티커. 실패 시 None.
-
-    ISIN(기계값) → 이름 매핑 → market.resolve_ticker(서비스 티커맵) 순으로 시도한다.
-    """
-    isin = (asset.get("isin") or "").strip().upper()
-    if isin in INDEX_ISIN_TICKER:
-        return INDEX_ISIN_TICKER[isin]
-    m = _KR7_RE.match(isin)
-    if m:
-        # 국내 상장주 — 표준코드에서 종목코드 6자리를 뽑아낸다(우선주 포함).
-        # 코스닥 종목은 .KS가 비어 나오므로 PriceStore가 .KQ로 자동 재시도한다.
-        return f"{m.group(1)}.KS"
-
-    name = asset.get("name") or ""
-    key = _norm_name(name)
-    if key in FOREIGN_NAME_TICKER:
-        return FOREIGN_NAME_TICKER[key]
-    # 마지막으로 서비스 티커맵(부분일치·학습티커 포함)에 맡긴다
-    return market.resolve_ticker(_TAIL_RE.sub("", name).strip()) or None
+# 실체는 core.market으로 옮겼다 (2026-08-05) — 운영 기준가 결정도 같은 매핑을 쓰는데,
+# 백테스트 전용 모듈에 두면 core.models를 끌어들여 import가 꼬인다.
+# 여기서는 기존 호출부(simulate_historical / verify_historical / scripts)가 그대로
+# 돌도록 이름만 재수출한다. 매핑을 고칠 때는 core/market.py 한 곳만 고치면 된다.
+INDEX_ISIN_TICKER = market.INDEX_ISIN_TICKER
+FOREIGN_NAME_TICKER = market.FOREIGN_NAME_TICKER
+_TAIL_RE = market._TAIL_RE
+_KR7_RE = market._KR7_RE
+_norm_name = market._norm_name
+resolve_asset_ticker = market.resolve_seibro_ticker
 
 
 def issue_tickers(issue):
