@@ -23,6 +23,10 @@
 
 from datetime import timedelta
 
+# 상품(KOFIA)과 SEIBro 행의 만기가 이만큼까지 다른 건 같은 상품으로 본다.
+# 공시 출처가 달라 며칠 어긋나는 경우가 실제로 있다.
+EXPIRY_TOLERANCE_DAYS = 3
+
 from django.core.management.base import BaseCommand
 
 from core.models import HistoricalIssue, Product
@@ -85,9 +89,14 @@ class Command(BaseCommand):
             if not h:
                 no_match += 1
                 continue
-            # 상품과 SEIBro 행의 만기가 둘 다 있는데 다르면 다른 상품이다.
-            # 회차수·만기 검증을 통과해도 여기서 먼저 걸러야 한다.
-            if p.expiry_date and h.expiry_date and p.expiry_date != h.expiry_date:
+            # 상품과 SEIBro 행의 만기가 둘 다 있는데 크게 다르면 다른 상품이다.
+            # 다만 며칠 차이는 오매칭이 아니라 공시 출처 차이다 — KOFIA와 SEIBro가
+            # 같은 상품의 만기를 1~3일 다르게 적는 경우가 있다. 실측(2026-08-04)에서
+            # 걸린 5건 중 4건이 상품명·발행일이 정확히 일치하는 올바른 매칭이었고,
+            # 진짜 오매칭은 361일 어긋난 1건뿐이었다. 그래서 ±3일까지는 같은
+            # 상품으로 본다. (조 팀장 판단)
+            if (p.expiry_date and h.expiry_date
+                    and abs((p.expiry_date - h.expiry_date).days) > EXPIRY_TOLERANCE_DAYS):
                 expiry_mismatch += 1
                 continue
             # SEIBro는 (평가일, 배리어)를 같은 순서로 준다. 리자드 상품은 같은
