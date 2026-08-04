@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 
 from .models import (
     ImportLog, Investment, Preset, Product, WatchItem, attach_peak_ratios,
+    peak_ratios,
 )
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,9 @@ def _market_regime(monday, sunday):
     읽는 용도. (regime_signal.py 검증, 2026-08-02)
     """
     from core import market as _m
-    from core.models import RADAR_V7_B0_MAX, v7_ki_cut
+    from core.models import (
+        RADAR_V7_B0_MAX, _peak_fetch_days, _peak_from_series, v7_ki_cut,
+    )
 
     group = list(Product.objects.filter(sub_end__gte=monday, sub_end__lte=sunday))
     if not group:
@@ -143,14 +146,17 @@ def _market_regime(monday, sunday):
     rate = n_pass / n_all * 100
 
     def _gauge(label, name):
+        # 화면 표기가 "52주 고점 대비 / 직전 1년 대비"이므로 창도 캘린더 52주로 자른다.
+        # (예전엔 fetch_history(days=370)의 종가 전체를 썼는데 370은 거래일 수로
+        #  해석돼 실제로는 1.5년 창이었다 — 실측 557캘린더일. 2026-08-05)
         tk = _m.resolve_ticker(name)
-        hist = _m.fetch_history(tk, days=370) if tk else None
-        closes = [c for _, c in (hist or []) if c]
-        if not closes:
+        hist = _m.fetch_history(tk, days=_peak_fetch_days(date.today())) if tk else None
+        if not hist:
             return None
-        return {"name": label,
-                "peak": round(closes[-1] / max(closes) * 100, 1),
-                "ret1y": round((closes[-1] / closes[0] - 1) * 100, 1)}
+        peak, ret1y = _peak_from_series(hist, hist[-1][0])
+        if peak is None or ret1y is None:
+            return None      # 표에 두 값이 다 있어야 한 행이 성립한다
+        return {"name": label, "peak": round(peak, 1), "ret1y": round(ret1y, 1)}
 
     idx = [g for g in (_gauge(lb, nm) for lb, nm in REGIME_INDEXES) if g]
 
@@ -534,8 +540,6 @@ def product_detail(request, pk):
             (hi_d, hi_c), (lo_d, lo_c) = s["hi"], s["lo"]
             chart_series.append({
                 "asset": s["asset"], "color": palette[i % 4],
-                # 고점대비 = 최근 종가 ÷ 1년 최고가 × 100 (레이더 고점 게이트와 같은 정의)
-                "peak_ratio": round(s["cur"] / hi_c * 100) if hi_c else None,
                 "poly": " ".join(f"{_x(d)},{_y(v)}" for d, v in s["pts"]),
                 "last": round(s["pts"][-1][1], 1),
                 # 실제 가격 정보 (기준가 통화 단위 그대로)
@@ -557,15 +561,20 @@ def product_detail(request, pk):
         if product.ki is not None and not product.is_no_ki:
             chart_lines.append({"label": f"낙인 {product.ki:g}",
                                 "y": _y(product.ki), "color": "#e03131", "dash": "2 3"})
-        # 상품 단위 고점대비 = 자산별 값 중 최댓값 (레이더 v7 게이트와 같은 정의 —
-        # 가장 덜 빠진 자산이 고점 부근이면 그 상품은 고점 발행으로 본다)
-        peaks = [s["peak_ratio"] for s in chart_series if s["peak_ratio"] is not None]
+        # 고점대비 — 발행 시점(기준가 산정일)과 현재 시점을 따로 계산해 둘 다 보여준다.
+        # 화면 문구가 "…자리에서 발행"이면 숫자도 발행일 값이어야 한다(2026-08-05 태훈님).
+        # 상품 단위 값은 자산별 최댓값 = 가장 덜 빠진 자산 기준(레이더 게이트와 같은 뜻).
+        peak = peak_ratios(product)
+        # 고점 발행이었나 판정은 템플릿이 issue_max(발행 완료분)로 한다 — v7 게이트가
+        # 보는 시점과 맞추기 위함. 미발행분만 now_max로 "이대로면" 이라고 쓴다.
+        peak["asset_rows"] = [r for r in peak["rows"] if r["now"] is not None]
         # 발행일(기준가 산정일) 세로 점선 — 차트 구간 안에 있을 때만
         base_x = _x(base_date) if (base_date and dmin <= base_date <= dmax) else None
         chart = {"W": W, "H": H, "series": chart_series, "lines": chart_lines,
                  "based_on_issue": bool(base_date),
+                 "range_from": dmin, "range_to": dmax,
                  "base_x": base_x, "top": PT, "bottom": H - PB,
-                 "peak_ratio": max(peaks) if peaks else None}
+                 "peak": peak}
 
     return render(request, "core/product_detail.html", {
         "product": product, "is_watched": is_watched, "svg": svg,

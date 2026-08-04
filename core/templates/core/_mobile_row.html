@@ -11,7 +11,7 @@
       {% if p.radar %}<span class="badge" style="background:{{ p.radar.color }};color:#fff;font-size:9.5px">{{ p.radar.tier|cut:" 신호" }}</span>{% endif %}
       {% if p.id in invested_ids %}<span class="badge badge-green" style="font-size:9.5px"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}
     </div>
-    <div class="m-l2">{{ p.assets_raw|asset_short }} · 낙인 <b>{% if p.is_no_ki %}없음{% else %}{{ p.ki|default:"-" }}{% endif %}</b> · 1차 <b>{{ p.barrier_first|default:"-" }}</b>{% if p.peak_ratio %} · 고점대비 <b style="color:{% if p.peak_ratio < 90 %}var(--green){% elif p.peak_ratio < 95 %}var(--blue-dark){% else %}var(--text-2){% endif %}">{{ p.peak_ratio }}%</b>{% endif %} · 손실 <b style="color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}{{ p.loss_prob }}%{% else %}-{% endif %}</b></div>
+    <div class="m-l2">{{ p.assets_raw|asset_short }} · 낙인 <b>{% if p.is_no_ki %}없음{% else %}{{ p.ki|default:"-" }}{% endif %}</b> · 1차 <b>{{ p.barrier_first|default:"-" }}</b>{% if p.peak_ratio %} · {% if p.peak_is_issue %}발행시 고점대비{% else %}고점대비{% endif %} <b style="color:{% if p.peak_ratio < 90 %}var(--green){% elif p.peak_ratio < 95 %}var(--blue-dark){% else %}var(--text-2){% endif %}">{{ p.peak_ratio }}%</b>{% endif %} · 손실 <b style="color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}{{ p.loss_prob }}%{% else %}-{% endif %}</b></div>
   </div>
   <div class="m-right">
     <span class="m-yield">{{ p.yield_rate|default:"-" }}<small>%</small></span>

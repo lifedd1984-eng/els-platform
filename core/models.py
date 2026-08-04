@@ -199,32 +199,132 @@ def v7_ki_cut(asset_type):
     return cut
 
 
-def attach_peak_ratios(products):
-    """상품 목록에 고점대비(%)를 p.peak_ratio로 붙인다.
+# ══ 고점대비 (고점 발행 회피 지표) ══════════════════════════════════
+# 정의: (평가 시점 종가) ÷ (그 시점 직전 52주 최고) × 100.
+# ⚠ '평가 시점'이 두 가지이고, 둘을 섞으면 뜻이 정반대가 된다.
+#   · 발행 시점 = 최초기준가격 산정일 종가 → "고점에서 발행됐나"를 답한다.
+#                발행이 끝나면 영원히 안 변한다.
+#   · 현재 시점 = 최근 종가 → "지금 얼마나 빠져 있나"를 답한다. 매일 변한다.
+# 10년 백테스트(EC2 sweep_peak_relax.py, 타겟 5,392건·정상상환 99.68%)가 검증한 건
+# **발행 시점** 쪽이다:  past = [발행일−365일, 발행일) 구간, ratio = 기준가 ÷ past.max()
+#
+# 창은 '캘린더 365일'이다. fetch_history(days=N)의 N은 yfinance가 **거래일** 수로
+# 해석하므로(실측: 370d = 557캘린더일 ≈ 1.53년) 넉넉히 받아 날짜로 잘라 쓴다.
+RADAR_PEAK_FETCH_DAYS = 750    # 약 3년치 거래일 — 2년 전 발행분까지 창을 덮는다
+RADAR_PEAK_WINDOW_DAYS = 365   # 고점 산정 창(캘린더일) = 52주
+_PEAK_MIN_ROWS = 30            # 창 안 거래일이 이보다 적으면 값을 내지 않는다
+# 370거래일 = 실측 536~557캘린더일. 500일까지는 안전 마진을 두고 370을 재사용한다 —
+# v7 게이트가 쓰는 창과 같아져 티커당 시세 조회가 한 번으로 끝난다(주간 화면 체감).
+_PEAK_SHORT_FETCH = 370
+_PEAK_SHORT_COVER = 500
 
-    v7_peak_ratio와 같은 정의(자산별 최근종가÷52주최고 중 최댓값)지만
-    티커 단위로 한 번만 조회해 목록 화면에서도 쓸 수 있게 한 배치판.
-    한 주 상품 283건이 구분 티커 23개뿐이라 캐시가 차면 사실상 공짜다.
+
+def _peak_fetch_days(as_of):
+    """as_of 기준 52주 창을 덮는 가장 작은 fetch_history 창(거래일 수)."""
+    need = (date.today() - as_of).days + RADAR_PEAK_WINDOW_DAYS
+    return _PEAK_SHORT_FETCH if need <= _PEAK_SHORT_COVER else RADAR_PEAK_FETCH_DAYS
+
+
+def _peak_from_series(hist, as_of, back=0):
+    """[(날짜, 종가)] → (고점대비%, 직전 1년 상승률%). 못 구하면 (None, None).
+
+    as_of 시점 종가(back거래일 보정 — 기준가 산정일 규칙과 같은 뜻)를
+    그 시점 직전 52주(as_of 당일 포함) 최고가로 나눈다.
+
+    ⚠ 창에 as_of 당일을 포함한다(백테스트는 미포함). 당일이 최고가일 때만 차이가
+      나는데, 그때 미포함이면 100 초과·포함이면 정확히 100이라 게이트 판정(95 이상)은
+      어느 쪽이든 같다. 화면에 100%가 넘는 값을 띄우지 않으려고 포함으로 잡았다.
+    """
+    if not hist or as_of is None:
+        return None, None
+    upto = [(d, c) for d, c in hist if c and d <= as_of]
+    if len(upto) <= back:
+        return None, None
+    ref_d, ref_c = upto[len(upto) - 1 - back]
+    win = [c for d, c in upto[:len(upto) - back]
+           if d >= ref_d - timedelta(days=RADAR_PEAK_WINDOW_DAYS)]
+    if len(win) < _PEAK_MIN_ROWS or not ref_c:
+        return None, None
+    ret1y = (ref_c / win[0] - 1) * 100 if win[0] else None
+    return ref_c / max(win) * 100, ret1y
+
+
+def peak_as_of(product):
+    """상품의 고점대비 평가 시점 → (기준일, 거래일오프셋, 발행완료여부).
+
+    발행이 끝났으면 최초기준가격 산정일, 아직이면 오늘(= 발행 예정 시점의 대용).
     """
     from core import market as _m
-    cache = {}
+    base, back = _m.base_price_date(product)
+    today = date.today()
+    if base and base <= today:
+        return base, back, True
+    return today, 0, False
+
+
+def peak_ratios(product):
+    """상품 고점대비를 '발행 시점'과 '현재 시점' 두 갈래로 계산한다.
+
+    반환 {"rows": [{"asset", "issue", "now"}], "issued": bool, "base_date": date|None,
+          "issue_max": %|None, "now_max": %|None}
+    자산 하나라도 시세를 못 구하면 그 갈래의 max는 None (오판보다 결측 — 게이트와 동일).
+    """
+    from core import market as _m
+    base, back, issued = peak_as_of(product)
+    days = _peak_fetch_days(base)
+    rows = []
+    for name in _m.split_assets(product.assets_raw or ""):
+        tk = _m.resolve_ticker(name)
+        hist = _m.fetch_history(tk, days=days) if tk else None
+        pi = _peak_from_series(hist, base, back)[0] if (hist and issued) else None
+        pn = _peak_from_series(hist, hist[-1][0], 0)[0] if hist else None
+        rows.append({"asset": name,
+                     "issue": round(pi) if pi is not None else None,
+                     "now": round(pn) if pn is not None else None})
+
+    def _worst(key):
+        vals = [r[key] for r in rows if r[key] is not None]
+        return max(vals) if (rows and len(vals) == len(rows)) else None
+
+    return {"rows": rows, "issued": issued,
+            "base_date": base if issued else None,
+            "issue_max": _worst("issue") if issued else None,
+            "now_max": _worst("now")}
+
+
+def attach_peak_ratios(products):
+    """상품 목록에 고점대비(%)를 붙인다 — p.peak_ratio / p.peak_is_issue.
+
+    p.peak_ratio  : 발행 완료분은 **발행 시점** 값, 청약 중(미발행)은 현재 값.
+    p.peak_is_issue: 위 값이 발행 시점 기준인지 여부(화면 설명 문구 분기용).
+
+    티커 시세는 한 번만 받고, 값은 (티커, 기준일, 오프셋)으로 캐시한다 —
+    한 주 상품 283건이 구분 티커 23개·기준일 5개뿐이라 사실상 공짜다.
+    """
+    from core import market as _m
+    hist_cache, val_cache = {}, {}
     for p in products:
+        as_of, back, issued = peak_as_of(p)
+        days = _peak_fetch_days(as_of)
         peak = None
         for name in _m.split_assets(p.assets_raw or ""):
             tk = _m.resolve_ticker(name)
             if not tk:
                 peak = None
                 break
-            if tk not in cache:
-                hist = _m.fetch_history(tk, days=370)
-                closes = [c for _, c in (hist or []) if c]
-                cache[tk] = round(closes[-1] / max(closes) * 100) if closes else None
-            r = cache[tk]
+            if (tk, days) not in hist_cache:
+                hist_cache[(tk, days)] = _m.fetch_history(tk, days=days)
+            key = (tk, as_of, back)
+            if key not in val_cache:
+                r = _peak_from_series(hist_cache[(tk, days)], as_of, back)[0]
+                val_cache[key] = round(r) if r is not None else None
+            r = val_cache[key]
             if r is None:
                 peak = None
                 break
             peak = r if peak is None else max(peak, r)
         p.peak_ratio = peak
+        p.peak_is_issue = issued
 
 
 def v7_peak_gate(p):
@@ -237,6 +337,15 @@ def v7_peak_gate(p):
      손실 15→17건. 20% 이상으로 열면 2021 HSCEI형이 14건 되살아나 기각.)
 
     자산 하나라도 위반이면 탈락. 시세를 못 구하면 (False, None) — 오판보다 결측.
+
+    ⚠ 미해결 결함 (2026-08-05 측정, 태훈님 판단 대기 — 고치지 말고 보고할 것)
+      여기서 쓰는 closes[-1]은 **오늘 종가**다. 청약 중 상품은 오늘 ≈ 발행 시점이라
+      맞지만, 이미 발행된 상품을 과거 주차로 다시 계산하면 발행일과 무관한
+      '지금 얼마나 빠졌나'를 재게 된다 — 게이트의 취지와 정반대다.
+      10년 검증(sweep_peak_relax.py)은 '발행일 기준가 ÷ 발행 직전 1년 최고'였다.
+      기준을 발행일로 바꾸면 로컬 4,274건 기준 배지 559 → 431건
+      (사라짐 160 · 새로 붙음 32). 확정 전까지 현행 유지.
+      발행일 기준 값이 필요하면 peak_ratios()/attach_peak_ratios()를 쓸 것.
     """
     from core import market as _m
     peak_disp = None
@@ -262,7 +371,8 @@ def v7_peak_gate(p):
 def v7_peak_ratio(p):
     """고점 위치(%) = 자산별 (최근 종가 ÷ 직전 52주 최고) 중 최댓값.
 
-    표시·호환용. 게이트 판정은 v7_peak_gate를 쓸 것.
+    게이트 호환용(v7_peak_gate와 같은 '현재 시점' 정의). 화면 표시에는 쓰지 말 것 —
+    발행 시점/현재 시점을 구분해 내는 peak_ratios()가 표시용이다.
     자산 하나라도 시세를 못 구하면 None.
     """
     from core import market as _m

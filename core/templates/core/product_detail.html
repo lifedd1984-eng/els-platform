@@ -286,24 +286,51 @@
 {% if chart %}
 <div class="card">
   <div class="card-title">
-    <i class="fa-solid fa-chart-line" style="color:var(--blue)"></i> 기초자산 1년 추이
+    <i class="fa-solid fa-chart-line" style="color:var(--blue)"></i> 기초자산 시세 추이
     <small style="font-weight:400;color:var(--text-3)">
-      {% if chart.based_on_issue %}(발행일 기준가 = 100){% else %}(미발행 — 1년 전 = 100){% endif %}
+      {{ chart.range_from|date:"Y.m.d" }}~{{ chart.range_to|date:"Y.m.d" }} ·
+      {% if chart.based_on_issue %}발행일 기준가 = 100{% else %}미발행 — 구간 시작 = 100{% endif %}
     </small>
   </div>
-  {% if chart.peak_ratio %}
-  <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;background:var(--bg);
-              border-radius:8px;padding:9px 12px;margin-bottom:10px">
-    <span style="font-size:12.5px;font-weight:700">고점대비</span>
-    <b style="font-size:17px;letter-spacing:-0.5px;color:{% if chart.peak_ratio < 90 %}var(--green){% elif chart.peak_ratio < 95 %}var(--blue-dark){% else %}var(--text-2){% endif %}">{{ chart.peak_ratio }}%</b>
-    <span style="font-size:12px;color:var(--text-2)">
-      1년 최고가 대비 {{ chart.peak_ratio }}% 자리에서 발행 —
-      {% if chart.peak_ratio < 95 %}고점 발행이 아닙니다{% else %}고점 부근입니다{% endif %}</span>
-    <span style="font-size:11.5px;color:var(--text-3);margin-left:auto">
-      {% for s in chart.series %}{% if s.peak_ratio %}{{ s.asset|asset_short }} {{ s.peak_ratio }}%{% if not forloop.last %} · {% endif %}{% endif %}{% endfor %}
-    </span>
+  {# ── 고점대비 — 발행 시점과 현재 시점을 나란히 (2026-08-05 태훈님 확정) ──
+     "…에서 발행" 이라고 쓴 숫자는 반드시 발행일 값이고, 고점 발행 여부 판정도
+     발행 시점 값으로 한다(v7 게이트가 보는 시점과 맞추기 위함). #}
+  {% with pk=chart.peak %}
+  {% if pk.now_max or pk.issue_max %}
+  <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+    <div style="display:flex;align-items:baseline;gap:8px 16px;flex-wrap:wrap">
+      <span style="font-size:12.5px;font-weight:700">고점대비</span>
+      {% if pk.issued %}
+      <span style="font-size:12px;color:var(--text-3)">발행 시점
+        <b style="font-size:17px;letter-spacing:-0.5px;margin-left:3px;color:{% if pk.issue_max >= 95 %}var(--red){% elif pk.issue_max >= 90 %}var(--orange){% else %}var(--green){% endif %}">{% if pk.issue_max %}{{ pk.issue_max }}%{% else %}-{% endif %}</b></span>
+      {% endif %}
+      <span style="font-size:12px;color:var(--text-3)">현재
+        <b style="font-size:17px;letter-spacing:-0.5px;margin-left:3px;color:var(--text-2)">{% if pk.now_max %}{{ pk.now_max }}%{% else %}-{% endif %}</b></span>
+    </div>
+    <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-top:5px">
+      {% if pk.issued and pk.issue_max %}
+        발행일({{ pk.base_date|date:"Y.m.d" }}) 종가가 직전 52주 최고가의 {{ pk.issue_max }}% —
+        {% if pk.issue_max < 95 %}고점 발행이 아닙니다{% else %}고점 부근에서 발행됐습니다{% endif %}.
+        {% if pk.now_max %}오늘 종가는 직전 52주 최고가의 {{ pk.now_max }}%입니다.{% endif %}
+      {% elif pk.issued %}
+        발행일 시세를 구하지 못해 발행 시점 값은 표시하지 않습니다.
+        오늘 종가는 직전 52주 최고가의 {{ pk.now_max }}%입니다.
+      {% else %}
+        아직 발행 전이라 발행일 종가가 없습니다. 지금 시세 기준으로는 직전 52주 최고가의
+        {{ pk.now_max }}% 자리이며{% if pk.now_max < 95 %}, 이대로면 고점 발행이 아닙니다{% else %}, 고점 부근입니다{% endif %}.
+        발행일 기준가가 정해지면 그 값으로 확정됩니다.
+      {% endif %}
+    </div>
+    {% if pk.asset_rows %}
+    <div style="font-size:11.5px;color:var(--text-3);line-height:1.7;margin-top:4px;word-break:keep-all">
+      {% if pk.issued %}자산별(발행→현재){% else %}자산별(현재){% endif %}
+      {% for r in pk.asset_rows %}<span style="white-space:nowrap;margin-left:7px">{{ r.asset|asset_short }}
+        {% if pk.issued %}{% if r.issue %}{{ r.issue }}%{% else %}-{% endif %}<i class="fa-solid fa-arrow-right-long" style="margin:0 2px;font-size:9px"></i>{% endif %}{{ r.now }}%</span>{% endfor %}
+    </div>
+    {% endif %}
   </div>
   {% endif %}
+  {% endwith %}
   <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-bottom:6px">
     {% for s in chart.series %}
     <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{{ s.color }};margin-right:4px"></span>{{ s.asset }} <b>{{ s.last }}</b></span>
