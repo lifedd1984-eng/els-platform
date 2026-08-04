@@ -97,9 +97,21 @@
 </div>
 {% endif %}
 
+{# ── 접이식 카드 공통 — 리스크 분석·스트레스 테스트가 .fold-card를 쓴다 ── #}
+<style>
+  .fold-card summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:800;flex-wrap:wrap}
+  .fold-card summary::-webkit-details-marker{display:none}
+  .fold-chev{color:var(--text-3);transition:transform .15s}
+  details.fold-card[open] .fold-chev{transform:rotate(180deg)}
+  details.fold-card:not([open]) summary{margin-bottom:0}
+</style>
+
 {% if risk %}
-<div class="card">
-  <div class="card-title"><i class="fa-solid fa-shield-halved" style="color:var(--blue)"></i> 리스크 분석</div>
+<details class="card fold-card">
+  <summary class="card-title">
+    <i class="fa-solid fa-shield-halved" style="color:var(--blue)"></i> 리스크 분석
+    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
+  </summary>
   <style>
     .rk-row{margin-bottom:8px}
     .rk-row summary{list-style:none;cursor:pointer}
@@ -149,15 +161,16 @@
     </div>
     {% endif %}
   </div>
-</div>
+</details>
 {% endif %}
 
 {% if stress %}
-<div class="card">
-  <div class="card-title">
+<details class="card fold-card">
+  <summary class="card-title">
     <i class="fa-solid fa-cloud-bolt" style="color:var(--orange)"></i> 스트레스 테스트
     <small style="font-weight:400;color:var(--text-3)">기초자산이 더 떨어지면 얼마를 잃나</small>
-  </div>
+    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
+  </summary>
 
   <div style="background:var(--bg);border-radius:10px;padding:14px 16px;margin-bottom:14px">
     <div style="font-size:13.5px;line-height:1.75">
@@ -211,7 +224,7 @@
     낙인에 들어가도 만기까지 회복하면 원금을 받습니다.
     {% if stress.missing_n %}<span style="color:var(--orange)">시세 미확보 {{ stress.missing_n }}건({{ stress.missing_amt|intcomma }}원)은 제외.</span>{% endif %}
   </p>
-</div>
+</details>
 {% endif %}
 
 {% if holding_count %}
@@ -388,7 +401,7 @@
           <td class="num" onclick="event.stopPropagation()">{% include "core/_amount_edit.html" with inv_id=inv.id field="amount" value=inv.amount %}</td>
           <td class="num" style="color:var(--blue-dark);font-weight:700">{{ inv.product.yield_rate|default:"-" }}%</td>
           <td class="num" style="font-weight:700">{% if inv.product.is_no_ki %}없음{% else %}{{ inv.product.ki|floatformat:"-1"|default:"-" }}{% endif %}</td>
-          <td class="num">{% with b0=inv.product.stepdown_barriers.0 %}{% if b0 %}{{ b0|floatformat:"-1" }}%{% else %}-{% endif %}{% endwith %}</td>
+          <td class="num">{% with b0=inv.product.barriers_raw.0 %}{% if b0 %}{{ b0|floatformat:"-1" }}%{% else %}-{% endif %}{% endwith %}</td>
           <td>{% if inv.product.issued_on %}{{ inv.product.issued_on|date:"Y.n.j" }}{% else %}-{% endif %}</td>
           <td>
             {% with nxt=inv.next_evaluation badge=inv.schedule_badge %}
