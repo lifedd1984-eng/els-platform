@@ -174,11 +174,12 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/weekly/'   # 로그인 직후엔 주간청약 (홈 /는 항상 랜딩)
 LOGOUT_REDIRECT_URL = '/accounts/login/'
 
-# ELS_Curator exe가 엑셀을 생성하는 폴더 (환경변수로 덮어쓰기 가능)
+# ELS_Curator exe가 엑셀을 생성하는 폴더 (환경변수로 덮어쓰기 가능).
+# 프로젝트 폴더 바로 위의 downloads/를 가리킨다. 절대경로를 박아두면 폴더를
+# 옮길 때마다 조용히 깨진다 — 2026-08-04에 ELS투자 → claude/ELSradar로
+# 옮기면서 실제로 깨졌다.
 ELS_DOWNLOADS_DIR = os.environ.get(
-    "ELS_DOWNLOADS_DIR",
-    r"C:\Users\Taehoon\Desktop\ELS투자\downloads",
-)
+    "ELS_DOWNLOADS_DIR", str(BASE_DIR.parent / "downloads"))
 
 # 텔레그램 (BASE_DIR/.env 또는 환경변수에서 로드 — _load_dotenv가 이미 채움)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")

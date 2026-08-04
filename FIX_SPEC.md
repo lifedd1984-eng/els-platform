@@ -4,8 +4,8 @@
 > 사용자 지적: 다음평가일·캘린더가 틀림, 163→161 누락, 이번달 건수 오류.
 > 전수 조사로 근본원인 6종(A~F) 확정. 아래 순서대로 구현·검증.
 
-프로젝트: C:\Users\Taehoon\Desktop\ELS투자\platform (Django5/SQLite/Windows)
-쉘: `cd "/c/Users/Taehoon/Desktop/ELS투자/platform" && python manage.py check`
+프로젝트: C:\Users\Taehoon\Desktop\claude\ELSradar\platform (Django5/SQLite/Windows)
+쉘: `cd "/c/Users/Taehoon/Desktop/claude/ELSradar/platform" && python manage.py check`
 
 ---
 

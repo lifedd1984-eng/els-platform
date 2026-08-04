@@ -11,7 +11,7 @@ KOFIA ELS 청약 데이터를 매일 자동 수집·파싱해 **주간 단위 �
 ## 1. 기존 자산 (재활용 필수)
 | 자산 | 경로 | 용도 |
 |------|------|------|
-| **데이터 수집기** | `Desktop\ELS투자\ELS_Curator_v1.3.exe` (서드파티 툴) | 주 1회 수동 실행 → `Desktop\ELS투자\downloads\청약중인상품_YYYYMMDD_HHMM.xlsx` 생성. **이것이 유일하게 검증된 수집원** |
+| **데이터 수집기** | `Desktop\claude\ELSradar\ELS_Curator_v1.3.exe` (서드파티 툴) | 주 1회 수동 실행 → `Desktop\claude\ELSradar\downloads\청약중인상품_YYYYMMDD_HHMM.xlsx` 생성. **이것이 유일하게 검증된 수집원** |
 | 파싱 함수 | `Desktop\휴지통\els_cleaner_app.py` | extract_ki / extract_barriers / extract_period / classify_asset — **검증 완료, 그대로 이식** |
 | 텔레그램 봇 | 토큰: `.env` (els_collector_ready), chat_id 8023647003 | 알림 재활용 |
 | 분류 로직 | `ELS_Process.py` | KI 구간별 카테고리 참고 |
@@ -27,7 +27,7 @@ KOFIA ELS 청약 데이터를 매일 자동 수집·파싱해 **주간 단위 �
 - **프론트**: Django 템플릿 + 바닐라 JS (SPA 불필요). FontAwesome CDN, 이모지 금지
 - **스케줄러**: Windows 작업 스케줄러 등록 스크립트 제공 (매일 09:00 수집 management command)
 - **알림**: 텔레그램 sendMessage/sendDocument
-- 프로젝트 위치: `C:\Users\Taehoon\Desktop\ELS투자\platform\`
+- 프로젝트 위치: `C:\Users\Taehoon\Desktop\claude\ELSradar\platform\`
 
 ## 3. 데이터 모델
 ```
@@ -97,7 +97,7 @@ Investment     # 실제 투자 기록 (user FK — Django 기본 auth, 단일 �
 
 **수집 흐름 (반자동)**:
 사용자가 주 1회 `ELS_Curator_v1.3.exe` 실행(유일한 수동 단계, ~1분)
-→ `Desktop\ELS투자\downloads\`에 `청약중인상품_*.xlsx` 생성
+→ `Desktop\claude\ELSradar\downloads\`에 `청약중인상품_*.xlsx` 생성
 → 이후 전부 자동 (아래 배치가 감지·임포트·알림)
 
 - `import_els` — downloads 폴더 스캔 → 미처리 xlsx 감지(처리 이력은 ImportLog 테이블로 관리)
@@ -139,7 +139,7 @@ Playwright/브라우저 불필요 — 순수 requests. 다만 KI/배리어/주�
 - 실제 지수/주가 연동한 낙인 모니터링 (2차 로드맵 — 지금은 하지 않음)
 
 ## 9. 검증 기준
-- 기존 엑셀 `Desktop\ELS투자\downloads\청약중인상품_20260314_1144.xlsx` 105건 기준
+- 기존 엑셀 `Desktop\claude\ELSradar\downloads\청약중인상품_20260314_1144.xlsx` 105건 기준
   파싱 누락이 els_cleaner_app 최신 버전과 동일 수준(구조적 무배리어 상품 제외 전부 추출)
 - import_els 2회 연속 실행 시 중복 Product / 중복 알림 없음 (동일 파일 재처리 금지 포함)
 - 대시보드 주간 그룹핑·프리셋 필터 실동작 확인
