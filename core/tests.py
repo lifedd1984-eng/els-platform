@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 
-from core.models import Investment, Product, ThreadsReply
+from core.models import HistoricalIssue, Investment, Product, ThreadsReply
 from core.threads_replies import (GREETING_REPLIES, SAMPLE_TEXTS, SERVICE_REPLIES,
                                   choose_reply, classify, is_approved,
                                   reply_delay_minutes)
@@ -308,3 +308,151 @@ class TemplateCompileTest(TestCase):
             except Exception as e:
                 broken.append(f"{name}: {type(e).__name__} {e}")
         self.assertEqual(broken, [], "컴파일 실패 템플릿:\n" + "\n".join(broken))
+
+
+class ProductCodeBackfillTest(TestCase):
+    """발행사+발행일+회차로 SEIBro ISIN을 찾을 때 엉뚱한 상품을 집지 않는지 본다.
+
+    왜 필요한가
+      회차번호만 보면 동명이인을 집는다. 운영 SEIBro 293,088행 중 같은
+      (발행사, 회차) 키에 2건 이상 몰린 키가 51,764개고, 실제로 '키움증권1863'은
+      2022년분과 2026년분이 함께 있다. 틀린 ISIN이 들어가면 기준가·평가일이
+      통째로 다른 상품 값으로 덮이므로, 비워 두는 편이 훨씬 안전하다. (2026-08-05)
+    """
+
+    def _seibro(self, isin, name, issuer, issue, expiry):
+        return HistoricalIssue.objects.create(
+            isin=isin, name=name, issuer=issuer, product_type="ELS",
+            issue_date=issue, expiry_date=expiry)
+
+    def _product(self, issuer, no, issue, expiry, real_issue=None):
+        return Product.objects.create(
+            issuer=issuer, product_no=no, name=no, issue_date=issue,
+            expiry_date=expiry, real_issue_date=real_issue, yield_rate=6.0)
+
+    def _resolve(self, p):
+        from core.management.commands.backfill_product_code import (
+            SeibroIndex, product_anchors, resolve)
+        anchors = product_anchors(p)
+        index = SeibroIndex.for_anchors(anchors)
+        return resolve(index, p.issuer, p.product_no, anchors, p.expiry_date)
+
+    def test_회차가_같아도_발행일이_다르면_옛_상품을_집지_않는다(self):
+        self._seibro("KR6KW0000SG0", "키움증권1863(ELS)", "키움증권",
+                     date(2022, 2, 18), date(2025, 2, 18))
+        right = self._seibro("KR6KW0005DP2", "키움증권뉴글로벌100조1863(ELS)", "키움증권",
+                             date(2026, 5, 4), date(2029, 5, 4))
+        p = self._product("키움증권", "1863", date(2026, 5, 4), date(2029, 5, 4))
+        status, rec, _ = self._resolve(p)
+        self.assertEqual(status, "matched")
+        self.assertEqual(rec[0], right.isin)
+
+    def test_같은_발행일에_회차가_겹치면_아무것도_채우지_않는다(self):
+        self._seibro("KR6KW0000AA1", "키움증권1863(ELS)", "키움증권",
+                     date(2026, 5, 4), date(2029, 5, 4))
+        self._seibro("KR6KW0000BB2", "키움증권뉴글로벌100조1863(ELS)", "키움증권",
+                     date(2026, 5, 4), date(2029, 5, 4))
+        p = self._product("키움증권", "1863", date(2026, 5, 4), date(2029, 5, 4))
+        status, rec, _ = self._resolve(p)
+        self.assertEqual(status, "ambiguous")
+        self.assertIsNone(rec)
+
+    def test_만기가_크게_다르면_다른_상품으로_보고_버린다(self):
+        self._seibro("KR6KW0000CC3", "키움증권1863(ELS)", "키움증권",
+                     date(2026, 5, 4), date(2029, 5, 4))
+        p = self._product("키움증권", "1863", date(2026, 5, 4), date(2027, 5, 4))
+        status, rec, _ = self._resolve(p)
+        self.assertEqual(status, "expiry_conflict")
+        self.assertIsNone(rec)
+
+    def test_발행사_표기가_달라도_이어진다(self):
+        h = self._seibro("KR6KB0000DD4", "KBable4159(ELS)", "케이비증권",
+                         date(2026, 1, 16), date(2029, 1, 19))
+        p = self._product("KB증권", "4159", date(2026, 1, 16), date(2029, 1, 19))
+        status, rec, _ = self._resolve(p)
+        self.assertEqual(status, "matched")
+        self.assertEqual(rec[0], h.isin)
+
+    def test_브랜드_접두가_숫자를_물면_접미일치로_찾는다(self):
+        # NH는 회차 145를 "N2145"로 적는다 — 숫자열이 "2145"로 읽힌다
+        h = self._seibro("KR6NH0005S44", "N2145(공모/ELS)", "NH투자증권",
+                         date(2026, 1, 16), date(2029, 1, 16))
+        p = self._product("NH투자증권", "145", date(2026, 1, 16), date(2029, 1, 16))
+        status, rec, why = self._resolve(p)
+        self.assertEqual(status, "matched")
+        self.assertEqual(rec[0], h.isin)
+        self.assertIn("접미", why)
+
+    def test_접미일치_후보가_여럿이면_건너뛴다(self):
+        self._seibro("KR6NH0000EE5", "N2145(공모/ELS)", "NH투자증권",
+                     date(2026, 1, 16), date(2029, 1, 16))
+        self._seibro("KR6NH0000FF6", "N3145(공모/ELS)", "NH투자증권",
+                     date(2026, 1, 16), date(2029, 1, 16))
+        p = self._product("NH투자증권", "145", date(2026, 1, 16), date(2029, 1, 16))
+        status, rec, _ = self._resolve(p)
+        self.assertEqual(status, "ambiguous")
+        self.assertIsNone(rec)
+
+    def test_회차가_두자리면_접미일치를_쓰지_않는다(self):
+        # "1196"이 "96"으로 끝난다고 96회차로 볼 수는 없다
+        self._seibro("KR6BS0000GG7", "BNK투자증권(ELS)1196", "비엔케이투자증권",
+                     date(2026, 1, 16), date(2029, 1, 18))
+        p = self._product("비엔케이투자증권", "96", date(2026, 1, 16), date(2029, 1, 18))
+        status, rec, _ = self._resolve(p)
+        self.assertEqual(status, "no_candidate")
+        self.assertIsNone(rec)
+
+    def test_real_issue_date가_있으면_그것으로_맞춘다(self):
+        # issue_date(=청약종료일)는 하루 어긋나 있고 real_issue_date가 정확한 경우
+        h = self._seibro("KR6HN0000HH8", "하나증권17342(ELS)", "하나증권",
+                         date(2026, 1, 13), date(2029, 1, 15))
+        p = self._product("하나증권", "17342", date(2026, 1, 12), date(2029, 1, 15),
+                          real_issue=date(2026, 1, 13))
+        status, rec, _ = self._resolve(p)
+        self.assertEqual(status, "matched")
+        self.assertEqual(rec[0], h.isin)
+
+    def test_종목명_형태가_달라도_회차를_뽑는다(self):
+        from core.management.commands.backfill_product_code import extract_seq
+        cases = {
+            "키움증권1863(ELS)": "1863",
+            "키움증권뉴글로벌100조1863(ELS)": "1863",
+            "NH투자증권2599(공모/ELB)": "2599",
+            "삼성증권2535(사모/ELB)": "2535",
+            "한국투자증권트루온(ELS)446": "446",
+            "다올투자증권(사모/ELB)58": "58",
+            "교보증권12614(ELB)사채": "12614",
+            "한화스마트ONELB164(ELB)": "164",
+        }
+        for name, expect in cases.items():
+            self.assertEqual(extract_seq(name), expect, name)
+
+    def test_apply_없이는_아무것도_저장하지_않는다(self):
+        from io import StringIO
+        self._seibro("KR6KW0009XX1", "키움증권1900(ELS)", "키움증권",
+                     date(2026, 5, 4), date(2029, 5, 4))
+        p = self._product("키움증권", "1900", date(2026, 5, 4), date(2029, 5, 4))
+        out = StringIO()
+        call_command("backfill_product_code", stdout=out)
+        p.refresh_from_db()
+        self.assertEqual(p.product_code, "")
+        self.assertIn("DRY-RUN", out.getvalue())
+        self.assertIn("유일 매칭 1건", out.getvalue())
+
+    def test_이미_채워진_상품은_대상이_아니다(self):
+        from io import StringIO
+        self._seibro("KR6KW0009YY2", "키움증권1901(ELS)", "키움증권",
+                     date(2026, 5, 4), date(2029, 5, 4))
+        p = self._product("키움증권", "1901", date(2026, 5, 4), date(2029, 5, 4))
+        p.product_code = "KR6KW0009ZZ3"
+        p.save(update_fields=["product_code"])
+        out = StringIO()
+        call_command("backfill_product_code", stdout=out)
+        self.assertIn("총 대상 0건", out.getvalue())
+        # 기존 값이 SEIBro에 없다는 점은 별도로 보고된다
+        self.assertIn("SEIBro에 없는 코드 1건", out.getvalue())
+
+    def test_dry_run과_apply를_함께_주면_거부한다(self):
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            call_command("backfill_product_code", "--dry-run", "--apply")
