@@ -35,6 +35,28 @@ def _uid():
     return uid
 
 
+class ThreadsAPIError(RuntimeError):
+    """Threads API 오류 — 메시지에 토큰이 들어가지 않게 만든 전용 예외.
+
+    requests의 HTTPError는 예외 문구에 요청 URL을 통째로 넣는데, 우리는 토큰을
+    쿼리스트링으로 보내므로 그게 로그 파일에 평문으로 남는다. 실제로 2026-08-04에
+    댓글 수집이 실패하면서 액세스 토큰이 로그에 46번 찍혔다. 그래서 상태코드와
+    Meta가 준 error.message만 남기고 URL은 버린다.
+    """
+
+
+def _check(r):
+    """응답 검증. 실패하면 토큰이 없는 예외로 바꿔 던진다."""
+    if r.ok:
+        return r
+    msg = ""
+    try:
+        msg = ((r.json().get("error") or {}).get("message")) or ""
+    except Exception:
+        pass
+    raise ThreadsAPIError(f"HTTP {r.status_code} {msg or r.reason}".strip())
+
+
 def _get_paged(url, params, max_pages=10):
     """커서 페이징을 따라가며 data를 모두 모은다.
 
@@ -45,7 +67,7 @@ def _get_paged(url, params, max_pages=10):
     out = []
     for _ in range(max_pages):
         r = requests.get(url, params=params, timeout=20)
-        r.raise_for_status()
+        _check(r)
         body = r.json()
         out.extend(body.get("data") or [])
         nxt = (body.get("paging") or {}).get("next")
@@ -59,7 +81,7 @@ def fetch_user_id():
     """토큰으로 내 계정 id·username 조회 (최초 설정 시 1회)."""
     r = requests.get(f"{BASE}/me", timeout=15,
                      params={"fields": "id,username", "access_token": _token()})
-    r.raise_for_status()
+    _check(r)
     return r.json()
 
 
@@ -80,7 +102,7 @@ def post_text(text, reply_to_id=None, image_url=None):
     if reply_to_id:
         data["reply_to_id"] = reply_to_id
     r = requests.post(f"{BASE}/{uid}/threads", timeout=30, data=data)
-    r.raise_for_status()
+    _check(r)
     creation_id = r.json()["id"]
 
     if image_url:
@@ -90,7 +112,7 @@ def post_text(text, reply_to_id=None, image_url=None):
 
     r = requests.post(f"{BASE}/{uid}/threads_publish", timeout=30,
                       data={"creation_id": creation_id, "access_token": tok})
-    r.raise_for_status()
+    _check(r)
     return r.json().get("id", "")
 
 
@@ -130,5 +152,5 @@ def refresh_token():
     """장기 토큰 갱신(만료 24시간 전~60일 사이 언제든 가능). 새 토큰 반환."""
     r = requests.get(f"{BASE.replace('/v1.0', '')}/refresh_access_token", timeout=15,
                      params={"grant_type": "th_refresh_token", "access_token": _token()})
-    r.raise_for_status()
+    _check(r)
     return r.json()   # {access_token, token_type, expires_in}
