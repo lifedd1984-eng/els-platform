@@ -591,6 +591,148 @@ class DisclosedRefPriceTest(SimpleTestCase):
         self.assertEqual(market.pick_ref_price(100.0, None), (None, "폴백"))
 
 
+class PeakIssueGateTest(SimpleTestCase):
+    """고점 게이트는 '발행 시점' 기준이다 — 10년 검증 스크립트와 같은 식.
+
+    EC2 sweep_peak_relax.py가 확정 수치를 낼 때 쓴 식:
+        past = s[(s.index >= 발행일−365일) & (s.index < 발행일)]
+        pk   = 기준가 / past.max() * 100
+    서비스 코드만 '오늘 종가'를 쓰고 있어 어긋나 있었다. 되돌린 뒤 같은 표본
+    69,903건을 다시 돌려 타겟 5,392건·정상상환 99.68%·손실 17건을 재현했고,
+    자산 단위 고점비율은 최대차 0.000000%p로 완전히 같았다. (2026-08-05)
+    """
+
+    ISSUE = date(2026, 1, 2)
+
+    class _P:
+        """게이트가 실제로 들여다보는 필드만 가진 가짜 상품."""
+
+        id = 1
+        product_code = ""
+        assets_raw = "삼성전자"
+        issuer = "한화투자증권"        # 기준일 = 실제 발행일 규칙(오프셋 없음)
+        base_eval_date = None
+        real_issue_date = None
+
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    def _hist(self, end, n, start_price=100.0, end_price=100.0):
+        """end로 끝나는 영업일 n개 [(날짜, 종가)] — start_price에서 end_price로 직선."""
+        days = []
+        d = end
+        while len(days) < n:
+            if d.weekday() < 5:
+                days.append(d)
+            d -= timedelta(days=1)
+        days.reverse()
+        step = (end_price - start_price) / (n - 1)
+        return [(x, start_price + step * i) for i, x in enumerate(days)]
+
+    def _peak(self, hist, as_of=None, **kw):
+        from core.models import _peak_from_series
+        return _peak_from_series(hist, as_of or self.ISSUE, 0, **kw)
+
+    def _gate(self, p, hist):
+        """fetch_history만 갈아끼우고 실제 v7_peak_gate를 돌린다."""
+        from core.models import v7_peak_gate
+        with mock.patch("core.market.fetch_history", return_value=hist), \
+                mock.patch("core.market.resolve_ticker", return_value="005930.KS"):
+            return v7_peak_gate(p, {})      # refs={} → DB 조회 없이 폴백 기준가
+
+    # ── 창의 정의 ────────────────────────────────────────────────
+    def test_게이트는_창에서_기준일_당일을_뺀다(self):
+        # 검증 스크립트의 `s.index < str(h.issue_date)`와 같은 뜻.
+        hist = self._hist(self.ISSUE, 200)
+        hist[-1] = (self.ISSUE, 120.0)          # 기준일 당일이 최고가
+        # 당일을 빼면 분모가 100이라 120%가 나온다 → 고점 발행으로 걸린다
+        self.assertAlmostEqual(self._peak(hist, include_asof=False)[0], 120.0)
+        # 화면용(당일 포함)은 100%를 넘기지 않는다 — 판정은 어차피 둘 다 95 이상
+        self.assertAlmostEqual(self._peak(hist)[0], 100.0)
+
+    def test_창은_거래일이_아니라_캘린더_365일이다(self):
+        # fetch_history(days=N)의 N은 yfinance가 거래일로 해석한다(370d ≈ 1.5년).
+        # 날짜로 자르지 않으면 1년보다 훨씬 먼 고점이 분모로 들어온다.
+        hist = self._hist(self.ISSUE, 200)
+        hist.insert(0, (self.ISSUE - timedelta(days=400), 200.0))   # 창 밖 고점
+        self.assertAlmostEqual(self._peak(hist, include_asof=False)[0], 100.0)
+
+    def test_창_안_거래일이_너무_적으면_값을_내지_않는다(self):
+        self.assertEqual(self._peak(self._hist(self.ISSUE, 10), include_asof=False),
+                         (None, None))
+
+    # ── 분자(기준가) ─────────────────────────────────────────────
+    def test_공시_최초기준가격이_분자다(self):
+        hist = self._hist(self.ISSUE, 200)
+        # 공시값이 시세와 어울리면 그대로 분자로 쓴다 (검증 스크립트와 동일)
+        self.assertAlmostEqual(
+            self._peak(hist, include_asof=False, disclosed=110.0)[0], 110.0)
+        # 정규화 기준점(1·100·1000…)은 기각하고 산정일 종가로 폴백한다
+        self.assertAlmostEqual(
+            self._peak(hist, include_asof=False, disclosed=1.0)[0], 100.0)
+
+    def test_직전_1년_상승률도_같은_분자로_잰다(self):
+        # 검증 스크립트: ret1y = ref / past.iloc[0] − 1  (창 첫 종가 대비)
+        hist = self._hist(self.ISSUE, 200, start_price=50.0, end_price=100.0)
+        _, ret = self._peak(hist, include_asof=False)
+        self.assertAlmostEqual(ret, 100.0)
+
+    # ── 발행 시점 고정 = 비결정성 해소 ───────────────────────────
+    def test_발행일_뒤_시세는_게이트_결과를_바꾸지_않는다(self):
+        """워커가 과거 주차를 언제 다시 계산해도 같은 답이 나와야 한다.
+
+        예전엔 closes[-1](오늘 종가)을 써서, 발행 뒤 폭락한 상품일수록
+        게이트를 통과했다 — 취지와 정반대이면서 매일 답이 달라졌다.
+        """
+        p = self._P(issue_date=self.ISSUE, sub_end=self.ISSUE - timedelta(days=3))
+        upto = self._hist(self.ISSUE, 200, start_price=50.0, end_price=100.0)
+        after = [self.ISSUE + timedelta(days=i)
+                 for i in range(1, 40) if (self.ISSUE + timedelta(days=i)).weekday() < 5]
+        crash = upto + [(d, 40.0) for d in after]
+        boom = upto + [(d, 400.0) for d in after]
+
+        self.assertEqual(self._gate(p, crash), self._gate(p, boom))
+        self.assertEqual(self._gate(p, crash), self._gate(p, upto))
+        ok, peak = self._gate(p, crash)
+        # 기준가가 창 최고와 사실상 같고 1년에 100% 올랐으니 고점 발행 — 탈락이 정답
+        self.assertFalse(ok)
+        self.assertGreaterEqual(peak, 95)
+
+    def test_예전_게이트라면_폭락분이_통과했다(self):
+        """위 테스트가 무엇을 막고 있는지 못 박아 둔다."""
+        upto = self._hist(self.ISSUE, 200, start_price=50.0, end_price=100.0)
+        crash = upto + [(self.ISSUE + timedelta(days=i), 40.0) for i in range(1, 40)]
+        closes = [c for _, c in crash]
+        self.assertLess(closes[-1] / max(closes) * 100, 95)   # 옛 식이면 통과
+
+    # ── 완화 예외 ────────────────────────────────────────────────
+    def test_완만한_우상향은_고점_부근이어도_통과한다(self):
+        from core.models import RADAR_V7_RELAX_RET1Y
+        p = self._P(issue_date=self.ISSUE, sub_end=self.ISSUE - timedelta(days=3))
+        flat = self._hist(self.ISSUE, 200, start_price=100.0, end_price=100.0)
+        ok, peak = self._gate(p, flat)
+        self.assertTrue(ok)                     # 고점 100%지만 1년 상승률 0%
+        self.assertGreaterEqual(peak, 95)
+        self.assertEqual(RADAR_V7_RELAX_RET1Y, 15)
+
+    def test_급등_뒤_고점이면_탈락한다(self):
+        p = self._P(issue_date=self.ISSUE, sub_end=self.ISSUE - timedelta(days=3))
+        surge = self._hist(self.ISSUE, 200, start_price=70.0, end_price=100.0)
+        self.assertFalse(self._gate(p, surge)[0])   # 1년 상승률 42.9% > 15%
+
+    # ── 발행 전(청약 중) ─────────────────────────────────────────
+    def test_아직_발행_전이면_오늘_기준으로_잰다(self):
+        from core.models import peak_as_of
+        future = date.today() + timedelta(days=30)
+        as_of, back, issued = peak_as_of(
+            self._P(issue_date=future, sub_end=future - timedelta(days=3)))
+        self.assertEqual((as_of, back, issued), (date.today(), 0, False))
+        # 발행이 끝나면 그 시점으로 고정된다
+        self.assertEqual(peak_as_of(self._P(issue_date=self.ISSUE,
+                                            sub_end=self.ISSUE - timedelta(days=3))),
+                         (self.ISSUE, 0, True))
+
+
 class RefreshRefPriceCommandTest(TestCase):
     """refresh_ref_price — 기본이 dry-run이고 --apply 없이는 절대 저장하지 않는다."""
 
@@ -657,3 +799,4 @@ class RefreshRefPriceCommandTest(TestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command("refresh_ref_price", "--dry-run", "--apply")
+

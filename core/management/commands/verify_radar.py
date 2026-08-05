@@ -53,7 +53,7 @@ class Command(BaseCommand):
                 price_cache[key] = market.fetch_price_on(ticker, d, back=back)
             return price_cache[key]
 
-        collected = judged = met_cnt = skipped = 0
+        collected = judged = met_cnt = skipped = retiered = 0
 
         for i in range(1, weeks + 1):
             monday = cur_monday - timedelta(weeks=i)
@@ -81,8 +81,19 @@ class Command(BaseCommand):
 
                     existing = RadarVerdict.objects.filter(product=p).first()
                     if existing and existing.met is not None:
+                        # 확정 판정은 다시 계산하지 않는다(평가일 시세 조회가 비싸다).
+                        # 다만 배지(tier)만은 어긋난 채 굳어 있을 수 있어 맞춰 준다.
+                        # 예전 고점 게이트는 '오늘 종가' 기준이라, met이 확정되는 밤
+                        # (= 발행 6~12개월 뒤) 시세로 배지가 붙었다. 그러면 발행 후
+                        # 폭락한 상품일수록 타겟으로 기록돼 검증이 규칙과 다른 걸 쟀다.
+                        # 이제 게이트가 발행 시점 고정이라 tier는 몇 번을 돌려도 같은
+                        # 값이 나오므로, 첫 실행에서 옛 라벨이 한 번 교정되고 끝난다.
+                        if existing.tier != tier:
+                            existing.tier = tier
+                            existing.save(update_fields=["tier"])
+                            retiered += 1
                         skipped += 1
-                        continue  # 이미 확정 판정 → 재계산 안 함
+                        continue
 
                     collected += 1
 
@@ -124,5 +135,6 @@ class Command(BaseCommand):
                     )
 
         self.stdout.write(
-            f"수집 {collected}건 / 판정확정 {judged}건 / 적중 {met_cnt}건 / 스킵 {skipped}건"
+            f"수집 {collected}건 / 판정확정 {judged}건 / 적중 {met_cnt}건 / "
+            f"스킵 {skipped}건 / 배지교정 {retiered}건"
         )
