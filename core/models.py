@@ -273,6 +273,62 @@ def _peak_from_series(hist, as_of, back=0, include_asof=True, disclosed=None):
     return ref_c / max(win) * 100, ret1y
 
 
+# 화면의 색·문구는 찍어 주는 **반올림값이 아니라 반올림 전 원값**으로 갈라야 한다.
+# round(94.98) = 95라, 게이트가 통과시킨 상품에 "고점 부근에서 발행됐습니다"라는
+# 정반대 문구와 빨간 숫자가 붙었다(2026-08-06 실측 14건). 표시 숫자는 그대로 두고
+# 판단 근거만 원값으로 되돌린다 — 게이트 판정 자체는 건드리지 않는다.
+PEAK_LEVEL_MID = 90     # 화면 색 구분용 '주의' 경계. 게이트 기준(95)과는 별개다.
+
+
+def peak_level(ratio):
+    """고점대비 원값(%) → 화면 색 단계 'high' | 'mid' | 'low'. 값이 없으면 None.
+
+    경계가 정수라 반올림한 뒤 비교하면 94.98%가 'high'로 넘어간다. 반드시
+    반올림 전 값으로 가른다.
+    """
+    if ratio is None:
+        return None
+    if ratio >= RADAR_V7_PEAK_MAX:
+        return "high"
+    return "mid" if ratio >= PEAK_LEVEL_MID else "low"
+
+
+def peak_tone(ratio, gate_block):
+    """상품상세 고점대비 숫자 색 'warn' | 'watch' | 'ok'. 값이 없으면 None.
+
+    경고색(warn)은 **게이트가 실제로 걸러낸 상품에만** 쓴다. 문구는 "통과"라고
+    하면서 숫자만 빨갛게 두면 그게 또 어긋나기 때문이다 (2026-08-06 태훈님 확정).
+    통과·판정불가는 원값이 PEAK_LEVEL_MID 이상이면 watch, 아니면 ok.
+    """
+    if ratio is None:
+        return None
+    if gate_block:
+        return "warn"
+    return "ok" if peak_level(ratio) == "low" else "watch"
+
+
+def peak_gate_verdict(product, refs=None):
+    """화면 문구용 — 고점 게이트의 판정을 그대로 네 갈래로 돌려준다.
+
+    반환 (통과, 완화예외로_통과, 규칙위반, 게이트가_본_원값)
+      · 통과 + 원값 95 미만 → 고점 발행이 아니다
+      · 통과 + 원값 95 이상 → 완만한 상승 예외로 통과 (= 완화 예외)
+      · 탈락 + 원값 있음    → 고점 부근 발행
+      · 원값 None           → 시세 결측이라 판정 못 함 (앞의 셋 모두 False)
+
+    ⚠ 완화 예외는 **내부 구분일 뿐 화면에서는 갈라 보이지 않는다.** 어느 경로로
+    통과했든 사용자에게는 "고점 발행 기준을 통과했다" 하나면 된다는 것이
+    2026-08-06 태훈님 확정. 화면은 gate_pass만 보고, gate_relaxed는 로그·분석용.
+
+    판정은 v7_peak_gate가 하고 여기서 되풀이하지 않는다. 문구가 게이트와
+    어긋나지 않게 하는 것이 이 함수의 전부다.
+    """
+    ok, graw = v7_peak_gate(product, refs)
+    if graw is None:
+        return False, False, False, None
+    return ok, bool(ok and graw >= RADAR_V7_PEAK_MAX), not ok, graw
+
+
 def peak_as_of(product):
     """상품의 고점대비 평가 시점 → (기준일, 거래일오프셋, 발행완료여부).
 
@@ -290,8 +346,13 @@ def peak_ratios(product):
     """상품 고점대비를 '발행 시점'과 '현재 시점' 두 갈래로 계산한다.
 
     반환 {"rows": [{"asset", "issue", "now"}], "issued": bool, "base_date": date|None,
-          "issue_max": %|None, "now_max": %|None}
+          "issue_max": %|None, "now_max": %|None, "issue_tone": 'warn'|'watch'|'ok'|None,
+          "gate_pass": bool, "gate_relaxed": bool, "gate_block": bool, "gate_peak": %|None}
     자산 하나라도 시세를 못 구하면 그 갈래의 max는 None (오판보다 결측 — 게이트와 동일).
+
+    gate_* 는 화면 문구·색 전용이다. 숫자는 반올림해 보여주되 "고점 발행이냐"는
+    판단만은 게이트가 실제로 쓴 원값으로 갈라, 경계에서 표시와 판정이 어긋나지
+    않게 한다 (2026-08-06).
     """
     from core import market as _m
     base, back, issued = peak_as_of(product)
@@ -307,16 +368,24 @@ def peak_ratios(product):
         pn = _peak_from_series(hist, hist[-1][0], 0)[0] if hist else None
         rows.append({"asset": name,
                      "issue": round(pi) if pi is not None else None,
-                     "now": round(pn) if pn is not None else None})
+                     "now": round(pn) if pn is not None else None,
+                     "issue_raw": pi, "now_raw": pn})
 
     def _worst(key):
         vals = [r[key] for r in rows if r[key] is not None]
         return max(vals) if (rows and len(vals) == len(rows)) else None
 
+    # round는 단조라 max(round(...)) == round(max(...)) — 보이는 숫자는 그대로다.
+    iraw = _worst("issue_raw") if issued else None
+    nraw = _worst("now_raw")
+    ok, relaxed, blocked, graw = peak_gate_verdict(product, refs)
     return {"rows": rows, "issued": issued,
             "base_date": base if issued else None,
-            "issue_max": _worst("issue") if issued else None,
-            "now_max": _worst("now")}
+            "issue_max": round(iraw) if iraw is not None else None,
+            "issue_tone": peak_tone(iraw, blocked),
+            "now_max": round(nraw) if nraw is not None else None,
+            "gate_pass": ok, "gate_relaxed": relaxed, "gate_block": blocked,
+            "gate_peak": graw}
 
 
 def attach_peak_ratios(products):
@@ -324,6 +393,9 @@ def attach_peak_ratios(products):
 
     p.peak_ratio  : 발행 완료분은 **발행 시점** 값, 청약 중(미발행)은 현재 값.
     p.peak_is_issue: 위 값이 발행 시점 기준인지 여부(화면 설명 문구 분기용).
+    p.peak_level  : 색 단계 'high'/'mid'/'low' — 반올림 전 원값으로 가른다.
+                    (템플릿이 반올림된 peak_ratio를 95와 비교하면 94.98%가
+                     'high'로 넘어가 게이트 통과분이 경고색을 뒤집어썼다.)
 
     티커 시세는 한 번만 받고, 값은 (티커, 기준일, 오프셋, 기준가)로 캐시한다 —
     한 주 상품 283건이 구분 티커 23개·기준일 5개뿐이라 사실상 공짜다.
@@ -347,14 +419,17 @@ def attach_peak_ratios(products):
             ref = pref.get(name) if issued else None
             key = (tk, as_of, back, ref)
             if key not in val_cache:
-                r = _peak_from_series(hist_cache[(tk, days)], as_of, back, disclosed=ref)[0]
-                val_cache[key] = round(r) if r is not None else None
+                # 캐시에는 원값을 담는다 — 색 단계를 반올림 전 값으로 갈라야 해서다.
+                val_cache[key] = _peak_from_series(
+                    hist_cache[(tk, days)], as_of, back, disclosed=ref)[0]
             r = val_cache[key]
             if r is None:
                 peak = None
                 break
             peak = r if peak is None else max(peak, r)
-        p.peak_ratio = peak
+        # round는 단조라 max를 먼저 잡고 반올림해도 보이는 숫자는 종전과 같다.
+        p.peak_ratio = round(peak) if peak is not None else None
+        p.peak_level = peak_level(peak)
         p.peak_is_issue = issued
 
 

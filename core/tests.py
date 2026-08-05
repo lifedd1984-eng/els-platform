@@ -733,6 +733,128 @@ class PeakIssueGateTest(SimpleTestCase):
                          (self.ISSUE, 0, True))
 
 
+class PeakDisplayVerdictTest(SimpleTestCase):
+    """화면 문구·색은 게이트와 **같은 원값**으로 갈라야 한다.
+
+    표시값을 반올림해 95와 비교하면 94.55~94.98%가 95%로 올라가, 게이트가
+    통과시킨 상품에 "고점 부근에서 발행됐습니다"라는 정반대 문구와 빨간 숫자가
+    붙었다(2026-08-06 운영 배지 26건 중 14건). 판정은 그대로 두고 표시 계층만
+    게이트 결과를 그대로 받아쓰게 고친 것을 여기서 못 박는다.
+    """
+
+    ISSUE = date(2026, 1, 2)
+    _P = PeakIssueGateTest._P
+    _hist = PeakIssueGateTest._hist
+
+    def _verdict(self, p, hist, ticker="005930.KS"):
+        """fetch_history만 갈아끼우고 실제 peak_gate_verdict를 돌린다."""
+        from core.models import peak_gate_verdict
+        with mock.patch("core.market.fetch_history", return_value=hist), \
+                mock.patch("core.market.resolve_ticker", return_value=ticker):
+            return peak_gate_verdict(p, {})
+
+    def _product(self):
+        return self._P(issue_date=self.ISSUE, sub_end=self.ISSUE - timedelta(days=3))
+
+    # ── 색 단계 ─────────────────────────────────────────────────
+    def test_색_단계는_반올림_전_값으로_가른다(self):
+        from core.models import peak_level
+        # 실제로 걸렸던 값들 — round()를 거치면 전부 95가 된다
+        for raw in (94.5525, 94.6678, 94.9789, 94.9794):
+            self.assertEqual(round(raw), 95)          # 표시 숫자는 95가 맞다
+            self.assertEqual(peak_level(raw), "mid")  # 그래도 '고점'은 아니다
+        self.assertEqual(peak_level(95.0), "high")
+        self.assertEqual(peak_level(98.2015), "high")
+        self.assertEqual(peak_level(89.6), "low")     # round()면 90 → 'mid'였다
+        self.assertIsNone(peak_level(None))
+
+    def test_경고색은_게이트가_걸러낸_상품에만_쓴다(self):
+        """문구는 "통과"라 해 놓고 숫자만 빨갛게 두면 그게 또 어긋난다."""
+        from core.models import peak_tone
+        # 탈락한 것만 warn
+        self.assertEqual(peak_tone(98.2, True), "warn")
+        # 통과분은 원값이 아무리 높아도 warn이 아니다 (완화 예외 12건이 여기)
+        self.assertEqual(peak_tone(98.2, False), "watch")
+        self.assertEqual(peak_tone(94.98, False), "watch")
+        self.assertEqual(peak_tone(83.0, False), "ok")
+        # 판정 못 한 경우도 경고색은 쓰지 않는다
+        self.assertEqual(peak_tone(99.0, False), "watch")
+        self.assertIsNone(peak_tone(None, False))
+
+    # ── 세 갈래 판정 ─────────────────────────────────────────────
+    def test_경계값은_게이트와_같은_편에_선다(self):
+        """94.98% — 표시는 95%지만 게이트는 통과. 문구도 통과여야 한다."""
+        hist = self._hist(self.ISSUE, 200)      # 200일 내내 100
+        hist[-1] = (self.ISSUE, 94.98)          # 기준가만 94.98 → 고점대비 94.98%
+        ok, relaxed, block, raw = self._verdict(self._product(), hist)
+        self.assertAlmostEqual(raw, 94.98)
+        self.assertEqual(round(raw), 95)        # 화면에는 95%로 찍힌다
+        self.assertEqual((ok, relaxed, block), (True, False, False))
+
+    def test_완화_예외도_화면에서는_그냥_통과다(self):
+        """완화 예외는 내부 구분일 뿐 — 화면 분기는 gate_pass 하나로 끝난다.
+
+        어느 경로로 통과했든 사용자에게는 "고점 발행 기준을 통과했다" 하나면
+        된다는 것이 2026-08-06 태훈님 확정. 문구도 색도 나머지 통과분과 같다.
+        """
+        from core.models import peak_tone
+        flat = self._hist(self.ISSUE, 200)      # 고점대비 100%, 1년 상승률 0%
+        ok, relaxed, block, raw = self._verdict(self._product(), flat)
+        self.assertEqual((ok, relaxed, block), (True, True, False))
+        self.assertGreaterEqual(raw, 95)        # 원값은 고점 부근이 맞지만
+        # 경고색은 게이트가 실제로 걸러낸 상품 전용이라 여기 오면 안 된다
+        self.assertNotEqual(peak_tone(raw, block), "warn")
+        # 경계 통과분(94.98%)과 색이 같아야 한다 — 갈라 보이면 안 된다
+        self.assertEqual(peak_tone(raw, block), peak_tone(94.98, False))
+
+    def test_급등_뒤_고점은_고점_발행으로_알려준다(self):
+        surge = self._hist(self.ISSUE, 200, start_price=70.0, end_price=100.0)
+        ok, relaxed, block, raw = self._verdict(self._product(), surge)
+        self.assertEqual((ok, relaxed, block), (False, False, True))
+        self.assertIsNotNone(raw)
+
+    def test_시세를_못_구하면_어느_쪽도_주장하지_않는다(self):
+        ok, relaxed, block, raw = self._verdict(
+            self._product(), self._hist(self.ISSUE, 200), ticker=None)
+        self.assertEqual((ok, relaxed, block, raw), (False, False, False, None))
+
+    def test_판정은_게이트가_내린_그대로다(self):
+        """peak_gate_verdict가 v7_peak_gate와 어긋나면 안 된다 — 규칙 복제 금지."""
+        from core.models import v7_peak_gate
+        p = self._product()
+        cases = [self._hist(self.ISSUE, 200),
+                 self._hist(self.ISSUE, 200, start_price=70.0, end_price=100.0),
+                 self._hist(self.ISSUE, 200, start_price=99.0, end_price=100.0)]
+        for hist in cases:
+            with mock.patch("core.market.fetch_history", return_value=hist), \
+                    mock.patch("core.market.resolve_ticker", return_value="005930.KS"):
+                gate_ok, gate_peak = v7_peak_gate(p, {})
+            ok, _relaxed, block, raw = self._verdict(p, hist)
+            self.assertEqual(ok, gate_ok)
+            self.assertEqual(block, not gate_ok)
+            self.assertEqual(raw, gate_peak)
+
+    # ── 템플릿이 다시 반올림값으로 돌아가지 않게 ──────────────────
+    def test_템플릿은_반올림값으로_고점을_가르지_않는다(self):
+        from pathlib import Path
+        from django.conf import settings
+        tpl = Path(settings.BASE_DIR) / "core" / "templates" / "core"
+        detail = (tpl / "product_detail.html").read_text(encoding="utf-8")
+        for banned in ("pk.issue_max < 95", "pk.issue_max >= 95",
+                       "pk.now_max < 95", "pk.now_max >= 95"):
+            self.assertNotIn(banned, detail)
+        for need in ("pk.gate_pass", "pk.gate_block", "pk.issue_tone"):
+            self.assertIn(need, detail)
+        # 완화 예외를 화면에서 갈라 보이면 안 된다 (2026-08-06 태훈님 확정)
+        self.assertNotIn("pk.gate_relaxed", detail)
+        for name in ("weekly.html", "_mobile_row.html"):
+            src = (tpl / name).read_text(encoding="utf-8")
+            for banned in ("p.peak_ratio < 90", "p.peak_ratio < 95",
+                           "p.peak_ratio >= 95"):
+                self.assertNotIn(banned, src)
+            self.assertIn("p.peak_level", src)
+
+
 class RefreshRefPriceCommandTest(TestCase):
     """refresh_ref_price — 기본이 dry-run이고 --apply 없이는 절대 저장하지 않는다."""
 
