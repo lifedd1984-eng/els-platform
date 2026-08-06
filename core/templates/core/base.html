@@ -195,6 +195,9 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   padding: 5px 12px; border-radius: 15px; font-size: 12px; font-weight: 700;
   background: var(--bg); color: var(--text-2); border: 1px solid transparent;
 }
+/* 프리셋이 하나도 없을 때 만들러 가는 칩 — 관리 화면의 추가 카드와 같은 점선.
+   :hover보다 앞에 둬야 같은 특정도에서 hover가 이긴다. */
+.preset-chip.add { border-color: var(--border); border-style: dashed; }
 .preset-chip:hover { border-color: var(--blue); color: var(--blue); }
 .preset-chip.active { background: var(--blue); color: #fff; }
 

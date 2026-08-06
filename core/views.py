@@ -221,14 +221,21 @@ def weekly(request):
     f_currency = request.GET.get("currency", "")
     f_no_ki = request.GET.get("no_ki", "")
     f_issuers = request.GET.getlist("issuer")  # 다중 선택
+    # 프리셋은 '각자 자기 조건' — 본인 것만 걸린다.
+    # 예전엔 Preset.objects.get(id=...)라 소유자를 안 봤다. 비로그인 방문자가
+    # ?preset=1 하나로 남의 프리셋 조건을 그대로 적용받았고(2026-08-06 실측),
+    # 화면에는 그 프리셋 칩이 없으니 왜 걸러졌는지 알 길도 없었다.
+    # 숫자가 아닌 값(?preset=abc)은 int 변환에서 ValueError가 나 500이 됐다.
+    # 남의 것·없는 것·숫자 아닌 것은 모두 공란으로 되돌린다 — '전체'가 켜진다.
     preset_id = request.GET.get("preset", "")
+    preset = None
+    if preset_id.isdigit():
+        preset = _scope(Preset.objects.all(), request.user).filter(id=preset_id).first()
+    if preset is None:
+        preset_id = ""
 
-    if preset_id:
-        try:
-            preset = Preset.objects.get(id=preset_id)
-            qs = preset.match_queryset(qs)
-        except Preset.DoesNotExist:
-            pass
+    if preset:
+        qs = preset.match_queryset(qs)
     else:
         if f_issuers:
             qs = qs.filter(issuer__in=f_issuers)
@@ -614,13 +621,16 @@ def presets(request):
                 currency=request.POST.get("currency", "전체"),
                 notify=request.POST.get("notify") == "on",
             )
+            # 텔레그램은 가족 공용 운영 채널이라 일반 회원 프리셋은 태우지 않는다.
+            # 가드가 추가(create)에만 있어서, 만든 뒤 수정으로 다시 켤 수 있었다.
+            # 화면에서 체크박스를 감추더라도 POST는 직접 올 수 있으므로 서버에서 막는다.
+            if not request.user.is_staff:
+                data["notify"] = False
             if pid:
                 _scope(Preset.objects.filter(id=pid), request.user).update(**data)
                 messages.success(request, "프리셋을 수정했습니다.")
             else:
                 data["user"] = request.user
-                if not request.user.is_staff:
-                    data["notify"] = False  # 텔레그램은 운영 채널 전용
                 Preset.objects.create(**data)
                 messages.success(request, "프리셋을 추가했습니다.")
         return redirect("presets")

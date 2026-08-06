@@ -31,15 +31,24 @@
 </div>
 
 <div class="filterbar">
+  {% comment %}
+  프리셋은 계정별 소유라 비로그인에게는 아예 걸 수 있는 것이 없다.
+  예전엔 회색 '프리셋' 라벨과 '전체' 칩만 남아, 눌러도 아무 일이 없는
+  고장난 컨트롤처럼 보였다. 로그인 유도는 상단 내비게이션이 맡는다.
+  로그인했는데 프리셋이 하나도 없으면(신규 회원의 기본 상태) 고를 것이
+  없으므로 '전체' 칩 대신 만들러 가는 길만 둔다.
+  {% endcomment %}
   {% if user.is_authenticated %}
-  <a href="{% url 'presets' %}" title="프리셋 관리" style="font-size:12px;font-weight:700;color:var(--blue-dark);text-decoration:none;white-space:nowrap">프리셋 <i class="fa-solid fa-gear" style="font-size:10px"></i></a>
-  {% else %}
-  <span style="font-size:12px;font-weight:700;color:var(--text-3)">프리셋</span>
+    {% if presets %}
+    <a href="{% url 'presets' %}" title="프리셋 관리" style="font-size:12px;font-weight:700;color:var(--blue-dark);text-decoration:none;white-space:nowrap">프리셋 <i class="fa-solid fa-gear" style="font-size:10px"></i></a>
+    <a href="?w={{ offset }}" class="preset-chip {% if not filters.preset %}active{% endif %}">전체</a>
+    {% for p in presets %}
+    <a href="?w={{ offset }}&preset={{ p.id }}" class="preset-chip {% if filters.preset == p.id|stringformat:'s' %}active{% endif %}">{{ p.name }}</a>
+    {% endfor %}
+    {% else %}
+    <a href="{% url 'presets' %}" class="preset-chip add"><i class="fa-solid fa-plus" style="font-size:10px"></i> 새 프리셋 추가</a>
+    {% endif %}
   {% endif %}
-  <a href="?w={{ offset }}" class="preset-chip {% if not filters.preset %}active{% endif %}">전체</a>
-  {% for p in presets %}
-  <a href="?w={{ offset }}&preset={{ p.id }}" class="preset-chip {% if filters.preset == p.id|stringformat:'s' %}active{% endif %}">{{ p.name }}</a>
-  {% endfor %}
   <form method="get" class="form-row" style="margin-left:auto">
     <input type="hidden" name="w" value="{{ offset }}">
     <details class="chk-dropdown">
