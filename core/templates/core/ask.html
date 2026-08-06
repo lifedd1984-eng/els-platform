@@ -1,0 +1,416 @@
+{% extends "core/base.html" %}
+{% load humanize %}
+{% block title %}AI 분석 질문 — ELS 레이더{% endblock %}
+
+{% block head %}
+<style>
+{% comment %}
+base.html 에 없는 것만 여기서 정의한다.
+card / stat-grid / stat-card / badge / btn / table / num / empty 는 base.html 것을 그대로 쓴다.
+{% endcomment %}
+textarea {
+  font-family: inherit; font-size: 14px; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 11px 12px;
+  background: #fff; outline: none; width: 100%; resize: none;
+}
+textarea:focus { border-color: var(--blue); }
+
+/* ── 예시·후속 질문 칩 ── */
+.chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 11px; }
+.chip {
+  padding: 6px 12px; border-radius: 15px; font-size: 12.5px; font-weight: 600;
+  background: var(--bg); color: var(--text-2); border: 1px solid transparent;
+  cursor: pointer; font-family: inherit; text-align: left; line-height: 1.4;
+}
+.chip:hover { border-color: var(--blue); color: var(--blue-dark); background: #fff; }
+.chip i { font-size: 11px; color: var(--text-3); margin-right: 4px; }
+
+.ex-group { margin-top: 13px; }
+.ex-label {
+  font-size: 12px; font-weight: 700; color: var(--text-2);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.ex-label > i { color: var(--text-3); font-size: 11px; }
+.lockmark { font-size: 11px; font-weight: 600; color: var(--text-3); }
+.ex-group .chips { margin-top: 6px; }
+
+/* ── 한도 소진 ── */
+.quota {
+  display: flex; gap: 11px; align-items: flex-start; background: var(--orange-bg);
+  border: 1px solid #F7DCB0; border-radius: var(--radius); padding: 14px 16px;
+}
+.quota-bar { height: 5px; border-radius: 3px; background: #F0E0C6; overflow: hidden; margin: 9px 0 7px; }
+.quota-bar span { display: block; height: 100%; background: var(--orange); }
+
+/* ── 포트폴리오 가드 ── */
+.guard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.guard-box { border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 13px; font-size: 12.5px; }
+.guard-box h4 { font-size: 12px; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+.guard-box ul { margin: 0; padding-left: 16px; color: var(--text-2); line-height: 1.8; }
+.guard-ok h4 { color: var(--green); }
+.guard-no h4 { color: var(--red); }
+
+/* ── 질문 에코 ── */
+.ask-echo {
+  display: flex; align-items: flex-start; gap: 9px; padding-bottom: 14px;
+  border-bottom: 1px solid var(--border); margin-bottom: 16px;
+}
+.ask-echo .q { font-size: 15.5px; font-weight: 700; line-height: 1.5; flex: 1; word-break: keep-all; }
+.ask-meta { font-size: 11.5px; color: var(--text-3); margin-top: 5px; display: flex; gap: 8px; flex-wrap: wrap; }
+.ask-meta code {
+  background: var(--bg); border-radius: 4px; padding: 1px 6px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: var(--text-2);
+}
+
+/* ── 답변 본문 ── */
+.answer p { margin-bottom: 9px; word-break: keep-all; line-height: 1.75; }
+.answer p:last-child { margin-bottom: 0; }
+.answer b { font-weight: 700; }
+
+.sec-title {
+  font-size: 13px; font-weight: 700; color: var(--text-2); margin: 22px 0 9px;
+  display: flex; align-items: center; gap: 6px;
+}
+.sec-title i { color: var(--text-3); font-size: 12px; }
+
+.note-box {
+  background: var(--bg); border-radius: var(--radius); padding: 12px 14px;
+  font-size: 12.5px; color: var(--text-2); line-height: 1.7; margin-top: 10px;
+}
+.note-box.warn { background: var(--red-bg); color: #9B3527; }
+.note-box code {
+  background: #fff; border-radius: 4px; padding: 1px 6px;
+  font-family: ui-monospace, Menlo, monospace; font-size: 11.5px;
+}
+
+/* ── 지표 카드 (카드 안에 들어가므로 배경을 회색으로) ── */
+.ask-stats { margin: 16px 0 18px; }
+.ask-stats .stat-card { background: var(--bg); padding: 14px 16px; }
+
+/* ── 계산 근거 ── */
+details.basis { border: 1px solid var(--border); border-radius: var(--radius); margin-top: 18px; }
+details.basis > summary {
+  list-style: none; cursor: pointer; padding: 11px 14px; font-size: 12.5px;
+  font-weight: 700; color: var(--text-2); display: flex; align-items: center; gap: 7px;
+}
+details.basis > summary::-webkit-details-marker { display: none; }
+details.basis > summary::after { content: "\25BE"; margin-left: auto; color: var(--text-3); }
+details.basis[open] > summary::after { content: "\25B4"; }
+.basis-body { padding: 0 14px 14px; font-size: 12.5px; color: var(--text-2); line-height: 1.8; }
+.basis-body dl { display: grid; grid-template-columns: 116px 1fr; gap: 4px 12px; }
+.basis-body dt { color: var(--text-3); font-weight: 600; }
+.basis-body dd { font-variant-numeric: tabular-nums; }
+
+/* ── 면책 (_disclaimer_inline.html 과 같은 모양) ── */
+.disclaimer {
+  display: flex; gap: 7px; align-items: flex-start; background: var(--bg); border-radius: 8px;
+  padding: 9px 12px; font-size: 11.5px; color: var(--text-2); line-height: 1.6; margin-top: 14px;
+}
+
+/* ── 차트 ── */
+.chart-wrap { overflow-x: auto; }
+.chart-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); margin-bottom: 7px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+
+{% comment %} 표의 모바일 대체 리스트 — 블록이 mobile 을 실어 보낼 때만 쓴다 {% endcomment %}
+.m-year { display: none; }
+.m-yrow { display: flex; align-items: center; gap: 10px; padding: 10px 2px; border-bottom: 1px solid #F2F4F6; }
+.m-yrow:last-child { border-bottom: none; }
+.m-yrow .yr { font-weight: 700; width: 62px; flex: none; }
+.m-yrow .rt { font-weight: 800; font-variant-numeric: tabular-nums; width: 78px; text-align: right; flex: none; }
+.m-yrow .dd { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+@media (max-width: 800px) {
+  .pc-year { display: none; }
+  .m-year { display: block; }
+  .chart-wrap svg { min-width: 640px; }
+  .basis-body dl { grid-template-columns: 88px 1fr; }
+  .guard { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .ask-echo .q { font-size: 14.5px; }
+  .chip { font-size: 12px; padding: 6px 10px; }
+}
+</style>
+{% endblock %}
+
+{% block nav_right %}
+{% if quota.unlimited %}<span class="freshness">오늘 <b style="color:var(--text-2)">{{ quota.used }}</b>회</span>
+{% elif quota.limit %}<span class="freshness">오늘 <b style="color:var(--text-2)">{{ quota.used }}</b> / {{ quota.limit }}회</span>{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="page-title">
+  <i class="fa-solid fa-magnifying-glass-chart" style="color:var(--blue)"></i> AI 분석 질문
+</div>
+<div class="page-sub">
+  기초자산 시세 10년, ELS 발행·상환 이력, 조건 검색, 내 포트폴리오 &mdash; 네 가지를 한 화면에서 묻습니다.
+  답변의 모든 숫자는 조회 시점에 <b>서버가 직접 계산</b>합니다.
+</div>
+
+{% if quota.exhausted %}
+{% comment %} 한도 소진 — 입력창 자리에 이 블록이 들어간다 {% endcomment %}
+<div class="card">
+  <div class="quota">
+    <i class="fa-solid fa-circle-exclamation" style="color:var(--orange);font-size:16px;margin-top:2px;flex:0 0 auto"></i>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:14px;color:#8A5A08">오늘 질문 {{ quota.limit }}회를 모두 사용했습니다</div>
+      <div class="quota-bar"><span style="width:{{ quota.percent }}%"></span></div>
+      <div style="font-size:12.5px;color:#8A5A08;line-height:1.7">
+        {{ quota.reset_text }}
+        그 전까지도 <b>이미 물어본 질문은 다시 볼 수 있고, 횟수도 차감되지 않습니다</b> &mdash;
+        아래 &lsquo;오늘 물어본 질문&rsquo;에서 그대로 열어 보세요.
+      </div>
+      {% if history %}
+      <div class="chips" style="margin-top:9px">
+        {% for h in history %}
+        <a class="chip" href="{% url 'ask' %}?log={{ h.id }}"><i class="fa-regular fa-clock"></i>{{ h.question|truncatechars:26 }}</a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% else %}
+{% comment %} 질문 입력 {% endcomment %}
+<div class="card" style="padding:16px 18px">
+  <form method="post" action="{% url 'ask' %}">{% csrf_token %}
+    <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <textarea name="q" id="askQ" rows="2" style="flex:1;min-width:240px"
+        placeholder="예: Micron 10년 추이하고 누적수익률, 연간수익률, 최대낙폭 정리해줘">{{ question|default:"" }}</textarea>
+      <button class="btn btn-primary" style="padding:12px 18px" type="submit">
+        <i class="fa-solid fa-paper-plane"></i> 질문하기
+      </button>
+    </div>
+  </form>
+
+  {% for g in presets %}
+  <div class="ex-group">
+    <div class="ex-label"><i class="fa-solid {{ g.icon }}"></i> {{ g.label }}{% if g.private %} <span class="lockmark"><i class="fa-solid fa-lock"></i> 본인 것만</span>{% endif %}</div>
+    <div class="chips">
+      {% for c in g.items %}<button type="button" class="chip" onclick="els_ask_fill(this)" data-q="{{ c }}">{{ c }}</button>{% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div style="font-size:11.5px;color:var(--text-3);margin-top:13px;line-height:1.7">
+    사실·통계 조회 전용입니다. 추천, 매수·매도 의견, 시세 전망은 제공하지 않습니다.
+    {% if not quota.unlimited %}· <b style="color:var(--text-2)">하루 {{ quota.limit }}회</b> {% endif %}· 같은 질문을 다시 하면 저장된 결과를 보여드리고 <b>횟수는 차감하지 않습니다</b>.
+    {% if coverage.price_first %}<br>조회 범위 &mdash; 기초자산 시세 {{ coverage.price_first }} ~ {{ coverage.price_last }} ({{ coverage.ticker_n }}종목) · 상품 {{ coverage.listed_n|intcomma }}건 · 상환 통계 {{ coverage.stat_year_from }}~{{ coverage.stat_year_to }}년.{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% comment %}
+답변 카드 하나로 정상·거절을 같이 받는다. 거절이어도 이미 돌린 도구 결과(blocks)가
+있으면 같이 보여준다 — 문장만 못 쓴 것이지 조회값은 사실이다.
+한도 초과는 위 한도 블록이 이미 같은 말을 하므로 카드를 만들지 않는다.
+{% endcomment %}
+{% if error.code != "QUOTA_EXCEEDED" %}
+{% if answer or blocks or error %}
+<div class="card" {% if error %}style="border-left:3px solid var(--orange)"{% endif %}>
+  {% if question %}
+  <div class="ask-echo">
+    <i class="fa-solid fa-quote-left" style="color:var(--text-3);font-size:13px;margin-top:5px"></i>
+    <div style="flex:1">
+      <div class="q">{{ question }}</div>
+      <div class="ask-meta">
+        {% if answered_at %}<span><i class="fa-regular fa-clock"></i> {{ answered_at|slice:":10" }} {{ answered_at|slice:"11:16" }}{% if elapsed_ms %} · {% widthratio elapsed_ms 1000 1 %}초{% endif %}</span>{% endif %}
+        {% if tools %}<span>실행: {% for t in tools %}<code>{{ t }}</code> {% endfor %}</span>{% endif %}
+        {% if is_private %}<span><i class="fa-solid fa-lock"></i> 본인 보유분만 조회</span>{% endif %}
+        {% if from_cache %}<span><i class="fa-solid fa-bookmark"></i> 저장된 결과 · 횟수 차감 없음</span>{% endif %}
+        {% if not quota.unlimited and quota.limit %}<span>오늘 {{ quota.used }} / {{ quota.limit }}회</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="answer">
+    <p>{{ error.message }}</p>
+    {% if error.alternatives %}<p style="color:var(--text-2)">대신 답할 수 있는 것: {{ error.alternatives|join:", " }}</p>{% endif %}
+  </div>
+  <div class="note-box">
+    <b>거절 사유 코드</b> <code>{{ error.code }}</code> &mdash;
+    질문·사유·응답은 호출 로그에 남고, 이 유형이 반복되면 데이터 확장 후보로 집계됩니다.
+  </div>
+  {% elif answer %}
+  <div class="answer">{{ answer|linebreaks }}</div>
+  {% endif %}
+
+  {% for b in blocks %}
+
+  {% if b.type == "section" %}
+  <div class="sec-title"><i class="fa-solid {{ b.icon|default:'fa-circle-info' }}"></i> {{ b.title }}</div>
+
+  {% elif b.type == "stats" %}
+  <div class="stat-grid ask-stats">
+    {% for s in b.cards %}
+    <div class="stat-card">
+      <div class="stat-label">{{ s.label }}</div>
+      <div class="stat-value" style="{% if s.tone == 'blue' %}color:var(--blue-dark){% elif s.tone == 'red' %}color:var(--red){% elif s.tone == 'green' %}color:var(--green){% endif %}">{{ s.display }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% elif b.type == "chips" %}
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+    {% for c in b.items %}<span class="badge badge-blue" style="font-weight:600">{{ c }}</span>{% endfor %}
+  </div>
+
+  {% elif b.type == "chart" %}
+  {% if b.legend %}
+  <div class="chart-legend">
+    {% for l in b.legend %}
+    <span {% if not l.color %}style="color:var(--text-3)"{% endif %}>{% if l.color %}<span class="sw" style="background:{{ l.color }}"></span>{% endif %}{{ l.label }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="chart-wrap">
+    <svg viewBox="{{ b.viewbox }}" style="width:100%;height:auto;display:block" role="img" aria-label="추이 차트">
+      {% for t in b.y_ticks %}
+      <line x1="{{ b.x0 }}" x2="{{ b.x1 }}" y1="{{ t.y }}" y2="{{ t.y }}" stroke="#E5E8EB" stroke-width="1"{% if not t.solid %} stroke-dasharray="3 3"{% endif %}/>
+      <text x="{{ b.x0|add:'-6' }}" y="{{ t.y|add:4 }}" text-anchor="end" font-size="10" fill="#8B95A1">{{ t.label }}</text>
+      {% endfor %}
+      <polyline fill="none" stroke="#3182F6" stroke-width="1.9" stroke-linejoin="round" points="{{ b.points }}"/>
+      {% if b.last_label %}
+      <circle cx="{{ b.last_x }}" cy="{{ b.last_y }}" r="3" fill="#3182F6"/>
+      <text x="{{ b.last_x|add:'-4' }}" y="{{ b.last_y|add:'-7' }}" text-anchor="end" font-size="10.5" font-weight="700" fill="#1B64DA">{{ b.last_label }}</text>
+      {% endif %}
+      {% for t in b.x_ticks %}<text x="{{ t.x }}" y="{{ b.y_bottom|add:20 }}" text-anchor="middle" font-size="10" fill="#8B95A1">{{ t.label }}</text>{% endfor %}
+    </svg>
+  </div>
+
+  {% elif b.type == "table" %}
+  <div style="overflow-x:auto" class="{% if b.mobile %}pc-year{% endif %}">
+    <table>
+      <thead>
+        <tr>{% for c in b.columns %}<th class="{% if c.num %}num{% endif %}">{{ c.label }}</th>{% endfor %}</tr>
+      </thead>
+      {% comment %}
+      셀은 자기 정렬을 모르고 columns 만 num 을 안다. 템플릿에는 리스트를 변수로
+      인덱싱하는 방법이 없어서 slice+last 로 같은 자리의 열을 꺼낸다
+      (slice:3 → 앞 3개, last → 3번째 = counter 3번째 셀의 열).
+      {% endcomment %}
+      <tbody>
+        {% for row in b.rows %}
+        <tr>
+          {% for c in row %}{% with col=b.columns|slice:forloop.counter|last %}
+          <td class="{% if col.num %}num{% endif %}" style="{% if c.tone == 'blue' %}color:var(--blue-dark);{% elif c.tone == 'red' %}color:var(--red);{% elif c.tone == 'green' %}color:var(--green);{% endif %}{% if c.bold %}font-weight:700;{% endif %}">{{ c.text }}</td>
+          {% endwith %}{% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if b.foot %}
+      <tfoot>
+        <tr style="border-top:2px solid var(--border)">
+          {% for c in b.foot %}{% with col=b.columns|slice:forloop.counter|last %}
+          <td class="{% if col.num %}num{% endif %}" style="font-weight:700;{% if c.tone == 'red' %}color:var(--red);{% elif c.tone == 'blue' %}color:var(--blue-dark);{% endif %}">{{ c.text }}</td>
+          {% endwith %}{% endfor %}
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+  {% if b.mobile %}
+  <div class="m-year">
+    {% for r in b.mobile %}
+    <div class="m-yrow">
+      <span class="yr">{{ r.label }}</span>
+      <span class="rt" style="{% if r.tone == 'blue' %}color:var(--blue-dark){% elif r.tone == 'red' %}color:var(--red){% endif %}">{{ r.value }}</span>
+      {% if r.sub %}<span class="dd">{{ r.sub }}</span>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% elif b.type == "note" %}
+  <div class="note-box {% if b.tone == 'warn' %}warn{% endif %}">
+    {% for ln in b.lines %}{{ ln }}{% if not forloop.last %}<br>{% endif %}{% endfor %}
+  </div>
+  {% endif %}
+
+  {% endfor %}
+
+  {% if is_private %}
+  <div class="guard">
+    <div class="guard-box guard-ok">
+      <h4><i class="fa-solid fa-circle-check"></i> 포트폴리오 질문에 답하는 것</h4>
+      <ul>
+        <li>현재 레벨 · 낙인까지 여유 · 추가 하락 여력</li>
+        <li>다음 평가일과 남은 일수</li>
+        <li>기초자산·발행사·청약 주차별 비중과 건수</li>
+        <li>스트레스 시나리오 결과 (기존 화면과 동일 계산)</li>
+      </ul>
+    </div>
+    <div class="guard-box guard-no">
+      <h4><i class="fa-solid fa-ban"></i> 포트폴리오 질문에서 차단하는 것</h4>
+      <ul>
+        <li>매수·매도·교체 권유 (&ldquo;정리하는 게&rdquo;, &ldquo;더 담아도&rdquo;)</li>
+        <li>평가어 (&ldquo;안전합니다&rdquo;, &ldquo;위험합니다&rdquo;, &ldquo;괜찮습니다&rdquo;)</li>
+        <li>미래 단정 (&ldquo;낙인될 것입니다&rdquo;, &ldquo;회복할 겁니다&rdquo;)</li>
+        <li>남의 계정 · 수익률 순위 · 세금 계산</li>
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if basis %}
+  <details class="basis" open>
+    <summary><i class="fa-solid fa-microscope"></i> 계산 근거</summary>
+    <div class="basis-body">
+      <dl>
+        {% for r in basis.rows %}<dt>{{ r.label }}</dt><dd>{{ r.value }}</dd>{% endfor %}
+      </dl>
+      {% if basis.note %}
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);color:var(--text-3)">{{ basis.note }}</div>
+      {% endif %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% if disclaimer %}
+  <div class="disclaimer">
+    <i class="fa-solid fa-circle-info" style="color:var(--text-3);margin-top:2px;flex:0 0 auto"></i>
+    <span>{{ disclaimer }}</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endif %}
+
+{% if followups and not quota.exhausted %}
+<div class="card" style="padding:16px 18px">
+  <div class="card-title" style="margin-bottom:4px;font-size:13.5px">이어서 물어볼 만한 것</div>
+  <div class="chips">
+    {% for f in followups %}<button type="button" class="chip" onclick="els_ask_fill(this)" data-q="{{ f }}"><i class="fa-solid fa-arrow-right"></i>{{ f }}</button>{% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if history and not quota.exhausted %}
+<div class="card" style="padding:16px 18px">
+  <div class="card-title" style="margin-bottom:4px;font-size:13.5px">오늘 물어본 질문</div>
+  <div class="chips">
+    {% for h in history %}
+    <a class="chip" href="{% url 'ask' %}?log={{ h.id }}"><i class="fa-regular fa-clock"></i>{{ h.at|date:"H:i" }} {{ h.question|truncatechars:26 }}</a>
+    {% endfor %}
+  </div>
+  <div style="font-size:11.5px;color:var(--text-3);margin-top:9px">
+    저장된 결과를 다시 여는 것이라 <b>횟수는 차감되지 않습니다</b>.
+  </div>
+</div>
+{% endif %}
+
+<script>
+// 예시·후속 질문 칩 → 입력창에 옮겨 담기. 바로 보내지 않는다(횟수 차감 방지).
+function els_ask_fill(btn) {
+  var box = document.getElementById('askQ');
+  if (!box) return;
+  box.value = btn.getAttribute('data-q') || '';
+  box.focus();
+  box.scrollIntoView({block: 'center'});
+}
+</script>
+{% endblock %}
