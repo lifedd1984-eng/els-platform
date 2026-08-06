@@ -181,7 +181,9 @@ def run_filter(f, user):
             return [by_id[i] for i in ids if i in by_id], None
         qs = Product.objects.filter(id__in=[i.product_id for i in invs])
     else:
-        qs = Product.objects.all()
+        # 검색 화면의 AI 검색도 목록이므로 같은 규칙을 태운다.
+        # 위 my_portfolio 분기는 본인이 등록한 보유 상품이라 거르지 않는다.
+        qs = Product.objects.listed()
         if f.get("subscribing_only"):
             qs = qs.filter(sub_end__gte=date.today())
 

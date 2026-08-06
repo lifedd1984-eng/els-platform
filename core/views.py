@@ -128,7 +128,10 @@ def _market_regime(monday, sunday):
         RADAR_V7_B0_MAX, _peak_fetch_days, _peak_from_series, v7_ki_cut,
     )
 
-    group = list(Product.objects.filter(sub_end__gte=monday, sub_end__lte=sunday))
+    # 원금지급형(ELB·DLB) 제외 — 낙인이 없어 통과(n_pass)에는 절대 못 들어가면서
+    # 모수(n_all)만 키우고 있었다. 그래서 통과율이 실제보다 낮게 찍혔다.
+    # (2026-08-06 실측: 이번 주 109/266=41.0% → 109/219=49.8%)
+    group = list(Product.objects.listed().filter(sub_end__gte=monday, sub_end__lte=sunday))
     if not group:
         return None
     n_all = n_pass = 0
@@ -209,7 +212,7 @@ def weekly(request):
     offset = int(request.GET.get("w", 0))
     monday, sunday = _week_range(offset)
 
-    qs = Product.objects.filter(sub_end__gte=monday, sub_end__lte=sunday)
+    qs = Product.objects.listed().filter(sub_end__gte=monday, sub_end__lte=sunday)
 
     # 필터
     f_asset = request.GET.get("asset", "")
@@ -317,8 +320,10 @@ def weekly(request):
     regime = _market_regime(monday, sunday)
 
     # 발행사 필터 후보 (이번 주 상품에 존재하는 발행사)
+    # 목록과 같은 .listed()를 태운다 — 안 그러면 골라도 0건인 발행사가 남는다
+    # (이번 주 17곳 중 3곳은 ELB·DLB만 낸 발행사였다. 2026-08-06 실측)
     issuers = sorted(set(
-        Product.objects.filter(sub_end__gte=monday, sub_end__lte=sunday)
+        Product.objects.listed().filter(sub_end__gte=monday, sub_end__lte=sunday)
         .values_list("issuer", flat=True)
     ))
 
@@ -387,7 +392,7 @@ def weekly(request):
     KI_BUCKETS = {"지수형": (25, 30, 35, 40), "종목형": (15, 20, 25, 30)}
     from collections import defaultdict
     _buckets = defaultdict(list)
-    for p in Product.objects.filter(
+    for p in Product.objects.listed().filter(
             sub_end__gte=monday, sub_end__lte=sunday,
             is_no_ki=False, ki__isnull=False):
         t = p.asset_type
@@ -621,14 +626,14 @@ def presets(request):
         return redirect("presets")
 
     today = date.today()
-    active_products = Product.objects.filter(sub_end__gte=today)
+    active_products = Product.objects.listed().filter(sub_end__gte=today)
     preset_list = []
     for p in _scope(Preset.objects.all(), request.user):
         preset_list.append({"obj": p, "match_count": p.match_queryset(active_products).count()})
 
     # 발행사 후보 (전체 상품 기준 — 최근 60일)
     issuers = sorted(set(
-        Product.objects.filter(sub_end__gte=today - timedelta(days=60))
+        Product.objects.listed().filter(sub_end__gte=today - timedelta(days=60))
         .values_list("issuer", flat=True)
     ))
 
@@ -1069,6 +1074,8 @@ def portfolio(request):
 
     # 투자 등록 폼용 상품 후보 (최근 청약 상품)
     # 투자등록 후보 = 관심목록에 담아둔 상품만 (가족=공용+본인, 회원=본인)
+    # .listed()를 걸지 않는다 — 본인이 직접 담은 관심목록이 원본이라, 여기서
+    # 거르면 담아둔 상품이 등록 목록에서만 사라져 이유를 알 수 없게 된다.
     candidates = Product.objects.filter(
         id__in=_scope(WatchItem.objects.all(), request.user).values_list("product_id", flat=True)
     ).order_by("-sub_end", "issuer")
@@ -1485,7 +1492,7 @@ def market_trend(request):
     from collections import defaultdict
 
     weeks_n = 20
-    qs = Product.objects.filter(sub_end__isnull=False)
+    qs = Product.objects.listed().filter(sub_end__isnull=False)
     buckets = defaultdict(list)
     for p in qs:
         monday = p.sub_end - timedelta(days=p.sub_end.weekday())
@@ -1545,9 +1552,14 @@ def market_trend(request):
         }
 
     # ── 레이더 신호 성과 검증 (verify_radar가 채운 RadarVerdict 집계) ──
-    from core.models import RadarVerdict
+    from core.models import PRINCIPAL_PROTECTED_TYPES, RadarVerdict
     BADGE_TIERS = ("타겟 신호", "아주 강한 신호", "강한 신호")
-    verdicts = list(RadarVerdict.objects.select_related("product").all())
+    # 대조군('배지 없음')에서도 원금지급형을 뺀다 — 배지가 붙을 수 없는 상품이
+    # 대조군에만 쌓이면 비교가 기울고, 화면에서 뺀 상품의 성적이 화면에 남는다.
+    # 이미 쌓인 행은 verify_radar 배치가 계속 만들지만 여기서 걸러 낸다.
+    # (2026-08-06 실측: ELB 판정확정 24건 · 대조군 적중률 83.1% → 83.8%)
+    verdicts = list(RadarVerdict.objects.select_related("product")
+                    .exclude(product__product_type__in=PRINCIPAL_PROTECTED_TYPES))
     badges = [v for v in verdicts if v.tier in BADGE_TIERS]
 
     radar = None
@@ -1976,7 +1988,7 @@ def product_search(request):
     results = []
     if q:
         results = list(
-            Product.objects.filter(
+            Product.objects.listed().filter(
                 Q(product_no__icontains=q) | Q(issuer__icontains=q)
                 | Q(assets_raw__icontains=q) | Q(name__icontains=q)
             ).order_by("-sub_end")[:200]
@@ -2018,9 +2030,11 @@ def _about_accuracy():
     """레이더 신호 성과검증 집계 — 배지 상품 vs 배지 없는 상품의 평가일 통과율."""
     from django.db.models import Count, Max, Min, Q
 
-    from .models import RadarVerdict
+    from .models import PRINCIPAL_PROTECTED_TYPES, RadarVerdict
 
-    qs = RadarVerdict.objects.filter(met__isnull=False)
+    # 트렌드 화면과 같은 모수를 쓴다 — 원금지급형은 대조군에서도 뺀다
+    qs = (RadarVerdict.objects.filter(met__isnull=False)
+          .exclude(product__product_type__in=PRINCIPAL_PROTECTED_TYPES))
     rows = qs.values("tier").annotate(n=Count("id"), ok=Count("id", filter=Q(met=True)))
     badge_n = badge_ok = ctrl_n = ctrl_ok = 0
     for r in rows:

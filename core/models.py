@@ -509,9 +509,17 @@ def _compute_radar_pool(monday, asset_type):
 
     ③이 발행 시점 기준이라 발행이 끝난 주차의 결과는 오늘 시세와 무관하다 →
     같은 주차를 언제 다시 계산해도 답이 같다(_radar_pool 캐시가 날아가도 안전).
+
+    group에서 원금지급형(ELB·DLB)을 뺀다(.listed()). 게이트 통과자는 그대로다 —
+    ELB·DLB는 낙인이 없어(ki=NULL) ②에서 전량 탈락하므로 배지가 붙은 적이 없다.
+    바뀌는 건 아래 yield_col, 즉 수익성 백분위의 분모다: ELB는 쿠폰이 낮아
+    (운영 470건 평균 연 7.6%) 분모에 깔려 있었고, 빼면 남은 ELS들의 상대 위치가
+    내려간다. 화면의 수익성 축·별점이 그만큼 낮게(=같은 종류끼리 비교한 값으로)
+    나온다. (2026-08-06 태훈님 승인. 실측: 게이트 통과자 1,436건 중 백분위가
+     움직인 것 1,248건, 중앙값 3%p·최대 23%p, 별점 등급이 내려간 것 246건.)
     """
     sunday = monday + timedelta(days=6)
-    group = list(Product.objects.filter(
+    group = list(Product.objects.listed().filter(
         sub_end__gte=monday, sub_end__lte=sunday, asset_type=asset_type))
     if not group:
         return {}
@@ -623,6 +631,32 @@ BROKER_SITE_URLS = {
 }
 
 
+# ══ 원금지급형 제외 ═══════════════════════════════════════════════
+# ELB·DLB는 원금지급형 파생결합'사채'다. 낙인도 손실확률도 없어서 이 서비스가
+# 재는 지표(낙인 컷·1차 배리어·만기 손실확률)가 아예 성립하지 않는다.
+# ELS와 한 표에 세워 두면 낙인 칸이 비고 손실확률이 0.0%로 찍혀 '가장 안전한
+# 상품'처럼 읽힌다 — 지표가 없다는 뜻인데 좋다는 뜻으로 뒤집혀 읽힌다.
+# 그래서 화면·배지·알림 목록에서 통째로 뺀다. (2026-08-06 태훈님 확정)
+#
+# ⚠ DLS는 여기 들어가지 않는다. 이름이 비슷하지만 원금비보장 파생결합'증권'이라
+#   ELS와 같은 지표가 그대로 성립한다. 10건 전부 그대로 노출한다.
+PRINCIPAL_PROTECTED_TYPES = ("ELB", "DLB")
+
+
+class ProductQuerySet(models.QuerySet):
+    """Product 공용 쿼리셋 — 목록 노출 규칙을 여기 한 곳에만 둔다."""
+
+    def listed(self):
+        """화면·배지·알림 목록에 노출할 상품만 (원금지급형 ELB·DLB 제외).
+
+        **목록을 만드는 쿼리는 전부 이걸 거쳐야 한다.** 뷰마다 따로
+        exclude를 쓰면 화면 하나 추가할 때마다 조용히 새는 자리가 늘어난다.
+        예외는 '사용자가 직접 담은 자기 데이터'뿐이다 — 관심목록·포트폴리오·
+        상품상세는 본인이 등록했거나 링크로 직접 찾아온 것이라 숨기지 않는다.
+        """
+        return self.exclude(product_type__in=PRINCIPAL_PROTECTED_TYPES)
+
+
 class Product(models.Model):
     """수집된 ELS 상품 — 이력 축적용, 삭제하지 않음."""
     PRODUCT_TYPES = [("ELS", "ELS"), ("DLS", "DLS"), ("ELB", "ELB"), ("DLB", "DLB")]
@@ -686,6 +720,11 @@ class Product(models.Model):
     sim_samples = models.IntegerField("시뮬 표본수", null=True, blank=True)
     sim_result = models.JSONField("시뮬 상세결과", null=True, blank=True)
     sim_updated = models.DateTimeField("시뮬 갱신일시", null=True, blank=True)
+
+    # 기본 매니저를 갈아끼운다 — Product.objects.listed()를 어디서나 쓸 수 있게.
+    # 기본 동작(objects.all/filter)은 그대로 전량이다. 수집·중복정리·백필 배치는
+    # ELB·DLB도 계속 저장·정리해야 하므로 제외를 기본값으로 만들지 않는다.
+    objects = ProductQuerySet.as_manager()
 
     class Meta:
         constraints = [
@@ -822,6 +861,36 @@ class Product(models.Model):
         return r if r and r["tier"] else None
 
     @property
+    def is_principal_protected(self):
+        """원금지급형(ELB·DLB)이면 True — 상품 하나를 볼 때의 판정.
+
+        목록 쿼리는 이걸 쓰지 않는다. ProductQuerySet.listed()가 같은
+        PRINCIPAL_PROTECTED_TYPES를 DB에서 걸러낸다 — 근거는 한 곳이고
+        여기는 이미 꺼낸 상품 하나를 화면에서 다르게 그릴 때만 쓴다.
+
+        판정 자체는 하지 않는다. product_type이 유일한 근거다
+        (수집 시 parsers.classify_product_type이 상품명·설명·낙인으로 정한 값).
+        예전에 같은 설명 원문을 scrape_kofia와 extract_ki가 서로 다르게 읽어
+        유형이 어긋난 사고가 있었으므로, 표시 계층에서 원문을 다시 읽지 않는다.
+
+        DLS는 원금비보장 파생결합'증권'이라 ELS와 같이 취급한다 — 여기 들어가지 않는다.
+        """
+        return self.product_type in PRINCIPAL_PROTECTED_TYPES
+
+    @property
+    def principal_label(self):
+        """원금지급형 표시 라벨 '원금지급형(ELB)'. ELS·DLS는 None.
+
+        '원금지급형'은 설명 원문·KOFIA 표기에 그대로 쓰이는 말이고
+        (parsers.PRINCIPAL_PROTECTED_WORDS), 괄호 안은 상품유형 코드다.
+        '원금보장'은 쓰지 않는다 — ELS 쪽 약속 문구로 읽힐 수 있어
+        스레드 금칙어(threads_content.BANNED_PHRASES)에 올라 있는 표현이다.
+        """
+        if not self.is_principal_protected:
+            return None
+        return f"원금지급형({self.product_type})"
+
+    @property
     def structure_label(self):
         """상품 구조 특이사항 라벨. 정상 스텝다운(배리어 있고 특이사항 없음)은 None.
 
@@ -853,7 +922,7 @@ def radar_tracks(monday=None, sunday=None, limit=5):
         monday = today - timedelta(days=today.weekday())
     if sunday is None:
         sunday = monday + timedelta(days=6)
-    pool = Product.objects.filter(
+    pool = Product.objects.listed().filter(
         sub_end__gte=max(monday, today) if sunday >= today else monday,
         sub_end__lte=sunday, yield_rate__isnull=False)
     tracks = {"지수형": [], "종목형": []}
@@ -901,9 +970,21 @@ class Preset(models.Model):
         return self.name
 
     def match_queryset(self, qs=None):
-        """이 프리셋 조건에 맞는 Product queryset."""
+        """이 프리셋 조건에 맞는 Product queryset (원금지급형 ELB·DLB 제외).
+
+        제외를 호출처가 아니라 여기서 건다. 프리셋은 화면(주간청약 필터·프리셋
+        목록의 매칭 건수)과 알림(notify.notify_preset_matches → 텔레그램)이
+        같이 쓰는 길목이라, 여기서 한 번 걸러야 세 경로가 함께 맞는다.
+        알림으로 ELB가 나가면 화면에서 뺀 의미가 없다.
+
+        ⚠ 낙인 조건이 이걸 대신해 주지 않는다. ki_min·ki_max가 둘 다 비어 있고
+          '노낙인 포함'도 꺼져 있으면 낙인 조건 자체가 안 걸린다(has_ki_cond).
+          운영 프리셋 '나의플랜'이 그 상태라 수익률 25% 이상 ELB·DLB 14건이
+          그대로 매칭될 수 있었다. (2026-08-06 실측)
+        """
         if qs is None:
             qs = Product.objects.all()
+        qs = qs.listed()
         if self.issuers:
             qs = qs.filter(issuer__in=self.issuers)
         if self.asset_type != "전체":
