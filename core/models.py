@@ -2,6 +2,7 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Coalesce
 
 # ELS/ELB 수익은 배당소득으로 과세: 소득세 14% + 지방소득세 1.4% = 15.4%
 # (원금 제외, 수익분에만 부과)
@@ -689,7 +690,14 @@ class Product(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["issuer", "product_no", "sub_end"], name="uniq_product"
+                "issuer", "product_no",
+                # sub_end가 NULL이면 SQLite는 NULL끼리 서로 다르다고 보므로
+                # fields=[..., "sub_end"] 형태로는 제약을 그냥 통과한다. 실제로
+                # 2026-07-16 엑셀 시딩에서 청약종료일 열이 없는 파일이 들어와
+                # sub_end=NULL 369행이 생겼고 그 중 274행이 기존 상품과 중복됐다.
+                # NULL을 고정값으로 접어 NULL끼리도 같다고 보게 만든다. (2026-08-05)
+                Coalesce("sub_end", models.Value(date(1, 1, 1))),
+                name="uniq_product",
             )
         ]
         ordering = ["sub_end", "-yield_rate"]

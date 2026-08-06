@@ -1,3 +1,5 @@
+import os
+import tempfile
 from datetime import date, datetime, timedelta, timezone as dt_timezone
 from unittest import mock
 
@@ -25,8 +27,11 @@ class ScheduleBadgeTest(TestCase):
             username="tester", password="x")
 
     def _inv(self, eval_dates):
+        # 한 테스트에서 여러 건을 만드므로 회차를 겹치지 않게 준다
+        # (uniq_product가 sub_end=NULL끼리도 같다고 보기 때문에 "1" 고정이면 충돌)
+        self._seq = getattr(self, "_seq", 0) + 1
         p = Product.objects.create(
-            issuer="테스트증권", product_no="1", yield_rate=6.0,
+            issuer="테스트증권", product_no=str(self._seq), yield_rate=6.0,
             barriers_raw=[90, 85, 80], period_months=6, first_eval_months=6,
             issue_date=date(2025, 1, 10), expiry_date=date(2026, 7, 10),
             eval_dates=eval_dates)
@@ -921,6 +926,73 @@ class RefreshRefPriceCommandTest(TestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command("refresh_ref_price", "--dry-run", "--apply")
+
+
+class ImportElsColumnMappingTest(TestCase):
+    """엑셀 열을 이름으로 찾는지 본다.
+
+    ELS_Curator 엑셀은 주차마다 열 구성이 달라진다(실측 15종). 예전엔 열 번호를
+    고정으로 읽어서, '청약종료일' 열이 아예 없는 파일(20260616_0925)의 그 자리에
+    있던 낙인조건을 sub_end로 넣으려다 369행이 통째로 sub_end=NULL이 됐다.
+    NULL은 SQLite 유니크 비교를 빠져나가므로 같은 상품이 두 행으로 갈라졌고
+    중복 274쌍이 생겼다. (2026-08-05)
+    """
+
+    DESC = "[스텝다운] 3년/6개월/80-80-75-75-70-65/45 KI"
+
+    def _write(self, tmpdir, name, header, rows):
+        import openpyxl
+        path = os.path.join(tmpdir, name)
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "ALL"
+        ws.append(header)
+        for r in rows:
+            ws.append(r)
+        wb.save(path)
+        return path
+
+    def _run(self, header, rows):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "청약중인상품_20260616_0925.xlsx", header, rows)
+            with mock.patch("core.telegram.send_message"):
+                call_command("import_els", file=path, no_notify=True)
+
+    def test_열_순서가_바뀌어도_헤더로_찾는다(self):
+        # 상품유형이 11번이 아니라 13번에 있는 레이아웃 (20260624_1200 계열)
+        self._run(
+            ["선택", "발행회사", "신용등급", "상품명", "기초자산", "발행일", "만기일",
+             "연수익률", "최대손실률(%)", "청약시작일", "청약종료일", "micron여부",
+             "지수형여부", "상품유형"],
+            [[1, "키움증권", "AA", "1863", "삼성전자", 20260618, 20290618,
+              7.5, -100, 20260608, 20260617, "N", "N", self.DESC]],
+        )
+        p = Product.objects.get(issuer="키움증권", product_no="1863")
+        self.assertEqual(p.sub_end, date(2026, 6, 17))
+        self.assertEqual(p.description, self.DESC)
+        self.assertEqual(p.ki, 45)          # 설명을 제대로 읽어야 낙인이 나온다
+
+    def test_청약종료일_열이_없으면_파일을_통째로_버린다(self):
+        # sub_end=NULL로 밀어넣으면 유니크 제약을 빠져나가 중복이 쌓인다
+        self._run(
+            ["선택", "발행회사", "신용등급", "상품명", "기초자산", "발행일", "만기일",
+             "연수익률", "최대손실률(%)", "청약시작일", "낙인조건", "상품유형"],
+            [[1, "키움증권", "AA", "1863", "삼성전자", 20260618, 20290618,
+              7.5, -100, 20260608, "KI45%", self.DESC]],
+        )
+        self.assertFalse(Product.objects.exists())
+
+    def test_청약종료일_값이_비면_그_행만_건너뛴다(self):
+        header = ["선택", "발행회사", "신용등급", "상품명", "기초자산", "발행일", "만기일",
+                  "연수익률", "최대손실률(%)", "청약시작일", "청약종료일", "상품유형"]
+        self._run(header, [
+            [1, "키움증권", "AA", "1863", "삼성전자", 20260618, 20290618,
+             7.5, -100, 20260608, None, self.DESC],
+            [2, "키움증권", "AA", "1864", "삼성전자", 20260618, 20290618,
+             7.5, -100, 20260608, 20260617, self.DESC],
+        ])
+        self.assertEqual([p.product_no for p in Product.objects.all()], ["1864"])
+        self.assertFalse(Product.objects.filter(sub_end__isnull=True).exists())
 
 
 class PriceBarStoreTest(TestCase):

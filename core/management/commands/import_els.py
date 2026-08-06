@@ -2,14 +2,17 @@
 downloads 폴더의 청약중인상품_*.xlsx를 감지해 Product로 임포트.
 
 - ALL 시트만 파싱 (다른 시트는 부분집합)
+- 열은 헤더 이름으로 찾는다 (아래 COLUMNS 주석 참고)
 - ImportLog로 동일 파일 재처리 방지
 - 프리셋 매칭 신규 상품 텔레그램 알림 (NotifiedMatch로 중복 방지)
 - 보유 Investment 평가일 D-7/D-1 알림 (RedemptionAlert로 중복 방지)
 - 월~수 새 파일 없으면 목요일에 리마인더
 """
 
+import datetime
 import glob
 import os
+import re
 from datetime import date, timedelta
 
 import openpyxl
@@ -19,11 +22,60 @@ from django.core.management.base import BaseCommand
 from core import notify, parsers, telegram
 from core.models import ImportLog, Product
 
+# ELS_Curator 엑셀은 주차마다 열 구성이 다르다. 실제로 downloads에 쌓인 42개 파일에서
+# 서로 다른 레이아웃이 15종 나왔다 — 열이 12~21개로 오가고, 같은 자리(11번)에
+# 상품유형·구분·ki·KI·낙인조건·micron여부가 번갈아 들어온다.
+# 열 번호를 고정하면 엉뚱한 값을 읽는다. 실제로 2026-07-16 시딩 배치에서
+# 청약종료일 열이 아예 없는 파일(20260616_0925)을 인덱스로 읽어 sub_end=NULL 369건이
+# 들어갔고, 그게 (issuer, product_no, sub_end) 유니크 제약을 빠져나가
+# 중복 274쌍을 만들었다. 그래서 헤더 이름으로 찾고, 필수 열이 없으면 파일을 버린다.
+# (2026-08-05)
+COLUMNS = {
+    "issuer": ("발행회사",),
+    "name": ("상품명",),
+    "assets": ("기초자산",),
+    "issue_date": ("발행일",),
+    "expiry_date": ("만기일",),
+    "yield_rate": ("연수익률",),
+    "max_loss": ("최대손실률",),          # 없는 파일이 있다 (선택)
+    "sub_start": ("청약시작일",),          # 없는 파일이 있다 (선택)
+    "sub_end": ("청약종료일", "청약마감일"),
+    "desc": ("상품유형",),
+}
+# 이 열이 하나라도 없으면 임포트하지 않는다 — 없는 채로 넣으면 조용히 결손 데이터가 쌓인다.
+# sub_start·max_loss는 키도 아니고 모델에서 null 허용이라 빠져도 그냥 비워 둔다.
+REQUIRED_COLUMNS = (
+    "issuer", "name", "assets", "issue_date", "expiry_date",
+    "yield_rate", "sub_end", "desc",
+)
+
+
+def _norm_header(h):
+    """헤더 비교용 정규화 — 공백·괄호·% 제거. '최대손실률(%)' → '최대손실률'."""
+    return re.sub(r"[\s()%]", "", str(h or ""))
+
+
+def _map_columns(header_row):
+    """헤더 행 → {필드명: 열 인덱스}. 못 찾은 필드는 키가 없다."""
+    found = {}
+    for idx, cell in enumerate(header_row):
+        norm = _norm_header(cell)
+        if not norm:
+            continue
+        for field, aliases in COLUMNS.items():
+            if field not in found and norm in aliases:
+                found[field] = idx
+    return found
+
 
 def _to_date(val):
-    """엑셀의 20260323 형식 int/str → date."""
+    """엑셀의 20260323 형식 int/str → date. 날짜 서식 셀(datetime)도 받는다."""
     if val is None:
         return None
+    if isinstance(val, datetime.datetime):
+        return val.date()
+    if isinstance(val, date):
+        return val
     s = str(val).strip().replace(".", "").replace("-", "")
     if len(s) == 8 and s.isdigit():
         try:
@@ -95,24 +147,55 @@ class Command(BaseCommand):
             return 0, 0
         ws = wb["ALL"]
 
-        n_rows = n_new = 0
+        header = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+        col = _map_columns(header)
+        missing = [f for f in REQUIRED_COLUMNS if f not in col]
+        if missing:
+            # 열이 빠진 파일을 인덱스로 밀어넣으면 결손·오염 데이터가 조용히 쌓인다.
+            # ImportLog는 남겨 매 실행마다 같은 경보가 반복되는 것만 막는다.
+            names = ", ".join(COLUMNS[f][0] for f in missing)
+            self.stderr.write(f"[열 누락] {os.path.basename(path)}: {names} / 임포트 건너뜀")
+            telegram.send_message(
+                f"[임포트 중단] {os.path.basename(path)}\n"
+                f"필수 열 누락: {names}\n"
+                f"실제 헤더: {', '.join(str(h) for h in header if h)}\n"
+                "엑셀을 다시 내려받아 주세요 (이 파일은 임포트하지 않았습니다)."
+            )
+            ImportLog.objects.create(
+                filename=os.path.basename(path), row_count=0, new_count=0
+            )
+            return 0, 0
+
+        def cell(row, field):
+            i = col.get(field)
+            return row[i] if i is not None and i < len(row) else None
+
+        n_rows = n_new = n_skipped = 0
         for row in ws.iter_rows(min_row=2, values_only=True):
-            # 열: (빈), 발행회사, 신용등급, 상품명, 기초자산, 발행일, 만기일,
-            #      연수익률, 최대손실률, 청약시작일, 청약마감일, 상품유형(설명)
-            issuer = str(row[1] or "").strip()
+            issuer = str(cell(row, "issuer") or "").strip()
             if not issuer:
                 continue
             # 기초자산이 비어 유형(종목형/지수형) 분류가 불가한 결손 행은 버림
             # (미분류 상품이 목록·포트폴리오 유형 집계를 깨뜨리는 것 원천 차단)
-            if not parsers.classify_asset(str(row[4] or "")):
+            assets = str(cell(row, "assets") or "")
+            if not parsers.classify_asset(assets):
+                continue
+
+            # sub_end는 유니크 키다. NULL로 넣으면 SQLite가 NULL끼리 다르다고 봐서
+            # 제약을 통과하고 같은 상품이 여러 행으로 갈라진다 — 행을 버린다.
+            sub_end = _to_date(cell(row, "sub_end"))
+            if sub_end is None:
+                n_skipped += 1
                 continue
             n_rows += 1
 
-            desc = str(row[11] or "")
+            desc = str(cell(row, "desc") or "")
+            issue_date = _to_date(cell(row, "issue_date"))
+            expiry_date = _to_date(cell(row, "expiry_date"))
             ki = parsers.extract_ki(desc)
             barriers = parsers.extract_barriers(desc)
-            period = parsers.extract_period(desc, row[5], row[6], barriers)
-            asset_type = parsers.classify_asset(str(row[4] or "")) or ""
+            period = parsers.extract_period(desc, issue_date, expiry_date, barriers)
+            asset_type = parsers.classify_asset(assets) or ""
 
             is_no_ki = ki == "NoKI"
             ki_val = None if (ki is None or is_no_ki) else int(ki)
@@ -125,13 +208,13 @@ class Command(BaseCommand):
 
             _, created = Product.objects.update_or_create(
                 issuer=issuer,
-                product_no=str(row[3] or "").strip(),
-                sub_end=_to_date(row[10]),
+                product_no=str(cell(row, "name") or "").strip(),
+                sub_end=sub_end,
                 defaults=dict(
-                    name=str(row[3] or "").strip(),
+                    name=str(cell(row, "name") or "").strip(),
                     product_type=product_type,
-                    yield_rate=_to_float(row[7]),
-                    max_loss=_to_float(row[8]),
+                    yield_rate=_to_float(cell(row, "yield_rate")),
+                    max_loss=_to_float(cell(row, "max_loss")),
                     ki=ki_val,
                     is_no_ki=is_no_ki,
                     barrier_first=int(barriers[0]) if barriers else None,
@@ -139,16 +222,21 @@ class Command(BaseCommand):
                     barriers_raw=[int(b) for b in barriers] if barriers else None,
                     period_months=period,
                     asset_type=asset_type,
-                    assets_raw=str(row[4] or "").strip(),
-                    issue_date=_to_date(row[5]),
-                    expiry_date=_to_date(row[6]),
-                    sub_start=_to_date(row[9]),
+                    assets_raw=assets.strip(),
+                    issue_date=issue_date,
+                    expiry_date=expiry_date,
+                    sub_start=_to_date(cell(row, "sub_start")),
                     currency=currency,
                     description=desc,
                 ),
             )
             if created:
                 n_new += 1
+
+        if n_skipped:
+            self.stderr.write(
+                f"[청약종료일 없음] {os.path.basename(path)}: {n_skipped}행 건너뜀"
+            )
 
         ImportLog.objects.create(
             filename=os.path.basename(path), row_count=n_rows, new_count=n_new
