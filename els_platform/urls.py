@@ -39,6 +39,7 @@ urlpatterns = [
     path('upload/', views.upload_excel, name='upload'),
     path('manage/members/', views.member_admin, name='member_admin'),
     path('search/', views.product_search, name='search'),
+    path('ask/', views.ask, name='ask'),
     path('about/', views.about, name='about'),
     path('terms/', views.legal_terms, name='terms'),
     path('privacy/', views.legal_privacy, name='privacy'),

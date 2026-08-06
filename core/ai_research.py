@@ -1,116 +1,21 @@
-"""AI 리서치 — 자연어 질문을 상품 필터(JSON)로 변환해 기존 쿼리로 실행.
+"""상품 조건 필터 실행 — 필터(JSON)를 받아 기존 쿼리로 돌린다.
 
-설계 원칙 (2026-07-28 확정):
+설계 원칙 (2026-07-28 확정, 그대로 유효):
 - AI는 답을 만들지 않고 "필터"만 만든다. 결과는 항상 DB의 실제 데이터.
   → 환각 원천 차단, 숫자를 지어낼 수 없음.
 - 자유 문답("이 상품 어때?")은 지원하지 않는다. 조회·정렬·필터 전용.
   → 투자권유 소지 차단. 레이더와 같은 "시스템 분류"의 법적 성격 유지.
-- 상품 데이터를 모델에 보내지 않는다. 질문 + 스키마만 전송 (요청당 약 0.4원).
+
+⚠ 2026-08-07: 자연어 → 필터 변환(ask())은 여기서 폐기했다. /search/의 AI
+  검색 입구를 없애고 /ask/ 한 곳으로 모았기 때문이다. 같은 일을 하는 입구가
+  둘이면 어느 쪽이 최신인지 아무도 모르게 된다.
+  변환은 이제 core/ask_agent.py의 해석턴이 하고, 이 모듈은 그 결과를
+  **실행**하는 쪽만 맡는다. run_filter / describe 는 /ask/의 product_filter
+  도구가 그대로 쓴다 — 검색 결과가 화면과 답변에서 갈라지지 않게 하는 지점이다.
 """
-import json
 import logging
 
-import requests
-from django.conf import settings
-
 log = logging.getLogger(__name__)
-
-API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-haiku-4-5"
-TIMEOUT = 20
-
-# Haiku가 채울 필터 스키마. strict tool use라 형식이 보장된다.
-FILTER_TOOL = {
-    "name": "product_filter",
-    "description": "사용자 질문을 ELS 상품 검색 필터로 변환한다. 질문에 없는 조건은 넣지 않는다.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "scope": {
-                "type": "string", "enum": ["products", "my_portfolio"],
-                "description": "내 보유/포트폴리오 관련 질문이면 my_portfolio, 그 외 products",
-            },
-            "subscribing_only": {
-                "type": "boolean",
-                "description": "청약 가능한(마감 전) 상품만 원하면 true. '지금 살 수 있는' 등",
-            },
-            "asset_type": {"type": "string", "enum": ["종목형", "지수형"]},
-            "ki_max": {"type": "number", "description": "낙인 상한 (이하). '낙인 40 이하' → 40"},
-            "ki_min": {"type": "number", "description": "낙인 하한 (이상)"},
-            "no_ki": {"type": "boolean", "description": "노낙인 상품만 원하면 true"},
-            "yield_min": {"type": "number", "description": "연수익률 하한 (%)"},
-            "loss_prob_max": {"type": "number", "description": "손실확률 상한 (%). '안전한' → 1 정도"},
-            "early_1y_min": {"type": "number", "description": "1년내 조기상환 확률 하한 (%)"},
-            "issuer": {"type": "string", "description": "발행사명 일부. 예: 키움, 삼성"},
-            "asset_contains": {"type": "string", "description": "기초자산명 일부. 예: 테슬라, S&P"},
-            "badge_only": {"type": "boolean", "description": "레이더 배지(아주 강한/강한 신호) 상품만"},
-            "eval_within_days": {
-                "type": "integer",
-                "description": "다음 평가일이 N일 이내 (my_portfolio 전용). '다음 달 평가' → 31",
-            },
-            "sort": {
-                "type": "string",
-                "enum": ["yield", "ki", "loss_prob", "sub_end", "early_1y", "next_eval"],
-                "description": "정렬 기준. 미지정 시 yield",
-            },
-            "sort_dir": {"type": "string", "enum": ["asc", "desc"]},
-            "limit": {"type": "integer", "minimum": 1, "maximum": 50},
-            "unanswerable": {
-                "type": "boolean",
-                "description": "조회·필터로 답할 수 없는 질문(의견·추천·예측 요구 등)이면 true",
-            },
-        },
-        "required": [],
-    },
-}
-
-SYSTEM = (
-    "너는 한국 ELS 상품 데이터베이스의 검색 필터 생성기다. "
-    "사용자 질문을 product_filter 도구 호출 하나로 변환한다. "
-    "질문에 명시되지 않은 조건은 절대 추가하지 않는다. "
-    "'추천해줘', '어때?', '살까?' 같은 의견·판단 요구는 unanswerable=true로 표시한다. "
-    "'안전한'은 loss_prob_max=1, '고수익'은 sort=yield/desc 로 해석한다. "
-    "asset_contains: 해외 종목·지수는 DB에 영문으로 저장돼 있으니 영문 원명으로 변환한다 "
-    "(테슬라→Tesla, 엔비디아→NVIDIA, 마이크론→Micron, 에스앤피→S&P). "
-    "국내 종목(삼성전자, SK하이닉스 등)과 코스피는 한글 그대로 둔다."
-)
-
-
-def ask(question):
-    """질문 → 필터 dict. 실패 시 (None, 오류메시지)."""
-    api_key = getattr(settings, "ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return None, "AI 검색이 아직 설정되지 않았습니다."
-    try:
-        r = requests.post(
-            API_URL,
-            headers={
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": MODEL,
-                "max_tokens": 300,
-                "system": SYSTEM,
-                "messages": [{"role": "user", "content": question[:300]}],
-                "tools": [FILTER_TOOL],
-                "tool_choice": {"type": "tool", "name": "product_filter"},
-            },
-            timeout=TIMEOUT,
-        )
-        r.raise_for_status()
-        data = r.json()
-        for block in data.get("content", []):
-            if block.get("type") == "tool_use":
-                return block["input"], None
-        return None, "필터 생성에 실패했습니다. 질문을 바꿔 보세요."
-    except requests.Timeout:
-        return None, "응답이 늦어지고 있습니다. 잠시 후 다시 시도해 주세요."
-    except Exception:
-        log.exception("AI 리서치 호출 실패")
-        return None, "일시적인 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
-
 
 # 필터 → 사람이 읽는 조건 칩 (적용된 조건을 투명하게 보여준다)
 _CHIP = {

@@ -9,8 +9,10 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from . import ask_tools, portfolio_facts
 from .models import (
     ImportLog, Investment, Preset, Product, WatchItem, attach_peak_ratios,
     peak_ratios,
@@ -727,120 +729,6 @@ def watchlist(request):
     })
 
 
-def _split_assets(assets_raw: str):
-    """'KOSPI200 , SK하이닉스' → ['KOSPI200', 'SK하이닉스']."""
-    import re
-    return [a.strip() for a in re.split(r"[,/]+", assets_raw or "") if a.strip()]
-
-
-def _analyze_risk(holding, total_invested):
-    """보유 포트폴리오의 집중도/분산 리스크 분석.
-
-    ELS는 워스트오브 구조 → 각 기초자산에 투자금 전액이 노출된다.
-    같은 자산에 여러 건 몰리면 그 자산 하나로 전체가 위험해진다.
-    """
-    if not holding or not total_invested:
-        return None
-
-    from collections import defaultdict
-
-    def _bucket():
-        return {"amount": 0, "count": 0, "items": []}
-
-    asset_exposure = defaultdict(_bucket)
-    issuer_exposure = defaultdict(_bucket)
-    week_exposure = defaultdict(_bucket)     # 청약 주차(빈티지)
-    ki_exposure = defaultdict(_bucket)       # 종목형 낙인별
-    maturity_buckets = defaultdict(int)  # 'YYYY-MM' → 건수
-
-    for inv in holding:
-        p = inv.product
-        item = {"pid": p.id, "label": f"{p.issuer} {p.product_no}", "amount": inv.amount,
-                "ki": "없음" if p.is_no_ki else (f"{p.ki:g}" if p.ki is not None else "-"),
-                "issued": p.issued_on}
-        for asset in _split_assets(p.assets_raw):
-            b = asset_exposure[asset]
-            b["amount"] += inv.amount
-            b["count"] += 1
-            b["items"].append(item)
-        b = issuer_exposure[p.issuer]
-        b["amount"] += inv.amount
-        b["count"] += 1
-        b["items"].append(item)
-        # 청약 주차 = 마감일이 속한 주의 월요일. 같은 주 발행분은 같은 빈티지로,
-        # 시장 급변 시 함께 무너질 수 있다 (2021 HSCEI·2023 LG화학 사례).
-        wd = p.sub_end or p.issue_date
-        if wd:
-            monday = wd - timedelta(days=wd.weekday())
-            b = week_exposure[monday]
-            b["amount"] += inv.amount
-            b["count"] += 1
-            b["items"].append(item)
-        # 종목형 낙인별 — 낙인이 얕을수록(숫자 클수록) 방어선이 약하다
-        if p.asset_type == "종목형":
-            kkey = "노낙인" if p.is_no_ki else (f"낙인 {p.ki:g}" if p.ki is not None else "낙인 미상")
-            b = ki_exposure[kkey]
-            b["amount"] += inv.amount
-            b["count"] += 1
-            b["items"].append(item)
-        nxt = inv.next_evaluation
-        if nxt:
-            maturity_buckets[nxt["date"].strftime("%Y-%m")] += 1
-
-    def _row(name, v):
-        return {"name": name, "amount": v["amount"], "count": v["count"],
-                "pct": round(v["amount"] / total_invested * 100),
-                "items": sorted(v["items"], key=lambda i: -i["amount"])}
-
-    def _top(exposure):
-        return sorted((_row(k, v) for k, v in exposure.items()),
-                      key=lambda r: -r["amount"])
-
-    assets = _top(asset_exposure)
-    issuers = _top(issuer_exposure)
-    weeks = [_row(f"{k.month}.{k.day}~{(k + timedelta(days=6)).month}.{(k + timedelta(days=6)).day}", v)
-             for k, v in sorted(week_exposure.items(), key=lambda kv: -kv[1]["amount"])]
-    # 낙인 낮은(깊은) 순 정렬, 노낙인·미상은 뒤로
-    def _ki_order(name):
-        if name.startswith("낙인 ") and name != "낙인 미상":
-            return (0, float(name.split()[1]))
-        return (1, 999)
-    ki_types = sorted((_row(k, v) for k, v in ki_exposure.items()),
-                      key=lambda r: _ki_order(r["name"]))
-
-    # 경고: 단일 자산/발행사 노출이 전체의 50% 초과
-    warnings = []
-    if assets and assets[0]["pct"] > 50:
-        warnings.append(
-            f"기초자산 '{assets[0]['name']}'에 전체의 {assets[0]['pct']}%가 집중되어 있습니다."
-        )
-    if issuers and issuers[0]["pct"] > 60:
-        warnings.append(
-            f"발행사 '{issuers[0]['name']}'에 전체의 {issuers[0]['pct']}%가 집중되어 있습니다."
-        )
-    # 청약 주차 집중: 같은 주 상품은 같은 빈티지 — 한 주에 50% 초과면 경고
-    if weeks and weeks[0]["pct"] > 50 and len(holding) >= 3:
-        warnings.append(
-            f"청약 주차 {weeks[0]['name']}에 전체의 {weeks[0]['pct']}%가 집중되어 있습니다. "
-            f"같은 주 상품은 시장 급변 시 함께 흔들립니다."
-        )
-    # 만기 집중: 한 달에 60% 초과 평가 몰림
-    if maturity_buckets:
-        top_month, top_cnt = max(maturity_buckets.items(), key=lambda x: x[1])
-        if top_cnt / len(holding) > 0.6 and len(holding) >= 3:
-            warnings.append(f"{top_month} 평가일에 상환이 몰려 있습니다 ({top_cnt}건).")
-
-    return {
-        "assets": assets[:6],
-        "issuers": issuers[:5],
-        "weeks": weeks[:6],
-        "week_total": len(weeks),
-        "ki_types": ki_types,
-        "maturity": sorted(maturity_buckets.items()),
-        "warnings": warnings,
-    }
-
-
 # ── 포트폴리오 ────────────────────────────────────
 @login_required
 def portfolio(request):
@@ -937,136 +825,13 @@ def portfolio(request):
     loss_coverage_pct = round(loss_weight / total_invested * 100) if total_invested else 0
 
     # 유형별(종목형/지수형) 보유 분해 — 건수·투자금액
-    holding_by_type = {
-        "종목형": {"count": 0, "amount": 0},
-        "지수형": {"count": 0, "amount": 0},
-        "기타": {"count": 0, "amount": 0},
-    }
-    for i in holding:
-        t = i.product.asset_type if i.product.asset_type in ("종목형", "지수형") else "기타"
-        holding_by_type[t]["count"] += 1
-        holding_by_type[t]["amount"] += i.amount
+    holding_by_type = portfolio_facts.holding_by_type(holding)
 
     # ── 리스크 분석 ──────────────────────────────
-    risk = _analyze_risk(holding, total_invested)
+    risk = portfolio_facts.analyze_risk(holding, total_invested)
 
-    # ── 스트레스 테스트: 자산별 추가 하락 시나리오 → 낙인 진입액·예상 손실 ──
-    # 위험 단위는 '노출 %'가 아니라 '낙인 발동가 분포'다. 같은 자산이라도
-    # 발행 시기(기준가)가 다르면 발동가가 달라 함께 무너지지 않는다 — 총노출만
-    # 보면 과대평가라는 태훈님 지적(2026-08-01)을 반영한 지표.
-    KI_LOSS_ASSUMED = 55   # 낙인 확정 시 원금 손실률 가정(%)
-    stress = None
-    if holding and total_invested:
-        from collections import defaultdict as _dd
-
-        from core import market as _mkt_s
-        from core.models import KnockInStatus
-
-        # 자산 키는 티커로 정규화 — 'Micron'과 'Micron Technology'가 표기만 다른
-        # 같은 자산으로 분리되면 3% 게이트에 걸려 통째로 누락된다 (레드팀 B [상3])
-        def _akey(name):
-            n = (name or "").strip()
-            return _mkt_s.resolve_ticker(n) or n
-
-        _sa = _dd(lambda: {"name": None, "cur": None, "cur_at": None, "trigs": [], "amt": 0})
-        _inv_assets = _dd(list)   # inv_id → [(asset_key, trigger|None)]
-        _inv_amt = {}
-        _covered = set()
-        for _s in KnockInStatus.objects.filter(
-                investment__in=holding).select_related("investment__product"):
-            _inv = _s.investment
-            if _s.ref_price is None or _s.current_price is None:
-                continue
-            _p = _inv.product
-            _k = _akey(_s.asset_name)
-            _a = _sa[_k]
-            if _a["name"] is None:
-                _a["name"] = _mkt_s.shorten_asset_display(_s.asset_name.strip())
-            # 티커로 합친 버킷에는 표기가 다른 행이 섞인다('Micron'/'Micron Technology').
-            # 그냥 덮어쓰면 마지막에 읽힌 행의 현재가가 자산 전체의 기준이 돼,
-            # 배치가 갱신하다 만 옛 값이 여유·손실 계산을 통째로 흔들 수 있다.
-            # 갱신 시각이 가장 최신인 행의 값을 채택한다.
-            if _a["cur"] is not None and _a["cur"] != _s.current_price:
-                logger.info("스트레스 테스트 현재가 불일치 자산=%s: %s(%s) vs %s(%s) — 최신값 채택",
-                            _k, _a["cur"], _a["cur_at"], _s.current_price, _s.updated_at)
-            if _a["cur"] is None or (_s.updated_at is not None
-                                     and (_a["cur_at"] is None or _s.updated_at > _a["cur_at"])):
-                _a["cur"] = _s.current_price
-                _a["cur_at"] = _s.updated_at
-            _covered.add(_inv.id)
-            _inv_amt[_inv.id] = _inv.amount
-            trig = None
-            if not (_p.is_no_ki or _p.ki is None):
-                trig = _s.ref_price * _p.ki / 100.0
-                _a["trigs"].append((trig, _inv.amount))
-            _inv_assets[_inv.id].append((_k, trig))
-        # 노출은 투자 단위로 (같은 투자가 한 자산에 두 번 잡히지 않게)
-        for _iid, _al in _inv_assets.items():
-            for _k in {k for k, _ in _al}:
-                _sa[_k]["amt"] += _inv_amt[_iid]
-
-        SHOCKS = (40, 50, 60, 70)
-        rows = []
-        _shown = set()   # 3% 게이트를 통과해 실제로 표에 그려지는 자산 키
-        for _k, _a in _sa.items():
-            pct = _a["amt"] / total_invested * 100
-            if pct < 3 or not _a["cur"] or not _a["trigs"]:
-                continue
-            _shown.add(_k)
-            needs = [(1 - trig / _a["cur"]) * 100 for trig, _ in _a["trigs"]]
-            amts = [amt for _, amt in _a["trigs"]]
-            # 금액가중 평균 여유 — 대표값 (min은 가장 취약한 1건이라 대표성이 없다)
-            wavg = sum(n * m for n, m in zip(needs, amts)) / sum(amts)
-            losses = {}
-            for d in SHOCKS:
-                px = _a["cur"] * (1 - d / 100)
-                hit = sum(amt for trig, amt in _a["trigs"] if px < trig)
-                losses[d] = round(hit / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
-            rows.append({"name": _a["name"] or _k, "pct": round(pct, 1),
-                         "wavg": round(wavg, 1), "nearest": round(min(needs), 1),
-                         "losses": losses})
-        if rows:
-            # 합계는 투자 단위 union — 워스트오브 상품은 어느 자산이든 발동가를
-            # 깨지면 낙인 1번이다. 자산 행 합산은 다중자산 투자를 중복 계상해
-            # 이론상 상한(55%)을 넘는 값까지 만들었다 (레드팀 B [상1·상2])
-            # union 범위는 표에 그려진 자산(_shown)으로 제한한다. 3% 게이트에 걸려
-            # 행이 없는 자산까지 세면 <tfoot> '합계'가 바로 위 행들과 안 맞아,
-            # 같은 표 안에서 셈이 어긋난 것처럼 보인다.
-            _cur = {k: _sa[k]["cur"] for k in _sa}
-            tot = {}
-            for d in SHOCKS:
-                knocked = 0
-                for _iid, _al in _inv_assets.items():
-                    if any(k in _shown and t is not None and _cur.get(k)
-                           and _cur[k] * (1 - d / 100) < t for k, t in _al):
-                        knocked += _inv_amt[_iid]
-                tot[d] = round(knocked / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
-            # '몰아 샀다면'(-60%): 전액을 각 자산의 가장 취약한 기준가에 샀다고 가정.
-            # 자산 단위 _worst_trig만 보면 안 되고 투자별 발동가 t도 함께 봐야 한다 —
-            # t가 None인 노낙인 투자는 같은 기초자산의 낙인 상품이 아무리 위험해도
-            # 절대 낙인되지 않는데, 이를 빼먹으면 그 투자금까지 conc60에 얹혀
-            # '시기를 나눠 산 덕분에 N%p를 막았습니다'가 부풀려진다.
-            _worst_trig = {k: max((t for t, _ in _sa[k]["trigs"]), default=None)
-                           for k in _shown}
-            conc_knocked = 0
-            for _iid, _al in _inv_assets.items():
-                if any(t is not None and _worst_trig.get(k) is not None and _cur.get(k)
-                       and _cur[k] * 0.40 < _worst_trig[k] for k, t in _al):
-                    conc_knocked += _inv_amt[_iid]
-            conc = round(conc_knocked / total_invested * 100 * KI_LOSS_ASSUMED / 100, 2)
-            rows.sort(key=lambda r: -r["losses"][60])
-            _miss = [i for i in holding if i.id not in _covered]
-            stress = {
-                "rows": rows,
-                "shocks": list(SHOCKS),
-                "loss_assumed": KI_LOSS_ASSUMED,
-                "total": tot,
-                "conc60": conc,
-                "saved60": round(conc - tot[60], 2),
-                "worst": rows[0],
-                "missing_n": len(_miss),
-                "missing_amt": sum(i.amount for i in _miss),
-            }
+    # ── 스트레스 테스트 (계산은 core/portfolio_facts.py — /ask/ 도구와 공용) ──
+    stress = portfolio_facts.stress_test(holding, total_invested)
 
     # ── 낙인 모니터링: 전체 보유 중 위험/경고(버퍼 ≤ 20%p)만 추림 ──
     ki_updated = None
@@ -1989,10 +1754,10 @@ def og_image(request):
 
 
 # ── 상품 검색 (공개) ─────────────────────────────
+# 자연어 조건검색은 /ask/로 옮겼다. 여기는 키워드 검색만 남긴다 —
+# 같은 일을 하는 입구가 둘이면 어느 쪽이 최신인지 아무도 모르게 된다.
 def product_search(request):
     from django.db.models import Q
-    from django.conf import settings as dj_settings
-    from . import ai_research
 
     q = request.GET.get("q", "").strip()
     results = []
@@ -2004,27 +1769,228 @@ def product_search(request):
             ).order_by("-sub_end")[:200]
         )
 
-    # ── AI 검색: 자연어 → 필터 → 기존 쿼리 실행 (답변 생성 없음) ──
-    aiq = request.GET.get("aiq", "").strip()
-    ai = None
-    if aiq:
-        flt, err = ai_research.ask(aiq)
-        if err:
-            ai = {"q": aiq, "error": err}
-        else:
-            rows, err = ai_research.run_filter(flt, request.user)
-            ai = {"q": aiq, "error": err,
-                  "results": rows or [], "chips": ai_research.describe(flt)}
-
     invested_ids = set()
     if request.user.is_authenticated:
         invested_ids = set(Investment.objects.filter(
             user=request.user, status="보유중").values_list("product_id", flat=True))
     return render(request, "core/search.html", {
         "q": q, "results": results, "invested_ids": invested_ids,
-        "ai": ai, "ai_enabled": bool(dj_settings.ANTHROPIC_API_KEY),
         "active_nav": "search",
     })
+
+
+# ── AI 분석 질문 (/ask/) ─────────────────────────
+# 예시 질문 — 네 갈래(시세·발행통계·조건검색·포트폴리오)를 한 화면에서 보여준다
+ASK_PRESETS = [
+    {"label": "기초자산 시세", "icon": "fa-chart-area", "private": False, "items": [
+        "Tesla와 삼성전자 10년 최대낙폭 비교",
+        "2020년 3월에 가장 많이 빠진 기초자산은",
+        "코스피200이 지금 5년 고점 대비 몇 %야"]},
+    {"label": "ELS 발행·상환 통계", "icon": "fa-chart-simple", "private": False, "items": [
+        "연도별 ELS 실현수익률과 손실 건수",
+        "올해 가장 많이 쓰인 기초자산",
+        "낙인 구간별 발행 비중 5년 추이"]},
+    {"label": "조건 검색", "icon": "fa-filter", "private": False, "items": [
+        "낙인 40 이하 지수형 중 수익률 높은 3개",
+        "이번 주 마감인 노낙인 상품",
+        "Micron 들어간 청약중 상품 전부"]},
+    {"label": "내 포트폴리오", "icon": "fa-briefcase", "private": True, "items": [
+        "내 보유 중 낙인까지 여유가 가장 적은 건",
+        "기초자산별 비중이랑 집중도 정리해줘",
+        "다음 달 평가일 오는 상품 몇 건이야"]},
+]
+
+ASK_DISCLAIMERS = {
+    "market": "과거 데이터를 집계한 결과이며 투자 권유가 아닙니다. 과거 성과는 미래 수익을 "
+              "보장하지 않고, 원금 손실이 발생할 수 있습니다.",
+    "portfolio": "등록하신 보유 기록을 집계한 결과이며 투자 권유가 아닙니다. 스트레스 결과는 "
+                 "가정에 따른 계산일 뿐 예측이 아니고, 원금 손실이 발생할 수 있습니다.",
+}
+
+
+def _ask_limit(request_user):
+    """(하루 한도, 면제 사유). 한도가 None이면 무제한.
+
+    ⚠ is_staff 는 '가족'(엑셀 업로드 권한을 가진 일반 회원)이고
+      is_superuser 가 운영자다. 무제한은 운영자에게만 연다 — 가족은 서비스
+      사용자지 운영자가 아니고, 넓게 열면 비용이 예측 밖으로 나간다.
+    """
+    limits = getattr(settings, "ASK_DAILY_LIMITS", {"default": 3})
+    if request_user.is_superuser:
+        return limits.get("superuser", None), "superuser"
+    if request_user.is_staff:
+        return limits.get("staff", limits.get("default", 3)), "staff"
+    return limits.get("default", 3), None
+
+
+def _ask_quota(user):
+    from .models import AskLog
+
+    limit, why = _ask_limit(user)
+    today = timezone.localdate()
+    used = AskLog.objects.filter(user=user, asked_on=today, billed=True).count()
+    unlimited = limit is None
+    return {
+        "used": used, "limit": limit, "unlimited": unlimited,
+        "exempt_reason": why if unlimited else None,
+        "remaining": None if unlimited else max(0, limit - used),
+        "exhausted": (not unlimited) and used >= limit,
+        "percent": 100 if unlimited else min(100, round(used / limit * 100)) if limit else 0,
+        "reset_text": "내일 오전 0시에 다시 채워집니다.",
+    }
+
+
+def _ask_context(request, result=None, quota=None, from_cache=False, log_id=None):
+    from .models import AskLog
+
+    today = timezone.localdate()
+    history = [
+        {"id": r.id, "question": r.question, "at": timezone.localtime(r.created_at),
+         "status": r.status, "tools": r.tools_used}
+        for r in AskLog.objects.filter(user=request.user, asked_on=today)
+        .exclude(status=AskLog.STATUS_BLOCKED).order_by("-created_at")[:10]
+    ]
+    ctx = {
+        "active_nav": "ask",
+        "presets": ASK_PRESETS,
+        "coverage": ask_tools.coverage(),
+        "quota": quota or _ask_quota(request.user),
+        "history": history,
+        "from_cache": from_cache,
+        "log_id": log_id,
+        "ai_enabled": bool(settings.ANTHROPIC_API_KEY),
+        # 답변 영역 (없으면 템플릿이 입력 폼만 그린다)
+        "question": None, "answer": None, "answer_html": None,
+        "blocks": [], "basis": None,
+        "followups": [], "error": None, "status": None, "tools": [],
+        "elapsed_ms": None, "elapsed_s": None, "answered_at": None,
+        "disclaimer": None, "is_private": False,
+    }
+    if result:
+        ms = result.get("elapsed_ms")
+        ctx.update({
+            "question": result.get("question"),
+            "answer": result.get("answer") or None,
+            # 도구 표시값만 감싼 강조 HTML (ask_agent.highlight) — |safe 로 쓴다
+            "answer_html": result.get("answer_html") or None,
+            "blocks": result.get("blocks") or [],
+            "basis": result.get("basis"),
+            "followups": result.get("followups") or [],
+            "error": result.get("error"),
+            "status": result.get("status"),
+            "tools": result.get("tools") or [],
+            "elapsed_ms": ms,
+            "elapsed_s": round(ms / 1000.0, 1) if ms else None,
+            "answered_at": result.get("answered_at"),
+            "is_private": "portfolio_facts" in (result.get("tools") or []),
+        })
+        ctx["disclaimer"] = ASK_DISCLAIMERS["portfolio" if ctx["is_private"] else "market"]
+    return ctx
+
+
+@login_required
+def ask(request):
+    """AI 분석 질문 — 로그인 필수, 하루 한도, 당일 같은 질문은 저장된 답을 재사용."""
+    from . import ask_agent
+    from .models import AskLog
+
+    today = timezone.localdate()
+
+    # 저장된 답 다시 열기 (본인 것만, 차감 없음)
+    log_id = request.GET.get("log")
+    if request.method == "GET" and log_id:
+        log = AskLog.objects.filter(pk=log_id, user=request.user).first()
+        if log and log.payload:
+            return render(request, "core/ask.html",
+                          _ask_context(request, log.payload, from_cache=True, log_id=log.id))
+        return render(request, "core/ask.html", _ask_context(request))
+
+    if request.method != "POST":
+        return render(request, "core/ask.html", _ask_context(request))
+
+    q = ask_agent.normalize_question(request.POST.get("q", ""))
+    if not q:
+        return redirect("ask")
+
+    # 질문키에는 시세 최신일이 섞인다 — 09:30 배치 전 답이 배치 뒤에 재사용되면
+    # 화면과 답이 어긋난다 (ask_agent.question_key 참조)
+    key = ask_agent.question_key(q)
+
+    def _blocked(code, message, quota=None):
+        AskLog.objects.create(
+            user=request.user, asked_on=today, question=q, question_key=key,
+            status=AskLog.STATUS_BLOCKED, refuse_code=code, billed=False,
+            payload={}, answer="")
+        ctx = _ask_context(request, quota=quota or _ask_quota(request.user))
+        ctx["error"] = {"code": code, "message": message, "detail": message}
+        ctx["question"] = q
+        return render(request, "core/ask.html", ctx)
+
+    # ① 당일 캐시 — 같은 질문은 모델을 다시 부르지 않는다 → 차감도 없다.
+    #    ⚠ 포트폴리오 질문은 제외한다. 보유·시세가 하루 안에도 움직여서
+    #      아침에 만든 답을 오후에 다시 보여주면 그 순간 틀린 화면이 된다.
+    hit = (AskLog.objects.filter(user=request.user, asked_on=today, question_key=key,
+                                 status__in=[AskLog.STATUS_OK, AskLog.STATUS_GUARDED])
+           .exclude(payload={})
+           .exclude(tools_used__icontains="portfolio_facts")
+           .order_by("-created_at").first())
+    if hit:
+        return render(request, "core/ask.html",
+                      _ask_context(request, hit.payload, from_cache=True, log_id=hit.id))
+
+    # ② 킬스위치 — 사고 시 배포 없이 끈다
+    if not getattr(settings, "ASK_ENABLED", True):
+        return _blocked("DISABLED", "AI 분석 질문을 잠시 중단했습니다. 곧 다시 열겠습니다.")
+
+    # ③ 서비스 전체 하루 상한 — 계정을 여러 개 만들어 1인 한도를 우회하는 경우 대비
+    cap = getattr(settings, "ASK_GLOBAL_DAILY_CAP", 0)
+    if cap and AskLog.objects.filter(asked_on=today, billed=True).count() >= cap:
+        return _blocked("GLOBAL_CAP",
+                        "오늘 서비스 전체 질문 한도에 도달했습니다. 내일 다시 이용해 주세요.")
+
+    # ④ 1인 한도 — 면제 계정은 체크를 건너뛴다 (기록은 남긴다)
+    quota = _ask_quota(request.user)
+    if quota["exhausted"]:
+        return _blocked("QUOTA_EXCEEDED",
+                        f"오늘 질문 {quota['limit']}회를 모두 사용했습니다.", quota)
+
+    if not settings.ANTHROPIC_API_KEY:
+        ctx = _ask_context(request)
+        ctx["question"] = q
+        ctx["error"] = {"code": "NOT_CONFIGURED", "message": "AI 분석 질문이 아직 설정되지 않았습니다."}
+        return render(request, "core/ask.html", ctx)
+
+    # ③ 실행
+    result = ask_agent.run(request.user, q)
+    result["question"] = q
+    result["answered_at"] = timezone.localtime().isoformat(timespec="minutes")
+
+    # ④ 차감 규칙
+    #    정상 O / 사후검사 실패 O(비용이 실제로 발생) / 캐시 히트 X(위에서 끝남)
+    #    사전 거절 X / 오류 X / 무제한 계정 X — 다만 전부 기록은 남긴다.
+    billable = result["status"] in (AskLog.STATUS_OK, AskLog.STATUS_GUARDED)
+    usage = result.get("usage") or {}
+    tot = {k: sum(u.get(k, 0) for u in usage.values())
+           for k in ("input_tokens", "output_tokens",
+                     "cache_creation_input_tokens", "cache_read_input_tokens")}
+    payload = {k: result.get(k) for k in
+               ("question", "answer", "answer_html", "blocks", "basis", "followups",
+                "tools", "error", "status", "elapsed_ms", "answered_at")}
+    log = AskLog.objects.create(
+        user=request.user, asked_on=today, question=q, question_key=key,
+        status=result["status"], refuse_code=(result.get("error") or {}).get("code", "") or "",
+        guard_flags=result.get("guard_flags") or [],
+        answer=result.get("answer") or "", tools_used=result.get("tools") or [],
+        payload=payload if billable else {},
+        input_tokens=tot["input_tokens"], output_tokens=tot["output_tokens"],
+        cache_write_tokens=tot["cache_creation_input_tokens"],
+        cache_read_tokens=tot["cache_read_input_tokens"],
+        cost_usd=result.get("cost_usd") or 0.0, usage=usage,
+        elapsed_ms=result.get("elapsed_ms") or 0,
+        billed=billable and not quota["unlimited"],
+    )
+    return render(request, "core/ask.html",
+                  _ask_context(request, result, quota=_ask_quota(request.user), log_id=log.id))
 
 
 # ── 홈 (/) — 로그인 여부 무관 랜딩 ──

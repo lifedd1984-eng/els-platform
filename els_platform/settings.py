@@ -210,6 +210,39 @@ VAPID_SUB = os.environ.get("VAPID_SUB", "mailto:lifedd1984@gmail.com")
 # AI 리서치 (Claude Haiku — 자연어 → 검색 필터 변환 전용)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
+# ── AI 분석 질문 (/ask/) ────────────────────────────
+# 2턴 구조: 해석(질문 → 도구 호출)은 Haiku, 설명(도구 결과 → 문장)은 Sonnet.
+# 해석은 스키마 채우기라 값싼 모델로 충분하고, 설명은 사용자가 읽는 문장이라
+# 품질이 그대로 드러난다. 모델을 바꾸면 캐시가 통째로 무효화되니 주의.
+ASK_MODEL_INTERPRET = os.environ.get("ASK_MODEL_INTERPRET", "claude-haiku-4-5")
+ASK_MODEL_ANSWER = os.environ.get("ASK_MODEL_ANSWER", "claude-sonnet-5")
+
+# 출력 상한. 해석턴은 도구 호출 하나면 되고, 설명턴은 3~5문장 + 후속질문이다.
+# ⚠ Sonnet 5는 thinking 파라미터를 생략하면 adaptive가 켜지고, max_tokens는
+#   thinking+본문 합계 상한이다. ask_agent가 thinking을 명시적으로 끈다.
+ASK_MAX_TOKENS = {"interpret": 700, "answer": 900}
+
+# 킬스위치. 사고가 나면 배포 없이 환경변수로 끈다.
+ASK_ENABLED = os.environ.get("ASK_ENABLED", "1") != "0"
+
+# 서비스 전체 하루 상한. 1인 한도는 계정을 여러 개 만들면 우회되므로
+# 마지막 방어선을 하나 더 둔다. 넘으면 아무도 새 질문을 못 한다(캐시 재열람은 가능).
+ASK_GLOBAL_DAILY_CAP = int(os.environ.get("ASK_GLOBAL_DAILY_CAP", "200"))
+
+# 1인 하루 한도. 값이 None이면 무제한.
+# 권한 구분: is_staff = '가족'(엑셀 업로드 권한을 가진 일반 회원),
+#            is_superuser = 운영자. 가족은 서비스 사용자지 운영자가 아니므로
+#            일반과 같은 한도를 준다 (운영 DB 기준 해당 계정 1명).
+#            무제한을 넓게 열면 비용이 예측 밖으로 나간다.
+ASK_DAILY_LIMITS = {
+    "default": 3,
+    "staff": 3,
+    "superuser": None,
+}
+
+# 질문 길이 상한 (초과분은 잘라서 보낸다 — 프롬프트 폭주 방지)
+ASK_MAX_QUESTION_CHARS = 300
+
 # 알림 메시지에 넣을 사이트 주소 (배포 시 실제 도메인으로)
 SITE_URL = os.environ.get("SITE_URL", "http://localhost:8000")
 

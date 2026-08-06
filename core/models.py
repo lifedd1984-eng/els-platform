@@ -1631,3 +1631,69 @@ class PriceBar(models.Model):
             qs = qs.filter(ticker__in=list(tickers))
         rows = qs.values("ticker").annotate(last=Max("date"))
         return {r["ticker"]: r["last"] for r in rows}
+
+
+class AskLog(models.Model):
+    """AI 분석 질문(/ask/) 호출 기록 — 한도 차감·당일 캐시·비용 추적을 겸한다.
+
+    왜 한 테이블에 다 담나
+      · 한도: 오늘 billed=True 건수를 세면 끝. 별도 카운터를 두면 캐시 히트나
+        사후검사 실패 같은 예외에서 카운터와 로그가 갈라진다.
+      · 캐시: 같은 사람이 같은 질문을 다시 하면 payload를 그대로 다시 그린다.
+        모델을 다시 부르지 않으므로 차감도 없다.
+      · 비용: 토큰·단가를 건별로 남겨야 "얼마 나가는지"를 나중에 셀 수 있다.
+    """
+
+    STATUS_OK = "ok"
+    STATUS_REFUSED = "refused"        # 모델이 refuse 도구를 부름 (사전 거절)
+    STATUS_GUARDED = "guarded"        # 사후검사 탈락 → 설명 문장만 정형 문구로 교체
+    STATUS_ERROR = "error"            # API/도구 실패
+    STATUS_BLOCKED = "blocked"        # 한도 초과 등으로 모델을 아예 안 부름
+    STATUSES = [(STATUS_OK, "정상"), (STATUS_REFUSED, "거절"), (STATUS_GUARDED, "검사탈락"),
+                (STATUS_ERROR, "오류"), (STATUS_BLOCKED, "차단")]
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                             related_name="ask_logs")
+    asked_on = models.DateField("질문일(KST)", db_index=True)
+    question = models.TextField("질문")
+    # 같은 날 같은 질문을 다시 찾기 위한 키. 공백 정규화 후 sha1 앞 32자.
+    question_key = models.CharField("질문키", max_length=32, db_index=True)
+
+    status = models.CharField("상태", max_length=10, choices=STATUSES, default=STATUS_OK)
+    refuse_code = models.CharField("거절 사유코드", max_length=20, blank=True)
+    # 사후검사에 걸린 항목 코드 목록 (예: ["NUMERIC_UNGROUNDED", "ADVICE"])
+    guard_flags = models.JSONField("사후검사 위반", default=list, blank=True)
+
+    answer = models.TextField("답변 문장", blank=True)
+    tools_used = models.JSONField("실행 도구", default=list, blank=True)
+    # 화면 재현용 — 캐시 히트 시 이 값만으로 같은 화면을 다시 그린다.
+    payload = models.JSONField("렌더 컨텍스트", default=dict, blank=True)
+
+    # ── 비용 ──
+    # 해석(Haiku)·설명(Sonnet)을 합산한 값. 모델별 분해는 usage에 남긴다.
+    input_tokens = models.IntegerField("입력 토큰", default=0)
+    output_tokens = models.IntegerField("출력 토큰", default=0)
+    cache_write_tokens = models.IntegerField("캐시 쓰기 토큰", default=0)
+    cache_read_tokens = models.IntegerField("캐시 읽기 토큰", default=0)
+    cost_usd = models.FloatField("추정 비용(USD)", default=0.0)
+    usage = models.JSONField("모델별 사용량", default=dict, blank=True)
+    elapsed_ms = models.IntegerField("소요(ms)", default=0)
+
+    # ⚠ 한도 차감 여부. 정상·검사탈락은 True(비용이 실제로 발생), 캐시 히트·
+    #   사전 차단·면제 계정은 False. 면제 계정도 기록은 남긴다 — 비용 추적이
+    #   끊기면 무제한을 연 순간 지출이 보이지 않는다.
+    billed = models.BooleanField("한도 차감", default=False, db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "asked_on"], name="asklog_user_day_idx"),
+            models.Index(fields=["user", "asked_on", "question_key"],
+                         name="asklog_cache_idx"),
+        ]
+        verbose_name = "AI 분석 질문 기록"
+
+    def __str__(self):
+        return f"{self.user_id} {self.asked_on} {self.question[:30]}"
