@@ -88,6 +88,45 @@ _RE_SEQ_BEFORE = re.compile(r"(\d+)\s*\(" + _KIND + r"\)")   # 키움증권1863(
 _RE_SEQ_AFTER = re.compile(r"\(" + _KIND + r"\)\s*(\d+)")    # 한국투자증권트루온(ELS)446
 _RE_SEQ_TAIL = re.compile(r"(\d+)\D*$")                      # 괄호가 아예 없는 경우
 
+# 상품명 안의 ELB·DLB 표기. 앞뒤에 영문자가 붙은 경우는 다른 단어이므로 제외한다
+# ("신한투자-ELB-4118", "KB able ELB 제371호", "BNK…기타파생결합사채(DLB)"는 모두 잡힌다).
+_RE_BOND_TOKEN = re.compile(r"(?<![A-Za-z])(?:ELB|DLB)(?![A-Za-z])", re.I)
+# '파생결합사채'는 원금보장형 채권(ELB·DLB)을 가리키는 법정 명칭이다.
+# ELS·DLS는 '파생결합증권'이라 이 문자열과 절대 겹치지 않는다
+# (운영 4,769건 실측: '파생결합사채'와 'ELS/DLS' 토큰이 함께 든 상품명 0건).
+_BOND_WORD = "파생결합사채"
+
+
+def is_principal_protected(product_type, name, ki):
+    """원금보장형(ELB·DLB)이면 True — ISIN 체계가 ELS와 다를 수 있는 부류다.
+
+    왜 product_type만 보면 안 되나 (2026-08-06 운영 실측)
+      product_type은 양방향으로 틀려 있어 단독으로는 못 쓴다.
+        · '신한투자-ELB-4118' 등 이름이 명백히 ELB·DLB인 26건이 product_type='ELS'
+        · 반대로 product_type='ELB'인데 '교보증권K(ELS) 23'처럼 ki=40이 박힌
+          진짜 ELS가 6건 있다 (엑셀 수입분에는 name이 회차번호뿐인 294건도 있어
+          이름만 봐도 안 된다).
+      그래서 세 신호를 OR로 합치고, ki로 한 번 거른다.
+
+    ki 조건이 안전장치다
+      원금보장형에는 낙인 배리어라는 개념 자체가 없다. 운영 실측에서
+      이름에 ELB·DLB 토큰이 있으면서 ki가 채워진 상품은 0건이었다.
+      반대로 ki가 있으면 그건 낙인이 걸린 원금비보장 상품이므로,
+      product_type이 'ELB'라 적혀 있어도 원금보장형으로 보지 않는다.
+      이 한 줄이 위 6건(진짜 ELS)을 예외에서 도로 빼낸다.
+
+    적용 범위를 좁게 둔 이유
+      이 판정은 '기존 product_code 점검'의 오염 분류에만 쓴다. 매칭 로직은
+      건드리지 않는다 — SEIBro에도 ELB는 정상 ISIN으로 실려 있고(운영에서
+      ELB 298건 중 250건이 SEIBro와 이어진다) 매칭 대상에서 뺄 이유가 없다.
+    """
+    if ki is not None:
+        return False
+    if (product_type or "").strip().upper() in ("ELB", "DLB"):
+        return True
+    name = name or ""
+    return bool(_RE_BOND_TOKEN.search(name)) or _BOND_WORD in name
+
 
 def normalize_issuer(issuer):
     """Product 발행사 표기를 SEIBro 표기로 맞춘다."""
@@ -345,11 +384,19 @@ class Command(BaseCommand):
         self._audit_existing(held_ids)
 
     def _audit_existing(self, held_ids):
-        """이미 채워진 product_code가 SEIBro에 실재하는지 점검(오염 확인용, 수정 안 함)."""
+        """이미 채워진 product_code가 SEIBro에 실재하는지 점검(오염 확인용, 수정 안 함).
+
+        ISIN 형식이 아닌 코드를 두 갈래로 나눠 센다.
+          · ELB·DLB(원금보장형) — 코드 체계가 다를 뿐 오염이 아니다. 운영에서
+            'BSH0009J5' 같은 9자리 코드가 붙은 3건이 전부 여기였다 (2026-08-06).
+          · 그 밖 — 진짜 오염 의심. 여기가 0이 아니면 봐야 한다.
+        어느 쪽이든 product_code 값은 지우지 않는다. SEIBro 매칭엔 못 써도
+        증권사 상세페이지 연결 등 다른 쓰임이 있다.
+        """
         existing = list(Product.objects.exclude(product_code="")
                         .exclude(product_code__isnull=True)
                         .values_list("id", "issuer", "product_no", "product_code",
-                                     "issue_date"))
+                                     "issue_date", "product_type", "name", "ki"))
         if not existing:
             return
         codes = {e[3] for e in existing}
@@ -358,10 +405,14 @@ class Command(BaseCommand):
         latest = HistoricalIssue.objects.order_by("-issue_date").values_list(
             "issue_date", flat=True).first()
         orphans = [e for e in existing if e[3] not in known]
-        bad_format = [e for e in orphans
-                      if not (len(e[3]) == 12 and e[3].upper().startswith("KR"))]
+        non_isin = [e for e in orphans
+                    if not (len(e[3]) == 12 and e[3].upper().startswith("KR"))]
+        # ELB·DLB는 헛경보다. 없애지 않고 아래에서 따로 센다.
+        bond = [e for e in non_isin if is_principal_protected(e[5], e[6], e[7])]
+        bad_format = [e for e in non_isin if e not in bond]
+        # after_cut의 판정 범위는 예전과 같다(ISIN 형식이 아닌 건 전부 제외).
         after_cut = [e for e in orphans
-                     if e not in bad_format and latest and e[4] and e[4] > latest]
+                     if e not in non_isin and latest and e[4] and e[4] > latest]
         self.stdout.write("\n  [기존 product_code 점검] (이 커맨드는 기존 값을 건드리지 않는다)")
         self.stdout.write(
             f"    채워진 상품 {len(existing)}건 중 SEIBro에 없는 코드 {len(orphans)}건 "
@@ -369,11 +420,19 @@ class Command(BaseCommand):
         self.stdout.write(
             f"      · ISIN 형식이 아님 {len(bad_format)}건  ← 오염 의심")
         self.stdout.write(
+            f"      · ELB·DLB {len(bond)}건 — ISIN 체계가 다름, 정상 "
+            "(원금보장형 파생결합사채)")
+        self.stdout.write(
             f"      · SEIBro 최신 수집일({latest}) 이후 발행 {len(after_cut)}건  "
             "← 아직 수집 안 된 것뿐")
         self.stdout.write(
             f"      · 형식은 ISIN인데 SEIBro에 없음 "
-            f"{len(orphans) - len(bad_format) - len(after_cut)}건  ← 확인 필요")
+            f"{len(orphans) - len(non_isin) - len(after_cut)}건  ← 확인 필요")
         for e in bad_format[:10]:
             self.stdout.write(
                 f"        형식이상 P{e[0]} {e[1]} {e[2]} code={e[3]!r} issue={e[4]}")
+        # 예외로 뺀 것도 눈에 보이게 남긴다 — 조용히 사라지면 나중에 못 찾는다.
+        for e in bond[:10]:
+            self.stdout.write(
+                f"        ELB·DLB P{e[0]} {e[1]} {e[2]} code={e[3]!r} "
+                f"name={e[6]!r} issue={e[4]}")
