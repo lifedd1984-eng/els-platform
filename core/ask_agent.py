@@ -279,12 +279,15 @@ def _call(model, system, tools, messages, max_tokens, tool_choice=None):
         "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         "tools": tools,
         "messages": messages,
-        # ⚠ Sonnet 5는 thinking을 생략하면 adaptive가 켜지고 max_tokens가
-        #   thinking+본문 합계 상한이 된다. 3~5문장 답변에 사고 예산을 태우면
-        #   본문이 잘린다. 명시적으로 끈다.
-        "thinking": {"type": "disabled"},
-        "output_config": {"effort": "low"},
     }
+    # ⚠ Claude 5 계열은 thinking을 생략하면 adaptive가 켜지고 max_tokens가
+    #   thinking+본문 합계 상한이 된다. 3~5문장 답변에 사고 예산을 태우면
+    #   본문이 잘리므로 명시적으로 끄고 effort도 low로 둔다.
+    #   Haiku 4.5는 output_config(effort)를 지원하지 않아 400을 낸다
+    #   (2026-08-07 첫 실호출에서 확인) — 5 계열 모델에만 붙인다.
+    if model.startswith(("claude-sonnet-5", "claude-opus-5", "claude-fable-5")):
+        body["thinking"] = {"type": "disabled"}
+        body["output_config"] = {"effort": "low"}
     if tool_choice:
         body["tool_choice"] = tool_choice
     r = requests.post(
