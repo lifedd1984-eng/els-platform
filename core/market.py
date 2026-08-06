@@ -280,8 +280,56 @@ def resolve_ticker(asset_name: str):
     return learned.get(name) or learned.get(asset_name.strip())
 
 
+# ══════════════════════════════════════════════════════════════════
+# ⚙️  auto_adjust 정책표 — 시세를 받는 곳은 전부 여기에 적는다
+# ══════════════════════════════════════════════════════════════════
+# yfinance는 auto_adjust로 **완전히 다른 두 계열**을 준다.
+#   · True  → Close가 배당·분할을 소급 반영한 '조정 종가'
+#   · False → Close(미조정) + Adj Close(조정)를 함께 준다
+# 용도가 정반대라 하나로 통일할 수 없다:
+#   · 수익률·최대낙폭  → 조정.  미조정으로 재면 배당락 하락이 전부 손실로 잡힌다.
+#   · 낙인·기준가      → 미조정. 조정 종가는 증권사 고시 종가와 어긋나고,
+#                         배당주는 시간이 갈수록 과거 가격이 계속 낮아진다.
+#                         (실측: 브로드컴 2026-04-23 조정 419.28 vs 실제 419.94)
+#
+# 현행 호출부 5곳 (2026-08-06 전수):
+#   ┌────────────────────────────────┬────────┬─────────────────────────┐
+#   │ 호출부                          │ 정책   │ 용도                     │
+#   ├────────────────────────────────┼────────┼─────────────────────────┤
+#   │ market.fetch_current_price      │ True   │ 낙인 현재가              │
+#   │ market.fetch_price_on           │ False  │ 낙인 기준가              │
+#   │ market.fetch_history            │ True   │ 고점대비 게이트, 상세 차트 │
+#   │ hist_radar.PriceStore           │ False  │ 10년 전수 백테스트        │
+#   │ backtest._fetch_price_frame     │ True   │ 화면의 손실확률           │
+#   └────────────────────────────────┴────────┴─────────────────────────┘
+# ⚠ 원래 셋(current_price·history·_fetch_price_frame)은 인자를 **생략**해
+#   yfinance 기본값(True)에 기대고 있었다. 라이브러리가 기본값을 바꾸면 운영
+#   숫자가 조용히 전부 틀어지는 구조라, 값은 그대로 두고 **명시만** 했다.
+#   (yfinance 1.5.1 PriceHistory.history 기본값이 auto_adjust=True임을 확인)
+#
+# ⚠ 알려진 불일치 — 고치지 않았다:
+#   ① 낙인 레벨 = fetch_current_price(조정) ÷ fetch_price_on(미조정).
+#      분자·분모의 계열이 다르다.
+#   ② 화면 손실확률(backtest, 조정) vs 10년 검증(PriceStore, 미조정)이
+#      서로 다른 시세를 본다.
+#   둘 다 실재하지만 손대면 화면 숫자가 바뀐다. 방금 기준가를 SEIBro 공시값으로
+#   정리하고 고점 게이트 검증(5,392건·99.68%)을 복원한 참이라, 이번엔 현황만
+#   측정하고 판단은 조 팀장께 넘긴다. 영향 규모는 보고서 참조.
+#
+# ▶ 새로 시세가 필요하면 yfinance를 직접 부르지 말고 **PriceBar**를 쓸 것.
+#   조정·미조정을 둘 다 저장해 두므로 용도별로 함수가 나뉘어 있다:
+#     PriceBar.closes_for_return(ticker)   → 수익률·낙폭 (조정)
+#     PriceBar.closes_for_barrier(ticker)  → 낙인·기준가 (미조정)
+#   적재는 `python manage.py sync_prices`.
+# ══════════════════════════════════════════════════════════════════
+
+
 def fetch_current_price(ticker: str):
     """현재가(최근 종가) 조회. 실패 시 None.
+
+    auto_adjust=True — **조정 종가**다. 원래 인자를 생략해 yfinance 기본값에
+    기대던 것을 명시로 바꿨다(값은 동일). 위 정책표 ①대로 기준가(미조정)와
+    계열이 어긋나 있지만, 바꾸면 낙인 레벨이 전부 움직이므로 그대로 둔다.
 
     ※ 급등락이 커도 걸러내지 않는다 — 2026-07-31 국내 자산 +24~30% 동시 급등은
       실제 대폭등장이었다(태훈님 확인). 이상치 필터를 넣었다가 진짜 거래일을
@@ -289,7 +337,7 @@ def fetch_current_price(ticker: str):
     """
     import yfinance as yf
     try:
-        h = yf.Ticker(ticker).history(period="5d")
+        h = yf.Ticker(ticker).history(period="5d", auto_adjust=True)
         if len(h):
             price = h["Close"].dropna()
             if len(price):
@@ -691,7 +739,18 @@ _history_cache = {}  # (ticker, date.today()) → [(date, close), ...]
 
 
 def fetch_history(ticker: str, days: int = 365):
-    """최근 days일 일별 종가 [(date, close), ...]. 실패 시 []. 하루 단위 캐시."""
+    """최근 days일 일별 종가 [(date, close), ...]. 실패 시 []. 하루 단위 캐시.
+
+    auto_adjust=True — **조정 종가**다(위 정책표). 원래 인자를 생략해 yfinance
+    기본값에 기대던 것을 명시로 바꿨다. 값은 동일하다 —
+    고점대비 게이트 판정(운영 배지 431건, 10년 5,392건·99.68%)이 이 함수에
+    걸려 있어 계열을 바꾸면 안 된다.
+
+    ⚠ 실패를 삼킨다 — 예외를 잡아 []를 돌려줄 뿐이라 '시세가 없다'와
+      '네트워크가 끊겼다'가 구분되지 않는다. 이 성질에 기대는 호출부가 있어
+      (v7_peak_gate는 결측을 '탈락'으로 처리) 여기서는 손대지 않았다.
+      배치 적재는 이 문제가 없는 sync_prices를 쓴다.
+    """
     import yfinance as yf
     from datetime import date as _date
 
@@ -703,7 +762,7 @@ def fetch_history(ticker: str, days: int = 365):
         return _history_cache[key]
     rows = []
     try:
-        h = yf.Ticker(ticker).history(period=f"{days}d")
+        h = yf.Ticker(ticker).history(period=f"{days}d", auto_adjust=True)
         closes = h["Close"].dropna()
         rows = [(idx.date(), float(v)) for idx, v in closes.items()]
     except Exception:

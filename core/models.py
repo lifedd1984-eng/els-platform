@@ -1408,3 +1408,137 @@ class PageView(models.Model):
 
     def __str__(self):
         return f"{self.date} {self.path}"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 기초자산 일별 시세 원본 (PriceBar)
+# ══════════════════════════════════════════════════════════════════
+# 왜 원본을 통째로 두는가 —
+#   "10년 추이 / 누적수익률 / 연간수익률 / 최대낙폭"처럼 **미리 정한 지표**만
+#   함수로 만들어 두면 "2020년 3월에 가장 많이 빠진 자산은?" 같은 예상 못 한
+#   질문에 답할 수 없다. 일별 OHLCV를 요약 없이 갖고 있다가 질문이 올 때마다
+#   그 위에서 계산한다. 이 모델은 그 **데이터 계층**이고, 지표 계산은 별도다.
+#
+# 왜 조정·미조정을 둘 다 저장하는가 — **이 모델의 핵심 설계 결정**
+#   yfinance는 auto_adjust 인자 하나로 둘 중 하나만 준다.
+#     · auto_adjust=True  → Close 열이 '배당·분할 소급 조정' 종가
+#     · auto_adjust=False → Close(미조정) + Adj Close(조정)가 **함께** 온다
+#   용도가 정반대다:
+#     · 수익률·낙폭  → 조정종가. 미조정으로 계산하면 배당락 하락이 전부
+#                      손실로 잡혀 장기 수익률이 과소평가된다.
+#     · 낙인·기준가  → 미조정 종가. 조정종가는 증권사가 고시하는 실제 종가와
+#                      어긋나고, 배당주는 시간이 지날수록 과거 가격이 계속
+#                      낮아져 오차가 누적된다.
+#                      (실측: 브로드컴 2026-04-23 조정 419.28 vs 실제 419.94)
+#   하나만 저장하면 나중에 다른 쪽을 **복원할 수 없다** — 조정계수를 따로
+#   보관하지 않는 한 역산이 불가능하기 때문. auto_adjust=False 한 번 호출로
+#   둘 다 얻으므로 네트워크 비용도 늘지 않는다. (2026-08-06 실측 확인)
+#
+# 용량 — 1티커 10년 ≈ 2,500행. 42티커면 약 10만 행(≈11MB),
+#   355티커면 약 89만 행(≈92MB). SQLite REAL 8바이트 × 6열 + 인덱스 기준.
+
+class PriceBar(models.Model):
+    """기초자산 일별 시세 한 줄 (요약·가공 없이 받은 그대로).
+
+    ⚠ 이 테이블에는 **파생값을 넣지 않는다.** 수익률·낙폭·이동평균 따위는
+      질의 시점에 계산한다. 한 번 요약해 저장하면 그 요약이 답할 수 있는
+      질문만 답하게 되고, 그게 바로 이 설계가 피하려는 것이다.
+    """
+
+    SOURCE_PRIMARY = "원본"
+    SOURCE_FILLED = "보완"
+    SOURCES = [(SOURCE_PRIMARY, "원본 계열 그대로"),
+               (SOURCE_FILLED, "대체 계열로 메움")]
+
+    ticker = models.CharField("티커", max_length=24)
+    date = models.DateField("거래일")
+
+    open = models.FloatField("시가", null=True, blank=True)
+    high = models.FloatField("고가", null=True, blank=True)
+    low = models.FloatField("저가", null=True, blank=True)
+    # ⚠ close = 미조정(증권사 고시 종가) / adj_close = 배당·분할 조정.
+    #   둘을 바꿔 쓰면 낙인 판정이나 장기 수익률 중 하나가 반드시 틀린다.
+    close = models.FloatField("종가(미조정)", null=True, blank=True)
+    adj_close = models.FloatField("조정종가", null=True, blank=True)
+    volume = models.BigIntegerField("거래량", null=True, blank=True)
+
+    # ── 출처 추적 ────────────────────────────────────────────────
+    # 코스피200처럼 주 계열(^KS200)에 결측 구간이 있어 다른 계열(069500.KS)로
+    # 메운 행을 데이터에서 구분할 수 있어야 한다. 안 그러면 "이 값이 실제
+    # 지수 종가인가, 우리가 환산해 넣은 값인가"를 나중에 알 길이 없다.
+    source = models.CharField("출처", max_length=8, choices=SOURCES,
+                              default=SOURCE_PRIMARY)
+    source_ticker = models.CharField("보완 원본 티커", max_length=24, blank=True)
+    # 보완 시 스케일 계수 — 지수(1,080p)와 ETF(41,000원)는 ~100배 스케일이
+    # 달라 그대로 이어붙이면 계열이 망가진다. 직전 공통 거래일의
+    # (주계열 종가 ÷ 보조계열 종가)를 곱해 레벨을 맞춘다. 비율 접합이라
+    # **수익률 계열은 보조계열 것이 그대로 보존**된다 (누적수익률·낙폭이 목적).
+    scale = models.FloatField("보완 스케일 계수", null=True, blank=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            # 같은 티커·날짜가 두 줄 생기면 모든 집계가 조용히 두 배가 된다.
+            models.UniqueConstraint(fields=["ticker", "date"], name="uniq_pricebar"),
+        ]
+        # (ticker, date) 복합 인덱스는 위 유니크 제약이 만들어 준다 →
+        # "티커 하나의 기간 구간" 질의는 이미 인덱스로 커버된다.
+        # 아래는 그 반대 방향("특정 날짜에 전 자산") 질의용.
+        indexes = [models.Index(fields=["date"], name="pricebar_date_idx")]
+        ordering = ["ticker", "date"]
+        verbose_name = "기초자산 일별 시세"
+
+    def __str__(self):
+        return f"{self.ticker} {self.date} {self.close}"
+
+    # ── 조회 헬퍼 ────────────────────────────────────────────────
+    # ⚠ 용도별로 함수를 **일부러 둘로 나눴다.** 인자 하나로 받는 형태
+    #   (closes(ticker, adjusted=True))로 만들면 호출부가 기본값을 그대로
+    #   쓰다가 용도에 안 맞는 계열을 집는다 — 지금 yfinance 호출부 5곳이
+    #   auto_adjust를 제각각 쓰게 된 경위가 정확히 그것이다.
+    #   이름만 보고도 어느 쪽인지 알게 만든다.
+
+    @classmethod
+    def _closes(cls, field, ticker, start=None, end=None):
+        qs = cls.objects.filter(ticker=ticker, **{f"{field}__isnull": False})
+        if start:
+            qs = qs.filter(date__gte=start)
+        if end:
+            qs = qs.filter(date__lte=end)
+        return list(qs.order_by("date").values_list("date", field))
+
+    @classmethod
+    def closes_for_return(cls, ticker, start=None, end=None):
+        """수익률·최대낙폭용 **조정종가** [(date, adj_close), ...].
+
+        배당·분할이 소급 반영돼 있어 장기 총수익(total return) 계산에 맞다.
+        낙인·기준가에는 쓰지 말 것 — 증권사 고시 종가와 어긋난다.
+        """
+        return cls._closes("adj_close", ticker, start, end)
+
+    @classmethod
+    def closes_for_barrier(cls, ticker, start=None, end=None):
+        """낙인·기준가용 **미조정 종가** [(date, close), ...].
+
+        증권사가 고시하는 실제 종가와 같은 계열이다.
+        누적수익률·낙폭에는 쓰지 말 것 — 배당락이 손실로 잡힌다.
+        """
+        return cls._closes("close", ticker, start, end)
+
+    @classmethod
+    def last_dates(cls, tickers=None, primary_only=False):
+        """{티커: 마지막 저장 거래일} — 증분 적재가 어디부터 이어받을지 결정.
+
+        primary_only=True면 **원본 행만** 본다. 증분 갱신이 이 값을 써야 한다 —
+        보완 행까지 포함해 최신일을 잡으면, 한 번 메운 구간은 원본 시세가
+        나중에 복구돼도 영영 다시 조회하지 않아 보완값이 눌러앉는다.
+        """
+        from django.db.models import Max
+        qs = cls.objects.all()
+        if primary_only:
+            qs = qs.filter(source=cls.SOURCE_PRIMARY)
+        if tickers is not None:
+            qs = qs.filter(ticker__in=list(tickers))
+        rows = qs.values("ticker").annotate(last=Max("date"))
+        return {r["ticker"]: r["last"] for r in rows}

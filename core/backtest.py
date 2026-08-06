@@ -242,14 +242,23 @@ def simulate_product(product, period_years=20):
 
 
 def _fetch_price_frame(tickers, period_years):
-    """여러 티커의 종가를 공통 구간으로 정렬한 DataFrame 반환."""
+    """여러 티커의 종가를 공통 구간으로 정렬한 DataFrame 반환.
+
+    auto_adjust=True — **조정 종가**다. 원래 인자를 생략해 yfinance 기본값에
+    기대던 것을 명시로 바꿨다(값 동일). 정책표는 core/market.py 상단 참고.
+
+    ⚠ 같은 계산을 하는 core.hist_radar.PriceStore는 auto_adjust=False(미조정)를
+      쓴다. 즉 **화면의 손실확률과 10년 전수 검증이 서로 다른 시세를 본다.**
+      실재하는 불일치지만 맞추면 화면 숫자가 바뀌므로 이번엔 손대지 않았다
+      (조 팀장 판단 사항). 영향 규모 실측은 보고서 참조.
+    """
     import pandas as pd
     import yfinance as yf
 
     series = {}
     for tk in tickers:
         try:
-            h = yf.Ticker(tk).history(period=f"{period_years}y")
+            h = yf.Ticker(tk).history(period=f"{period_years}y", auto_adjust=True)
             s = h["Close"].dropna()
             if len(s):
                 s.index = s.index.tz_localize(None)

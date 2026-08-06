@@ -922,3 +922,83 @@ class RefreshRefPriceCommandTest(TestCase):
         with self.assertRaises(CommandError):
             call_command("refresh_ref_price", "--dry-run", "--apply")
 
+
+class PriceBarStoreTest(TestCase):
+    """시세 이력 저장소 — 조정/미조정 분리와 중복 방지가 지켜지는지.
+
+    이 테이블의 존재 이유가 '요약하지 않은 원본'이라, 두 계열이 섞이거나
+    같은 티커·날짜가 두 줄 생기면 그 위에서 계산하는 모든 지표가 조용히 틀어진다.
+    네트워크를 쓰지 않는다 — 순수 DB 검증.
+    """
+
+    def _bar(self, ticker, d, close, adj, **kw):
+        from core.models import PriceBar
+        return PriceBar.objects.create(
+            ticker=ticker, date=d, close=close, adj_close=adj, **kw)
+
+    def test_같은_티커_같은_날짜는_두_줄_생기지_않는다(self):
+        from django.db import IntegrityError
+        self._bar("AAA", date(2026, 1, 5), 100.0, 90.0)
+        with self.assertRaises(IntegrityError):
+            self._bar("AAA", date(2026, 1, 5), 101.0, 91.0)
+
+    def test_조정과_미조정이_서로_다른_계열로_나온다(self):
+        from core.models import PriceBar
+        self._bar("AAA", date(2026, 1, 5), 100.0, 90.0)
+        self._bar("AAA", date(2026, 1, 6), 110.0, 99.0)
+        # 낙인·기준가용 = 미조정
+        self.assertEqual([v for _, v in PriceBar.closes_for_barrier("AAA")],
+                         [100.0, 110.0])
+        # 수익률·낙폭용 = 조정
+        self.assertEqual([v for _, v in PriceBar.closes_for_return("AAA")],
+                         [90.0, 99.0])
+
+    def test_증분_이어받기는_보완행을_기준으로_삼지_않는다(self):
+        """보완 행까지 최신일로 치면 원본이 복구돼도 그 구간을 다시 안 받는다."""
+        from core.models import PriceBar
+        self._bar("AAA", date(2026, 1, 5), 100.0, 100.0)
+        self._bar("AAA", date(2026, 1, 9), 105.0, 105.0,
+                  source=PriceBar.SOURCE_FILLED, source_ticker="BBB", scale=0.01)
+        self.assertEqual(PriceBar.last_dates(["AAA"])["AAA"], date(2026, 1, 9))
+        self.assertEqual(
+            PriceBar.last_dates(["AAA"], primary_only=True)["AAA"], date(2026, 1, 5))
+
+    def test_보완행은_출처가_데이터에_남는다(self):
+        from core.models import PriceBar
+        self._bar("AAA", date(2026, 1, 9), 105.0, 105.0,
+                  source=PriceBar.SOURCE_FILLED, source_ticker="BBB", scale=0.01)
+        row = PriceBar.objects.get(ticker="AAA", date=date(2026, 1, 9))
+        self.assertEqual(row.source, PriceBar.SOURCE_FILLED)
+        self.assertEqual(row.source_ticker, "BBB")
+        self.assertEqual(row.scale, 0.01)
+        self.assertIsNone(row.volume)      # 다른 계열 거래량은 옮기지 않는다
+
+
+class SyncPricesStaleTest(SimpleTestCase):
+    """정체 판정은 같은 시장끼리 비교해야 연휴에 오경보가 나지 않는다."""
+
+    def test_시장_분류(self):
+        from core.management.commands.sync_prices import market_of
+        self.assertEqual(market_of("005930.KS"), "KR")
+        self.assertEqual(market_of("035760.KQ"), "KR")
+        self.assertEqual(market_of("^KS200"), "KR")     # 지수도 국내 달력
+        self.assertEqual(market_of("^N225"), "JP")
+        self.assertEqual(market_of("^HSCE"), "HK")
+        self.assertEqual(market_of("^STOXX50E"), "EU")
+        self.assertEqual(market_of("AAPL"), "US")
+        self.assertEqual(market_of("^GSPC"), "US")
+
+    def test_국내_연휴는_동료끼리_같이_밀려_경보가_안_난다(self):
+        """추석에 국내 티커가 전부 11일 밀려도, 미국 티커와 비교하지 않으므로 조용하다."""
+        from core.management.commands.sync_prices import market_of
+        eff = {"005930.KS": date(2026, 9, 25), "000660.KS": date(2026, 9, 25),
+               "^KS200": date(2026, 9, 25), "AAPL": date(2026, 10, 6)}
+        peer_max, peer_n = {}, {}
+        for t, d in eff.items():
+            m = market_of(t)
+            peer_max[m] = max(peer_max.get(m, d), d)
+            peer_n[m] = peer_n.get(m, 0) + 1
+        self.assertEqual(peer_n["KR"], 3)
+        # 국내 3종은 자기들끼리 최신 → 뒤처짐 0일
+        for t in ("005930.KS", "000660.KS", "^KS200"):
+            self.assertEqual((peer_max["KR"] - eff[t]).days, 0)
