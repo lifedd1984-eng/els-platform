@@ -161,6 +161,23 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
   font-size:15.5px; font-weight:800; padding:14px 0; border-radius:12px; }
 @media (min-width:881px){ .lp-sticky { display:none; } }
 
+/* AI 분석 질문 티저 — 예시는 눌리지 않는 표본이고, 행동은 CTA 하나로 모은다 */
+.aq-card { max-width:700px; margin:0 auto; padding:26px 24px; text-align:left; }
+.aq-list { display:flex; flex-direction:column; gap:8px; }
+.aq-item { display:flex; align-items:center; gap:11px; background:var(--bg);
+  border-radius:10px; padding:13px 15px; font-size:14.5px; font-weight:600;
+  color:var(--text-2); line-height:1.45; }
+.aq-item svg { flex:0 0 auto; color:var(--blue); }
+.aq-cta { text-align:center; margin-top:22px; }
+.aq-meta { font-size:12.5px; color:var(--text-3); margin-top:11px; }
+.aq-note { display:flex; gap:7px; align-items:flex-start; background:var(--bg);
+  border-radius:8px; padding:9px 12px; font-size:11.5px; color:var(--text-2);
+  line-height:1.6; margin-top:16px; }
+@media (max-width:880px){
+  .aq-card { padding:22px 17px; }
+  .aq-item { font-size:13.5px; padding:12px 13px; gap:9px; }
+}
+
 @media (max-width: 880px) {
   .lp-hero { grid-template-columns:1fr; gap:30px; min-height:0; padding-top:30px; text-align:center; }
   .lp-h1 { font-size:27px; letter-spacing:-0.8px; }
@@ -532,6 +549,44 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
       <span class="gn">3</span><span class="gw">그 이후</span>
       <h3>평가일은 알려드립니다</h3>
       <p>투자 등록만 해두면 조기상환 평가일을 D-7·D-1 알림으로 알려드립니다. 낙인까지 남은 거리도 포트폴리오에서 한눈에 확인됩니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ 6.6 AI 분석 질문 ══ -->
+{# /ask/ 는 로그인 필수라 이 자리(시작 3단계 뒤·FAQ 앞)에 둔다 — 가치를 다 읽은 뒤라야 로그인 조건이 벽이 아니라 가입 이유로 읽히고, 뒤 FAQ와 '묻는다' 흐름이 이어진다 #}
+<section class="lp-sec">
+  <span class="lp-label">AI 분석 질문</span>
+  <h2 class="lp-h2">궁금한 건<br>한 줄로 물어보세요</h2>
+  <p class="lp-sub">기초자산 시세 10년, ELS 발행·상환 이력, 조건 검색, 내 포트폴리오 &mdash;<br>
+    네 가지를 한 화면에서 묻습니다</p>
+
+  <div class="card aq-card">
+    {# 예시 3개는 ASK_PRESETS 원문 그대로다 — 눌러 들어가면 같은 문장을 그 화면에서 다시 만나야 한다 #}
+    <div class="aq-list">
+      <div class="aq-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3 20 20"/></svg>
+        <span>Tesla와 삼성전자 10년 최대낙폭 비교</span>
+      </div>
+      <div class="aq-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3 20 20"/></svg>
+        <span>연도별 ELS 실현수익률과 손실 건수</span>
+      </div>
+      <div class="aq-item">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.3 15.3 20 20"/></svg>
+        <span>낙인 40 이하 지수형 중 수익률 높은 3개</span>
+      </div>
+    </div>
+
+    <div class="aq-cta">
+      {# 비로그인은 login_required 가 ?next=/ask/ 로 받아 로그인 직후 그 화면에 떨군다 #}
+      <a href="{% url 'ask' %}" class="btn btn-primary lp-btn">AI 분석 질문 해보기</a>
+      <div class="aq-meta">로그인 후 이용 &middot; 하루 3회 무료</div>
+    </div>
+
+    <div class="aq-note">
+      <span style="color:var(--text-3);flex:0 0 auto">ⓘ</span>
+      <span>사실·통계 조회 전용입니다. 추천, 매수·매도 의견, 시세 전망은 제공하지 않습니다.</span>
     </div>
   </div>
 </section>
