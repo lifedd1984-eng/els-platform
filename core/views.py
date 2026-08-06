@@ -1286,25 +1286,40 @@ def watchlist_export(request):
 
 @login_required
 def portfolio_export(request):
-    """현재 보유 투자내역을 xlsx로 다운로드."""
+    """보유·상환 내역을 조 팀장 관리 양식(17열)으로 다운로드 — **본인 데이터만**.
+
+    첫 시트 '보유계약'이 조 팀장이 쓰던 엑셀 양식이고, 둘째 시트 '상세'는 종전
+    다운로드 형식(손실확률·다음평가일 등)을 그대로 남겨 둔 것이다.
+    """
     import io
 
     import openpyxl
     from django.http import HttpResponse
 
+    from core import portfolio_export as pfx
+
+    mine = (Investment.objects.filter(user=request.user)
+            .select_related("product"))
+
+    wb = openpyxl.Workbook()
+    sheet = wb.active
+    sheet.title = "보유계약"
+    sheet.append(pfx.COLUMNS)
+    for row in pfx.build_rows(mine):
+        sheet.append(row)
+    for i, w in enumerate(pfx.COLUMN_WIDTHS, 1):
+        sheet.column_dimensions[openpyxl.utils.get_column_letter(i)].width = w
+    sheet.freeze_panes = "A2"
+
     cols = ["발행사", "상품번호", "기초자산", "투자금액(원)", "수익률(%)", "낙인",
             "주기(개월)", "1차까지(개월)", "다음평가일", "예상상환금", "손실확률(%)",
             "발행일", "만기일", "스케줄"]
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "보유내역"
+    ws = wb.create_sheet("상세")
     ws.append(cols)
 
-    invs = (Investment.objects.filter(user=request.user, status="보유중")
-            .select_related("product"))
     holding = sorted(
-        invs,
+        [i for i in mine if i.status == "보유중"],
         key=lambda i: (i.next_evaluation["date"] if i.next_evaluation else date.max),
     )
     for inv in holding:
@@ -1337,7 +1352,7 @@ def portfolio_export(request):
         buf.getvalue(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    fname = f"ELS_보유내역_{date.today():%Y%m%d}.xlsx"
+    fname = f"ELS_보유계약_{date.today():%Y%m%d}.xlsx"
     from urllib.parse import quote
     resp["Content-Disposition"] = (
         f"attachment; filename=\"portfolio.xlsx\"; "
