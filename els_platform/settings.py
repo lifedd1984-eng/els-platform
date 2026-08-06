@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -32,15 +34,30 @@ def _load_dotenv(path):
 _load_dotenv(BASE_DIR / ".env")
 
 
-# SECURITY: 배포 시 반드시 환경변수 SECRET_KEY 설정
-# (미설정 시 로컬 개발용 임시 키 — 외부 노출 배포에서는 절대 이걸 쓰면 안 됨)
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-dev-only-CHANGE-ME-in-production",
-)
+# SECURITY: 배포 시 반드시 환경변수 DJANGO_SECRET_KEY 설정.
+# 미설정이면 아래 임시 키로 폴백하되, 운영 모드에서는 기동을 막는다(하단 참조).
+_INSECURE_SECRET_KEY = "django-insecure-dev-only-CHANGE-ME-in-production"
+# .env 에 "DJANGO_SECRET_KEY=" 처럼 빈 값이 남아 있는 경우도 미설정으로 본다.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "").strip() or _INSECURE_SECRET_KEY
 
-# 환경변수 DJANGO_DEBUG=0 이면 운영 모드
-DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
+# 환경변수 DJANGO_DEBUG=1 이면 개발 모드. 기본값은 False(운영).
+# 왜 기본이 False인가: 예전 기본값은 True였다. 환경변수가 빠진 채로 뜨면
+# 오류 화면에 스택트레이스·로컬 변수·서버 경로·settings 값이 그대로 실려
+# 익명 방문자에게 나간다. 설정을 빠뜨린 대가가 너무 크므로 명시적으로
+# 켤 때만 켜지게 한다.
+DEBUG = os.environ.get("DJANGO_DEBUG", "0") == "1"
+
+# 운영에서 임시 키를 쓰면 세션·비밀번호 재설정 토큰·CSRF 토큰이 전부 공개된
+# 값으로 서명된다(누구나 위조 가능). 조용히 뜨는 것보다 못 뜨는 게 낫다.
+if not DEBUG and SECRET_KEY == _INSECURE_SECRET_KEY:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY가 설정되지 않았습니다. "
+        "운영 모드(DEBUG=False)에서는 임시 키로 기동할 수 없습니다.\n"
+        "  - 운영: .env 에 DJANGO_SECRET_KEY=<실제 키> 를 넣으세요.\n"
+        "  - 로컬 개발: .env 에 DJANGO_DEBUG=1 을 넣거나 키를 만들어 넣으세요.\n"
+        '  - 키 생성: python -c "from django.core.management.utils import '
+        'get_random_secret_key; print(get_random_secret_key())"'
+    )
 
 # 콤마 구분: "els.example.com,192.168.0.10"
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]

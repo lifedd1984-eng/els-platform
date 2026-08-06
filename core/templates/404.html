@@ -1,0 +1,20 @@
+{# 404 — Django가 DEBUG=False에서 자동으로 찾는 이름. 앱 템플릿 루트에 둔다. #}
+{# base 상속: 방문자가 네비로 빠져나갈 수 있게. base가 쓰는 컨텍스트는 user(auth #}
+{# 컨텍스트 프로세서)와 {% url %}뿐이라 404 렌더링 경로에서도 그대로 동작한다. #}
+{% extends "core/base.html" %}
+{% block title %}페이지를 찾을 수 없습니다 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:90px auto;padding:0 4px;text-align:center;word-break:keep-all">
+  <div style="font-size:13px;font-weight:700;color:var(--text-3);letter-spacing:2px;margin-bottom:10px">404</div>
+  <h1 style="font-size:24px;font-weight:800;letter-spacing:-0.6px;margin-bottom:12px">
+    페이지를 찾을 수 없습니다</h1>
+  <p style="font-size:14.5px;color:var(--text-2);line-height:1.7;margin-bottom:28px">
+    주소가 잘못되었거나 삭제된 페이지일 수 있어요.
+  </p>
+  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+    <a href="{% url 'weekly' %}" class="btn btn-primary" style="padding:12px 26px">주간 청약 보기</a>
+    <a href="{% url 'home' %}" class="btn" style="padding:12px 26px">홈으로</a>
+  </div>
+</div>
+{% endblock %}

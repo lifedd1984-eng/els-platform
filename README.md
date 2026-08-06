@@ -50,4 +50,6 @@ Windows 매일 09:00 자동화: `register_scheduler.ps1` (관리자 PowerShell)
 - 브라우저/Playwright 불필요 — 순수 `requests`로 동작 (가볍고 어떤 호스팅에서도 실행 가능).
 
 ## 환경변수 (.env)
-`.env.example` 참고. `DJANGO_DEBUG=0`으로 두면 운영 모드(외부 노출 시).
+`.env.example` 참고. `DJANGO_DEBUG=1`이어야 개발 모드이고, 그 외에는(값이 없거나
+`.env` 자체가 없어도) 운영 모드다. 운영 모드에서는 `DJANGO_SECRET_KEY`가 없으면
+서버가 기동을 거부한다 — 임시 키로 조용히 뜨는 사고를 막기 위함.
