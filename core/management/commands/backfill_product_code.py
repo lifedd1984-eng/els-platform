@@ -59,6 +59,7 @@ from datetime import date, timedelta
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 
+from core import parsers
 from core.models import HistoricalIssue, Investment, Product
 
 # Product.issue_date는 실제로는 청약종료일이라 SEIBro 발행일과 0~1일 어긋난다.
@@ -88,15 +89,6 @@ _RE_SEQ_BEFORE = re.compile(r"(\d+)\s*\(" + _KIND + r"\)")   # 키움증권1863(
 _RE_SEQ_AFTER = re.compile(r"\(" + _KIND + r"\)\s*(\d+)")    # 한국투자증권트루온(ELS)446
 _RE_SEQ_TAIL = re.compile(r"(\d+)\D*$")                      # 괄호가 아예 없는 경우
 
-# 상품명 안의 ELB·DLB 표기. 앞뒤에 영문자가 붙은 경우는 다른 단어이므로 제외한다
-# ("신한투자-ELB-4118", "KB able ELB 제371호", "BNK…기타파생결합사채(DLB)"는 모두 잡힌다).
-_RE_BOND_TOKEN = re.compile(r"(?<![A-Za-z])(?:ELB|DLB)(?![A-Za-z])", re.I)
-# '파생결합사채'는 원금보장형 채권(ELB·DLB)을 가리키는 법정 명칭이다.
-# ELS·DLS는 '파생결합증권'이라 이 문자열과 절대 겹치지 않는다
-# (운영 4,769건 실측: '파생결합사채'와 'ELS/DLS' 토큰이 함께 든 상품명 0건).
-_BOND_WORD = "파생결합사채"
-
-
 def is_principal_protected(product_type, name, ki):
     """원금보장형(ELB·DLB)이면 True — ISIN 체계가 ELS와 다를 수 있는 부류다.
 
@@ -119,13 +111,17 @@ def is_principal_protected(product_type, name, ki):
       이 판정은 '기존 product_code 점검'의 오염 분류에만 쓴다. 매칭 로직은
       건드리지 않는다 — SEIBro에도 ELB는 정상 ISIN으로 실려 있고(운영에서
       ELB 298건 중 250건이 SEIBro와 이어진다) 매칭 대상에서 뺄 이유가 없다.
+
+    이름 판정은 parsers.has_bond_name 한 곳에 있다. 여기서 설명(description)까지
+    보지 않는 것은 이 커맨드가 상품유형을 고치는 자리가 아니기 때문이다 —
+    설명까지 쓰는 전체 판정은 parsers.classify_product_type이 맡고,
+    reparse_products가 그것으로 product_type을 소급 교정한다.
     """
     if ki is not None:
         return False
     if (product_type or "").strip().upper() in ("ELB", "DLB"):
         return True
-    name = name or ""
-    return bool(_RE_BOND_TOKEN.search(name)) or _BOND_WORD in name
+    return parsers.has_bond_name(name)
 
 
 def normalize_issuer(issuer):

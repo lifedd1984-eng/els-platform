@@ -51,7 +51,13 @@ class Command(BaseCommand):
             is_no_ki = ki == "NoKI"
             ki_val = None if (ki is None or is_no_ki) else int(ki)
 
+            # 상품유형도 갱신 대상이다. 예전엔 이 목록에 없어서, 판정을 아무리
+            # 고쳐도 이미 저장된 상품은 영영 틀린 채로 남았다 (수집 때 한 번 정한
+            # 값이 그대로 굳는다). 판정은 수집·엑셀수입과 같은 parsers 함수를 쓴다.
+            product_type = parsers.classify_product_type(p.name, desc, ki_val)
+
             new = dict(
+                product_type=product_type,
                 ki=ki_val,
                 is_no_ki=is_no_ki,
                 barrier_first=int(barriers[0]) if barriers else None,

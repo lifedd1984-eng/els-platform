@@ -107,9 +107,12 @@ class Command(BaseCommand):
             is_no_ki = ki == "NoKI"
             ki_val = None if (ki is None or is_no_ki) else int(ki)
 
-            product_type = "ELS"
-            if "ELB" in desc.upper() or "원금지급형" in desc:
-                product_type = "ELB"
+            # 상품유형은 **상품명까지** 봐야 한다. 예전엔 설명만 봤는데
+            #   · 신한 ELB·DLB는 설명이 '원금**추가**지급형'이라 안 걸렸고
+            #   · '스텝다운 (65-65-…) 월지급 하이파이브'처럼 설명에 단서가
+            #     아예 없는 상품도 있어 전부 기본값 ELS로 저장됐다.
+            # 판정은 parsers 한 곳에 있고 import_els·reparse_products도 같은 것을 쓴다.
+            product_type = parsers.classify_product_type(row["name"], desc, ki_val)
 
             currency = "USD" if ("USD" in desc.upper() or "달러" in desc) else "KRW"
 

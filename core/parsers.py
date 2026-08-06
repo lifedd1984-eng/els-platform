@@ -20,6 +20,87 @@ INDEX_KEYWORDS = [
     'WTI', '원유', 'Gold', '금',
 ]
 
+# ──────────────────────────────────────────────
+# 원금보장 표기 — 상품유형 판정과 낙인부재 판정이 공유하는 단 하나의 목록
+# ──────────────────────────────────────────────
+# 한글은 부분문자열이 연속하지 않는다. '원금지급형' 하나만 적으면
+# '원금**추가**지급형'(신한 ELB·DLB의 표기)이 걸리지 않는다 — 전부 나열해야 한다.
+# 예전에 scrape_kofia는 '원금지급형'만, extract_ki는 아래 목록 전부를 보고 있어
+# 같은 설명 원문을 두 코드가 다르게 읽었다. 그 목록을 여기 한 곳으로 모았다.
+PRINCIPAL_PROTECTED_WORDS = (
+    '원금지급형', '원금추가지급형', '원금지급추구형', '원금보장',
+)
+_RE_PROTECTED_WORD = re.compile('|'.join(PRINCIPAL_PROTECTED_WORDS))
+
+# 상품명·설명 안의 ELB·DLB 표기. 앞뒤에 영문자가 붙으면 다른 단어이므로 제외한다
+# ("신한투자-ELB-4118", "KB able ELB 제371호", "BNK…기타파생결합사채(DLB)"는 잡히고
+#  "ELBOW 인덱스"는 안 잡힌다. "한화스마트ONELB164(ELB)"는 뒤쪽 "(ELB)"로 잡힌다).
+_RE_BOND_TOKEN = re.compile(r'(?<![A-Za-z])(?:ELB|DLB)(?![A-Za-z])', re.I)
+# 기초자산이 주가가 아닌 부류(DLS·DLB) 표기
+_RE_OTHER_TOKEN = re.compile(r'(?<![A-Za-z])(?:DLS|DLB)(?![A-Za-z])', re.I)
+
+# 법정 명칭 — 원금보장형은 '파생결합사채', 원금비보장형은 '파생결합증권'이다.
+# (운영 4,769건 실측: '파생결합사채'와 ELS/DLS 토큰이 함께 든 상품명 0건.)
+_BOND_WORD = '파생결합사채'
+# '주가연계파생결합…'이면 ELS·ELB, '기타파생결합…'이면 DLS·DLB.
+_OTHER_WORD = '기타파생결합'
+
+
+def has_bond_name(name):
+    """상품명이 원금보장형(ELB·DLB)임을 스스로 밝히면 True.
+
+    상품명은 발행사가 공시하는 법정 명칭이라 설명 원문보다 신뢰도가 높다.
+    다만 엑셀 수입분은 name이 회차번호뿐이라(운영 3,771건) 이것만으론 부족하다.
+    """
+    name = str(name or '')
+    return bool(_RE_BOND_TOKEN.search(name)) or _BOND_WORD in name
+
+
+def is_principal_protected(name, description=None, ki=None):
+    """원금보장형(ELB·DLB)이면 True.
+
+    ki가 안전장치다
+      원금보장형에는 낙인 배리어라는 개념 자체가 없다. 반대로 ki가 박혀 있으면
+      그건 낙인이 걸린 원금비보장 상품이므로, 설명에 '(80%원금지급형)'처럼
+      부분보장 문구가 있어도 원금보장형으로 보지 않는다.
+      이 한 줄이 교보증권K(ELS) 19/23/27/31 등 ki=40인 6건을 ELS로 남긴다.
+
+    상품명 → 설명 순으로 본다
+      이름이 회차번호뿐인 엑셀 수입분은 설명이 유일한 단서라 설명도 함께 본다.
+    """
+    if ki is not None:
+        return False
+    if has_bond_name(name):
+        return True
+    desc = str(description or '')
+    return bool(_RE_BOND_TOKEN.search(desc)) or bool(_RE_PROTECTED_WORD.search(desc))
+
+
+def is_other_linked(name, description=None):
+    """기초자산이 주가가 아닌 부류(DLS·DLB)면 True.
+
+    표기가 명시된 것만 본다 — 기초자산 문자열로 역추정하지 않는다.
+    (근거 없는 추정으로 유형이 흔들리는 것보다 ELS·ELB로 남는 편이 낫다.)
+    """
+    for text in (str(name or ''), str(description or '')):
+        if _OTHER_WORD in text or _RE_OTHER_TOKEN.search(text):
+            return True
+    return False
+
+
+def classify_product_type(name, description=None, ki=None):
+    """상품유형 4종(ELS/DLS/ELB/DLB) 판정 — 상품명과 설명, 낙인을 함께 본다.
+
+    두 축이 독립이다.
+      · 원금보장 여부: 증권(S, 원금비보장) ↔ 사채(B, 원금보장)
+      · 기초자산 종류: 주가연계(E) ↔ 그 밖(D, 금리·환율 등)
+    """
+    protected = is_principal_protected(name, description, ki)
+    other = is_other_linked(name, description)
+    if protected:
+        return 'DLB' if other else 'ELB'
+    return 'DLS' if other else 'ELS'
+
 
 def classify_asset(text):
     if not text:
@@ -62,7 +143,9 @@ def extract_ki(text):
             return m.group(1)
 
     # ③ KI 숫자가 없을 때만 '낙인 부재' 판정
-    if re.search(r'하이파이브|Hi-Five|원금지급형|원금추가지급형|원금지급추구형|Digital형|원금보장', text):
+    #    원금보장 표기는 PRINCIPAL_PROTECTED_WORDS 하나만 본다 — 상품유형 판정과
+    #    같은 목록이라야 같은 설명 원문을 두 곳이 다르게 읽지 않는다.
+    if re.search(r'하이파이브|Hi-Five|Digital형', text) or _RE_PROTECTED_WORD.search(text):
         return 'NoKI'
     # 상승참여형: 낙인 배리어 없이 만기 시 상승/하락 참여율만으로 정산하는 구조
     if re.search(r'상승참여율', text):

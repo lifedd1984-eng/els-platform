@@ -200,9 +200,11 @@ class Command(BaseCommand):
             is_no_ki = ki == "NoKI"
             ki_val = None if (ki is None or is_no_ki) else int(ki)
 
-            product_type = "ELS"
-            if "ELB" in desc.upper() or "원금지급형" in desc:
-                product_type = "ELB"
+            # 엑셀 수입분은 상품명이 회차번호뿐이라 설명이 사실상 유일한 단서다.
+            # 그래도 판정은 scrape_kofia·reparse_products와 같은 parsers 함수를 쓴다
+            # (예전엔 이 파일에도 같은 분기가 복사돼 있어 셋이 따로 놀았다).
+            product_type = parsers.classify_product_type(
+                str(cell(row, "name") or "").strip(), desc, ki_val)
 
             currency = "USD" if ("USD" in desc.upper() or "달러" in desc) else "KRW"
 
