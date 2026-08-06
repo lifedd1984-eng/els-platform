@@ -74,6 +74,11 @@ FILL_ANCHOR_MAX_GAP_DAYS = 90
 #     서비스가 원래 KODEX200 ETF를 쓴다), 069500.KS로 메워 데이터에 구멍이
 #     없으면 조치할 게 없다. 경보 대상은 '메울 대체 계열이 없는데 멈춘 것'이다.
 #  ③ 동료가 없는 단독 시장(^N225 등)은 전체 최신일과 비교하되 임계를 넉넉히.
+#  ④ **현재 쓰는 티커만** 본다. --scope historical로 끌어오는 과거 자산에는
+#     상장폐지·합병으로 계열이 정상 종료된 종목이 섞여 있다(실측 294티커 중 11개:
+#     130960.KS 2018-07-17, 016170.KS 2018-09-17, 192530.KS 2018-10-25 …).
+#     이건 고장이 아니라 사실이고, 매일 경보로 울리면 진짜 고장이 묻힌다.
+#     현행 상품·보유에 걸린 티커가 멈추면 그건 진짜 경보다.
 STALE_PEER_DAYS = 5       # 같은 시장 동료 최신일 대비 (연휴는 동료도 같이 밀린다)
 STALE_SOLO_DAYS = 14      # 동료 없는 시장 — 최장 연휴(11일)를 넘겨 잡는다
 
@@ -214,10 +219,14 @@ class Command(BaseCommand):
         raw = (opts["tickers"] or "").strip()
         if raw:
             tickers = {t.strip() for t in raw.split(",") if t.strip()}
+            # 직접 지정한 티커는 '보고 있는 것'으로 본다 (정체 판정 대상)
+            self.live = set(tickers)
         else:
             tickers = set()
+            self.live = set()
             if opts["scope"] in ("current", "all"):
-                tickers |= self._current_tickers()
+                self.live = self._current_tickers()
+                tickers |= self.live
             if opts["scope"] in ("historical", "all"):
                 tickers |= self._historical_tickers(opts["since_year"])
 
@@ -225,6 +234,8 @@ class Command(BaseCommand):
         for primary, secondary in FILL_PAIRS.items():
             if primary in tickers or secondary in tickers:
                 tickers |= {primary, secondary}
+                if primary in self.live or secondary in self.live:
+                    self.live |= {primary, secondary}
         return sorted(tickers)
 
     def _current_tickers(self):
@@ -533,7 +544,7 @@ class Command(BaseCommand):
             m = market_of(t)
             peer_n[m] = peer_n.get(m, 0) + 1
 
-        stale = []
+        stale, ended = [], []
         for t, last in effective.items():
             m = market_of(t)
             if peer_n[m] >= 2:                      # 동료 있음 → 시장 안에서 비교
@@ -542,8 +553,12 @@ class Command(BaseCommand):
                 gap, limit, basis = (cohort - last).days, STALE_SOLO_DAYS, "전체"
             else:
                 continue
-            if gap > limit:
-                stale.append((t, last, gap, basis, limit))
+            if gap <= limit:
+                continue
+            if t in getattr(self, "live", set()):
+                stale.append((t, last, gap, basis, limit))   # 지금 쓰는 계열 → 진짜 경보
+            else:
+                ended.append((t, last, gap))                 # 이력 전용 → 정상 종료로 본다
 
         # 보완으로 메워진 계열은 경보가 아니라 정보다
         covered = [(t, stats[t]["last"], filled_last[t])
@@ -584,9 +599,18 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f"  [보완으로 해소] {t}: 원본 {src_last}까지 → 보완 후 {fill_last} "
                     f"(경보 아님 — 이 계열의 평소 성질)")
+        if ended:
+            self.stdout.write(
+                f"  [종료된 계열 {len(ended)}] 이력 전용 티커 — 상장폐지·합병으로 "
+                f"시세가 끝난 것으로 본다 (경보 아님)")
+            for t, last, gap in sorted(ended, key=lambda x: -x[2])[:10]:
+                self.stdout.write(f"    - {t}: 마지막 {last}")
+            if len(ended) > 10:
+                self.stdout.write(f"    … 외 {len(ended) - 10}개")
         if stale:
             self.stdout.write(self.style.WARNING(
-                f"  [정체 {len(stale)}] 같은 시장 동료보다 뒤처짐 (보완으로도 못 메움)"))
+                f"  [정체 {len(stale)}] 현행 상품·보유에 걸린 계열이 동료보다 뒤처짐 "
+                f"(보완으로도 못 메움)"))
             for t, last, gap, basis, limit in sorted(stale, key=lambda x: -x[2])[:20]:
                 self.stdout.write(self.style.WARNING(
                     f"    - {t}: 마지막 {last} ({basis} 대비 {gap}일, 임계 {limit}일)"))
