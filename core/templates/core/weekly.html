@@ -356,8 +356,8 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
           <td class="num" style="white-space:nowrap">{{ p.period_months|default:"-" }}{% if p.period_months %}개월{% endif %}</td>
           <td class="num" title="{% if p.peak_is_issue %}발행일 종가가 그 직전 52주 최고가의 몇 %인지 — 낮을수록 이미 내린 자리에서 발행됐습니다{% else %}아직 발행 전이라 현재 종가가 직전 52주 최고가의 몇 %인지를 보여줍니다{% endif %}">
             {% if p.peak_ratio %}
-              {# 색은 반올림 전 원값으로 가른 peak_level로 — 94.98%가 95%로 반올림돼
-                 게이트 통과분이 경고색을 뒤집어쓰던 문제(2026-08-06) #}
+              {% comment %}색은 반올림 전 원값으로 가른 peak_level로 — 94.98%가 95%로 반올림돼
+                 게이트 통과분이 경고색을 뒤집어쓰던 문제(2026-08-06){% endcomment %}
               <span style="font-weight:700;color:{% if p.peak_level == 'low' %}var(--green){% elif p.peak_level == 'mid' %}var(--blue-dark){% else %}var(--text-2){% endif %}">{{ p.peak_ratio }}%</span>
             {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
           </td>
@@ -412,8 +412,8 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
 </div>
 {% endif %}
 
-{# 위 두 카드(낙인대별·TOP5) 안에 이미 면책이 들어 있다. 두 카드가 모두 없는 주간
+{% comment %}위 두 카드(낙인대별·TOP5) 안에 이미 면책이 들어 있다. 두 카드가 모두 없는 주간
    — 지난 주 조회(offset<0)나 낙인 버킷이 빈 주 — 에는 아래 상품 표에만 신호 배지와
-   손실확률이 남으므로, 그때는 이 자리에서 한 번 보여준다. #}
+   손실확률이 남으므로, 그때는 이 자리에서 한 번 보여준다.{% endcomment %}
 {% if not ki_top5 and not top5_tracks %}{% include "core/_disclaimer_inline.html" %}{% endif %}
 {% endblock %}

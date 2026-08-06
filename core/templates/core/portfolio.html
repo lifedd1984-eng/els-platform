@@ -238,8 +238,13 @@
   </div>
   {% if not has_ki_data %}
   <div style="text-align:center;padding:20px 0;color:var(--text-3)">
-    <div style="font-size:13px;margin-bottom:8px">아직 시세 데이터가 없습니다.</div>
-    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px">python manage.py update_prices</code>
+    <div style="font-size:13px">아직 시세 데이터가 없습니다.</div>
+    {% comment %}배치 명령은 운영자(superuser)에게만. is_staff는 이 서비스에서 '가족'이라
+       개발자가 아니다. 이 화면은 @login_required뿐이라 보유 상품이 있는 일반 회원
+       누구에게나 명령어가 그대로 보이고 있었다. (2026-08-06){% endcomment %}
+    {% if user.is_superuser %}
+    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px;display:inline-block;margin-top:8px">python manage.py update_prices</code>
+    {% endif %}
   </div>
   {% elif ki_alerts %}
   <div style="overflow-x:auto">

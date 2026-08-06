@@ -274,8 +274,13 @@
   </div>
   {% else %}
   <div style="text-align:center;padding:20px 0;color:var(--text-3)">
-    <div style="font-size:13px;margin-bottom:8px">아직 시뮬레이션 데이터가 없습니다.</div>
-    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px">python manage.py simulate_products</code>
+    <div style="font-size:13px">아직 시뮬레이션 데이터가 없습니다.</div>
+    {% comment %}배치 명령은 운영자(superuser)에게만 보여준다. 이 서비스에서 is_staff는
+       '가족'이라 개발자가 아니므로 게이트는 is_superuser로 건다. 이 분기에 걸리는
+       상품이 운영 926건(청약중 29건)이라 방문자에게 그대로 노출되고 있었다. (2026-08-06){% endcomment %}
+    {% if user.is_superuser %}
+    <code style="font-size:12px;background:var(--bg);padding:4px 8px;border-radius:6px;display:inline-block;margin-top:8px">python manage.py simulate_products</code>
+    {% endif %}
   </div>
   {% endif %}
 </div>
@@ -283,8 +288,8 @@
 </div>{# /detail-right #}
 </div>{# /detail-cols #}
 
-{# 배지가 있는 상품은 위 레이더 패널에서 이미 면책을 노출하므로 중복을 피한다.
-   배지가 없어도 손실확률·모의실험은 그대로 나오므로 이 자리에서 한 번 보여준다. #}
+{% comment %}배지가 있는 상품은 위 레이더 패널에서 이미 면책을 노출하므로 중복을 피한다.
+   배지가 없어도 손실확률·모의실험은 그대로 나오므로 이 자리에서 한 번 보여준다.{% endcomment %}
 {% if not product.radar %}{% include "core/_disclaimer_inline.html" %}{% endif %}
 
 {% if chart %}
@@ -296,14 +301,14 @@
       {% if chart.based_on_issue %}발행일 기준가 = 100{% else %}미발행 — 구간 시작 = 100{% endif %}
     </small>
   </div>
-  {# ── 고점대비 — 발행 시점과 현재 시점을 나란히 (2026-08-05 태훈님 확정) ──
+  {% comment %}── 고점대비 — 발행 시점과 현재 시점을 나란히 (2026-08-05 태훈님 확정) ──
      "…에서 발행" 이라고 쓴 숫자는 반드시 발행일 값이고, 고점 발행 여부 판정도
      발행 시점 값으로 한다(v7 게이트가 보는 시점과 맞추기 위함).
      숫자는 반올림해 보여주되 색·문구 분기는 pk.issue_tone / pk.gate_* 로 한다 —
      반올림한 값(94.98→95)으로 가르면 게이트가 통과시킨 상품에 정반대 문구가
      붙는다. 판단 근거를 게이트와 하나로 맞춘 것. (2026-08-06)
      완화 예외로 통과한 상품도 **통과는 통과**라, 문구·색을 나머지 통과분과
-     똑같이 쓴다. 어느 경로로 통과했는지는 내부 사정이다. (2026-08-06 태훈님) #}
+     똑같이 쓴다. 어느 경로로 통과했는지는 내부 사정이다. (2026-08-06 태훈님){% endcomment %}
   {% with pk=chart.peak %}
   {% if pk.now_max or pk.issue_max %}
   <div style="background:var(--bg);border-radius:8px;padding:10px 12px;margin-bottom:10px">
