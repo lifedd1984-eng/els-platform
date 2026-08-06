@@ -329,7 +329,7 @@ def weekly(request):
     # 선정 로직은 models.radar_top5()로 통일(주간요약 텔레그램과 동일 기준).
     # overlap(보유 중복도) 계산만 뷰에 남긴다.
     # ── v7 TOP5 이원화: 안정(지수형) / 수익(종목형) 트랙 ──
-    recommendations = []
+    top5_tracks = []
     if offset >= 0:  # 지난 주 조회 시에는 표시 안 함
         from core import market as _mkt
         from core.models import radar_tracks
@@ -374,7 +374,7 @@ def weekly(request):
                               "peak": r.get("peak")})
             if items:
                 meta = TRACK_META[tier]
-                recommendations.append({
+                top5_tracks.append({
                     "tier": tier, "label": meta["label"], "sub": meta["sub"],
                     "icon": meta["icon"],
                     "color": items[0]["p"].radar["color"], "items": items,
@@ -410,7 +410,7 @@ def weekly(request):
     return render(request, "core/weekly.html", {
         "regime": regime,
         "products": products,
-        "recommendations": recommendations,
+        "top5_tracks": top5_tracks,
         "ki_top5": ki_top5,
         "columns": columns,
         "monday": monday, "sunday": sunday, "offset": offset,

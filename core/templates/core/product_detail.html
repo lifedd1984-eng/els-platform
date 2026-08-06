@@ -283,6 +283,10 @@
 </div>{# /detail-right #}
 </div>{# /detail-cols #}
 
+{# 배지가 있는 상품은 위 레이더 패널에서 이미 면책을 노출하므로 중복을 피한다.
+   배지가 없어도 손실확률·모의실험은 그대로 나오므로 이 자리에서 한 번 보여준다. #}
+{% if not product.radar %}{% include "core/_disclaimer_inline.html" %}{% endif %}
+
 {% if chart %}
 <div class="card">
   <div class="card-title">

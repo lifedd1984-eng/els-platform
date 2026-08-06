@@ -1,7 +1,7 @@
 {% extends "core/base.html" %}
 {% load els_extras humanize %}
 {% block title %}ELS 레이더 — 이번주 ELS TOP5{% endblock %}
-{% block og_desc %}매주 월요일 아침, AI가 300여 개 ELS를 분석해 최적의 상품만 선별합니다. 10년 검증 기준 · 무료.{% endblock %}
+{% block og_desc %}매주 월요일 아침, 300여 개 ELS의 낙인·손실확률을 계산해 조건에 부합하는 상품을 분류합니다. 정보 제공 서비스 · 무료.{% endblock %}
 
 {% block content %}
 <style>
@@ -185,8 +185,8 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
   <div>
     <span class="lp-pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="flex:0 0 auto"><path d="M13 2 4.5 13.5h5L11 22l8.5-11.5h-5L13 2z"/></svg> 베타 기간 무료</span>
     <h1 class="lp-h1">매주 쏟아지는 <span style="white-space:nowrap">ELS 300개,</span><br><span class="lp-acc">5개</span>면 충분합니다</h1>
-    <p class="lp-lead">매주 월요일 아침, AI가 300여 개 상품을 분석해<br>
-      최적의 상품만 선별해드립니다.</p>
+    <p class="lp-lead">매주 월요일 아침, 300여 개 상품의 손실확률을 계산해<br>
+      조건에 부합하는 상품을 분류해 보여드립니다.</p>
     <div class="lp-ctas">
       {% if user.is_authenticated %}
       <a href="{% url 'weekly' %}" class="btn btn-primary lp-btn">이번 주 TOP5 보기</a>
@@ -244,11 +244,11 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
     <details>
       <summary><span class="q">Q</span>은행·증권사 창구에서 권하는 대로 가입하고 계시죠?<span class="chev">▾</span></summary>
       <div class="a">어디에서도 찾아볼 수 없는 손실확률을 상품마다 계산해 드립니다.
-        그리고 최적의 상품만 ELS 레이더가 선별해 드리니, 여러분은 선택만 하시면 됩니다.</div>
+        조건에 부합하는 상품은 시스템이 분류해 보여드리며, 최종 투자 판단은 투자자 본인의 책임입니다.</div>
     </details>
     <details>
       <summary><span class="q">Q</span>낙인이 뭔지 잘 모른 채 청약한 적 있으시죠?<span class="chev">▾</span></summary>
-      <div class="a">낙인은 원금손실이 시작되는 선입니다. 숫자가 낮을수록 안전합니다.
+      <div class="a">낙인은 원금손실이 시작되는 선입니다. 숫자가 낮을수록 손실 구간까지 거리가 멉니다.
         ELS 레이더는 모든 상품의 낙인과 숨어 있는 위험까지 찾아서 여러분에게 알려드립니다.</div>
     </details>
     <details>
@@ -277,8 +277,8 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
     </div>
     <div class="card">
       <div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.1" fill="currentColor" stroke="none"/></svg></div>
-      <h3>AI가 추천하는 TOP5</h3>
-      <p>저위험 중수익 상품만 쏙쏙 골라 선별해 드립니다</p>
+      <h3>기준 통과 TOP5</h3>
+      <p>세 기준을 모두 통과한 상품을 수익률 순으로 보여드립니다</p>
     </div>
   </div>
 </section>
@@ -288,7 +288,7 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
   <div class="lp-dark">
     <span class="lp-label" style="background:rgba(255,255,255,.08);color:#6CA8FF">10년 전체 검증 · 2016~2025</span>
     <h2 class="lp-h2" style="color:#fff">같은 10년,<br>결과는 달랐습니다</h2>
-    <p class="lp-sub" style="color:#8B95A1">지난 10년간 발행된 69,903개 상품 전체에<br>지금의 선별 기준을 그대로 적용해, 시장 전체와 비교했습니다</p>
+    <p class="lp-sub" style="color:#8B95A1">지난 10년간 발행된 69,903개 상품 전체에<br>지금의 분류 기준을 그대로 적용해, 시장 전체와 비교했습니다</p>
 
     <div class="vx-grid">
       <div class="vx-panel">
@@ -328,7 +328,7 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
     </div>
 
     <div style="display:flex;justify-content:center;gap:26px;flex-wrap:wrap;margin-top:24px;font-size:13px;color:#B9C0CC">
-      <span>10년 합계 <b style="color:#fff">5,392개</b> 선별</span>
+      <span>10년 합계 <b style="color:#fff">5,392개</b> 기준 통과</span>
       <span>매주 평균 <b style="color:#fff">10개</b></span>
       <span>홍콩H 사태 구간 <b style="color:#fff">포함</b></span>
     </div>
@@ -365,7 +365,7 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
         수익률은 상품이 제시한 연 수익 조건의 평균입니다. 손실 17건 중 15건이 2022년 발행 종목형이며,
         그래서 TOP5를 지수형/종목형으로 나눠 보여드립니다.
         {% if accuracy %}지금도 매주 검증을 이어가고 있습니다 — 최근 청약분 {{ accuracy.total_n }}개에서
-        ELS 레이더 선택 상품의 첫 조기상환 성공률은 <b style="color:#fff">{{ accuracy.badge_pct }}%</b>(나머지
+        기준 통과 상품의 첫 조기상환 성공률은 <b style="color:#fff">{{ accuracy.badge_pct }}%</b>(나머지
         {{ accuracy.ctrl_pct }}%)였습니다.{% endif %}
         과거 실적으로 <b style="color:#fff">미래 수익을 보장하지 않으며</b>, 조건에 부합하는 상품을
         시스템으로 분류한 결과일 뿐 투자 권유가 아닙니다.</span>
@@ -373,10 +373,10 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
   </div>
 </section>
 
-<!-- ══ 5. 타이밍: 왜 지금인가 ══ -->
+<!-- ══ 5. 시장 상황과 낙인의 관계 ══ -->
 <section class="lp-sec">
-  <span class="lp-label">왜 지금인가</span>
-  <h2 class="lp-h2">시장 조정기가<br>ELS 투자의 최적기입니다</h2>
+  <span class="lp-label">시장 상황과 낙인</span>
+  <h2 class="lp-h2">많이 내린 시장일수록<br>낙인까지 남은 거리가 멉니다</h2>
   <p class="lp-sub">이미 많이 내린 시장에서는 낙인 기준까지 다시 내려갈 위험이 그만큼 작아집니다<br>
     — 시장 데이터 22년치(발행 29만 건) 분석 결과</p>
 
@@ -462,7 +462,7 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
       </div>
     </div>
     <div style="font-size:12.5px;color:var(--text-2);margin-top:14px;line-height:1.65">
-      지금 같은 시장 조정기에는 대부분의 상품이 고점 아래에서 발행됩니다.
+      시장이 조정을 받는 구간에서는 대부분의 상품이 고점 아래에서 발행됩니다.
       ELS 레이더는 이 기준을 모든 상품에 자동으로 적용합니다.</div>
   </div>
 </section>
@@ -514,7 +514,7 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
 <!-- ══ 6.5 시작 3단계 ══ -->
 <section class="lp-sec">
   <span class="lp-label">시작은 간단합니다</span>
-  <h2 class="lp-h2">여러분은 청약만 하세요.<br>나머지는 ELS 레이더가 챙겨드립니다</h2>
+  <h2 class="lp-h2">청약은 증권사에서,<br>나머지는 ELS 레이더가 챙겨드립니다</h2>
   <div class="go3" style="margin-top:38px">
     <div class="card">
       <span class="gn">1</span><span class="gw">월요일</span>
@@ -560,7 +560,7 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
     <details>
       <summary><span class="q">Q</span>얼마부터 시작할 수 있나요?<span class="chev">▾</span></summary>
       <div class="a">보통 10만 원 단위부터 청약할 수 있습니다(증권사마다 조금씩 다릅니다).
-        처음이라면 소액으로 한 건 경험해 보시는 것을 권합니다.</div>
+        최소 청약 금액과 조건은 증권사 안내를 확인하시기 바랍니다.</div>
     </details>
     <details>
       <summary><span class="q">Q</span>타겟 신호는 어떻게 정해지나요?<span class="chev">▾</span></summary>
@@ -610,7 +610,7 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
     {"@type": "Question", "name": "여기서 바로 가입하고 청약하는 건가요?",
      "acceptedAnswer": {"@type": "Answer", "text": "아닙니다. ELS 레이더는 정보만 제공합니다. 실제 청약은 지금 쓰시는 증권사 앱에서 하시면 됩니다."}},
     {"@type": "Question", "name": "얼마부터 시작할 수 있나요?",
-     "acceptedAnswer": {"@type": "Answer", "text": "보통 10만 원 단위부터 청약할 수 있습니다(증권사마다 조금씩 다릅니다). 처음이라면 소액으로 한 건 경험해 보시는 것을 권합니다."}},
+     "acceptedAnswer": {"@type": "Answer", "text": "보통 10만 원 단위부터 청약할 수 있습니다(증권사마다 조금씩 다릅니다). 최소 청약 금액과 조건은 증권사 안내를 확인하시기 바랍니다."}},
     {"@type": "Question", "name": "타겟 신호는 어떻게 정해지나요?",
      "acceptedAnswer": {"@type": "Answer", "text": "세 가지 기준을 모두 통과해야 합니다. 조기상환 조건이 낮을 것, 기초자산이 고점일 때 발행된 상품이 아닐 것, 낙인이 가장 낮은 30% 안에 들 것. 10년치 발행 데이터로 검증한 기준이며, 사람 판단 없이 매주 같은 기준을 적용합니다."}}
   ]

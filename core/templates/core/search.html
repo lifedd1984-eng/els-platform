@@ -84,7 +84,7 @@
   </div>
   <form method="get" class="form-row">
     <input type="search" name="aiq" value="{{ ai.q|default:'' }}"
-           placeholder='예: 낙인 40 이하 지수형 중에 수익률 제일 좋은 거 3개'
+           placeholder='예: 낙인 40 이하 지수형 중에 수익률 높은 순 3개'
            style="flex:1;min-width:200px;font-size:14px;padding:10px 12px">
     <button class="btn btn-primary" type="submit"><i class="fa-solid fa-wand-magic-sparkles"></i> 검색</button>
   </form>
@@ -154,4 +154,6 @@
   {% endif %}
 {% endif %}
 {% endif %}
+
+{% include "core/_disclaimer_inline.html" %}
 {% endblock %}
