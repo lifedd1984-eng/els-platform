@@ -18,19 +18,28 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--no-notify", action="store_true", help="텔레그램 발송 생략")
 
-    def _upsert_product(self, row, defaults) -> bool:
-        """product_code(고유)와 (issuer,product_no,sub_end)(레거시 exe키) 둘 다로
-        기존 행을 찾아본 뒤 있으면 갱신, 없으면 새로 만든다. True면 신규 생성."""
-        existing = None
+    def _find_existing(self, row):
+        """이 row가 갱신할 기존 Product를 찾는다. 없으면 None.
+
+        product_code(고유)와 (issuer,product_no,sub_end)(레거시 exe키) 둘 다로 본다.
+        upsert와 기초자산 보존이 **같은 행**을 가리켜야 하므로 한 곳으로 모았다.
+        (예전엔 보존 쪽이 product_code로만 찾아, exe 소스(코드 빈값) 행에 손으로
+         넣어 둔 기초자산이 다음 배치에서 빈 값으로 되돌아갈 수 있었다.)
+        """
         if row["product_code"]:
             existing = Product.objects.filter(product_code=row["product_code"]).first()
-        if existing is None:
-            # 폴백은 exe 소스(product_code 빈값) 행에만 병합 —
-            # 다른 KOFIA 상품(코드 있음)을 실수로 덮어쓰지 않도록 제한
-            existing = Product.objects.filter(
-                issuer=row["issuer"], product_no=row["product_no"], sub_end=row["sub_end"],
-                product_code="",
-            ).first()
+            if existing:
+                return existing
+        # 폴백은 exe 소스(product_code 빈값) 행에만 병합 —
+        # 다른 KOFIA 상품(코드 있음)을 실수로 덮어쓰지 않도록 제한
+        return Product.objects.filter(
+            issuer=row["issuer"], product_no=row["product_no"], sub_end=row["sub_end"],
+            product_code="",
+        ).first()
+
+    def _upsert_product(self, row, defaults) -> bool:
+        """기존 행이 있으면 갱신, 없으면 새로 만든다. True면 신규 생성."""
+        existing = self._find_existing(row)
 
         if existing:
             for k, v in defaults.items():
@@ -73,14 +82,15 @@ class Command(BaseCommand):
 
             # KOFIA 결손 대응: 기초자산이 빈 값이면 기존 DB의 수동 보정값을 보존
             # (매 배치 upsert가 보정을 빈 값으로 되돌리는 것 방지 — NH 25004 사례)
+            #
+            # 이 분기는 **KOFIA가 기초자산을 빈 값으로 준 상품에서만** 돈다.
+            # 값이 정상인 상품은 여기 들어오지 않으므로 수집 결과가 달라지지 않는다.
             if not (row["assets_raw"] or "").strip():
-                prev = None
-                if row["product_code"]:
-                    prev = Product.objects.filter(product_code=row["product_code"]).first()
+                prev = self._find_existing(row)
                 if prev and (prev.assets_raw or "").strip():
                     row["assets_raw"] = prev.assets_raw
                 else:
-                    missing_assets.append(f"{row['issuer']} {row['product_no']} (~{row['sub_end']})")
+                    missing_assets.append(row)
             asset_type = parsers.classify_asset(row["assets_raw"]) or ""
 
             # 조기상환주기 정합성 — 설명 원문에 주기가 명시된 경우에만 대조한다.
@@ -135,13 +145,31 @@ class Command(BaseCommand):
         self.stdout.write(f"[자동수집] KOFIA {len(rows)}건 중 신규 {n_new}건")
 
         # 기초자산 결손 경보 — 보정 전까지 매 배치 상기
+        #
+        # ⚠ 예전 문구는 "KOFIA 웹에서 실물 확인"이었는데 이는 헛걸음이다.
+        #   빈 값의 출처가 KOFIA 목록(val8) 자체라 KOFIA 웹 화면에서도 그 칸이 비어 있다.
+        #   실제 답은 같은 응답에 딸려 오는 **간이투자설명서**의 '상품개요' 표에 있다.
+        #   (2026-08-06 실측: NH투자증권 25034·25065 — 설명서엔 'KOSDAQ150 지수' 명시)
         if missing_assets and should_notify:
-            telegram.send_message(
-                "[기초자산 누락] KOFIA가 기초자산을 빈 값으로 내려준 상품 "
-                f"{len(missing_assets)}건\n"
-                + "\n".join(f"- {m}" for m in missing_assets)
-                + "\nKOFIA 웹에서 실물 확인 후 보정 필요 (유형·손실확률 계산 불가 상태)"
+            lines = [
+                f"[기초자산 누락] KOFIA가 기초자산을 빈 값으로 내려준 상품 "
+                f"{len(missing_assets)}건",
+            ]
+            for r in missing_assets[:10]:
+                lines.append(f"- {r['issuer']} {r['product_no']} (~{r['sub_end']})")
+                if r.get("prospectus_url"):
+                    lines.append(f"  설명서: {r['prospectus_url']}")
+            if len(missing_assets) > 10:
+                lines.append(f"... 외 {len(missing_assets) - 10}건")
+            lines.append(
+                "KOFIA 목록 자체가 빈 값이라 웹 화면에도 안 나옵니다. "
+                "간이투자설명서 '상품개요'로 확인 후 보정하세요 "
+                "(유형·손실확률 계산 불가 상태).\n"
+                "  python manage.py fix_missing_assets            # 근거·후보 확인\n"
+                "  python manage.py fix_missing_assets --id <id> "
+                "--assets \"...\" --apply"
             )
+            telegram.send_message("\n".join(lines))
             self.stdout.write(f"[기초자산 누락 경보] {len(missing_assets)}건 발송")
 
         # 조기상환주기 이상 경보 — 평가일 계산의 뿌리라 즉시 확인 필요
