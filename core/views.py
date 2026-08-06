@@ -1403,7 +1403,7 @@ def portfolio_upload(request):
         # 회원 화면에 그대로 찍히던 것을 로그로 돌린다. 화면에는 사람 말 한 줄만.
         # (2026-08-06)
         logger.exception("포트폴리오 엑셀 업로드 실패: %s", getattr(f, "name", ""))
-        messages.error(request, "파일을 읽을 수 없습니다.")
+        messages.error(request, "파일을 읽을 수 없습니다. 형식을 확인해 주세요.")
         return redirect("portfolio")
 
     ws = wb["투자내역"] if "투자내역" in wb.sheetnames else wb.worksheets[0]
