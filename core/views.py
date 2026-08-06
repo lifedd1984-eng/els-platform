@@ -1085,9 +1085,10 @@ def portfolio(request):
         "yield": lambda i: i.product.yield_rate if i.product.yield_rate is not None else -1,
         "issue": lambda i: (i.product.issued_on or date.max),
         "ki": lambda i: (999 if i.product.is_no_ki or i.product.ki is None else i.product.ki),
-        "b1": lambda i: (i.product.stepdown_barriers[0]
-                         if i.product.stepdown_barriers
-                         and isinstance(i.product.stepdown_barriers[0], (int, float)) else 999),
+        # Product에는 stepdown_barriers가 없다(HistoricalIssue 필드) — 예전엔
+        # AttributeError로 이 정렬이 500을 냈다. 1차 배리어는 barrier_first다.
+        "b1": lambda i: (i.product.barrier_first
+                         if i.product.barrier_first is not None else 999),
         "next": lambda i: (i.next_evaluation["date"] if i.next_evaluation else date.max),
         "pretax": _pretax,
         "loss": lambda i: (i.product.loss_prob if i.product.loss_prob is not None else -1),
