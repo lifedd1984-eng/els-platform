@@ -66,6 +66,9 @@ textarea:focus { border-color: var(--blue); }
 .answer p { margin-bottom: 9px; word-break: keep-all; line-height: 1.75; }
 .answer p:last-child { margin-bottom: 0; }
 .answer b { font-weight: 700; }
+{% comment %} ask_agent.highlight() 가 도구 표시값에만 씌우는 강조 — 이 두 줄이 없으면 강조가 통째로 죽는다 {% endcomment %}
+.answer .hl { color: var(--blue-dark); font-weight: 700; font-variant-numeric: tabular-nums; }
+.answer .hl-red { color: var(--red); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .sec-title {
   font-size: 13px; font-weight: 700; color: var(--text-2); margin: 22px 0 9px;
@@ -197,7 +200,8 @@ details.basis[open] > summary::after { content: "\25B4"; }
   <div style="font-size:11.5px;color:var(--text-3);margin-top:13px;line-height:1.7">
     사실·통계 조회 전용입니다. 추천, 매수·매도 의견, 시세 전망은 제공하지 않습니다.
     {% if not quota.unlimited %}· <b style="color:var(--text-2)">하루 {{ quota.limit }}회</b> {% endif %}· 같은 질문을 다시 하면 저장된 결과를 보여드리고 <b>횟수는 차감하지 않습니다</b>.
-    {% if coverage.price_first %}<br>조회 범위 &mdash; 기초자산 시세 {{ coverage.price_first }} ~ {{ coverage.price_last }} ({{ coverage.ticker_n }}종목) · 상품 {{ coverage.listed_n|intcomma }}건 · 상환 통계 {{ coverage.stat_year_from }}~{{ coverage.stat_year_to }}년.{% endif %}
+    {% comment %} 라벨은 ask_tools.coverage_line() 과 같은 말로 쓴다 — 화면과 프롬프트가 다른 수를 말하면 안 된다 {% endcomment %}
+    {% if coverage.price_first %}<br>조회 범위 &mdash; 기초자산 시세 {{ coverage.ticker_n }}티커, {{ coverage.price_first }}~{{ coverage.price_last }} · 수집 상품 {{ coverage.product_n|intcomma }}건 중 검색·통계 대상은 ELB·DLB 제외 {{ coverage.listed_n|intcomma }}건 · SEIBro 상환 집계 {{ coverage.stat_year_from }}~{{ coverage.stat_year_to }}년.{% endif %}
   </div>
 </div>
 {% endif %}
@@ -208,7 +212,7 @@ details.basis[open] > summary::after { content: "\25B4"; }
 한도 초과는 위 한도 블록이 이미 같은 말을 하므로 카드를 만들지 않는다.
 {% endcomment %}
 {% if error.code != "QUOTA_EXCEEDED" %}
-{% if answer or blocks or error %}
+{% if answer or answer_html or blocks or error %}
 <div class="card" {% if error %}style="border-left:3px solid var(--orange)"{% endif %}>
   {% if question %}
   <div class="ask-echo">
@@ -216,7 +220,7 @@ details.basis[open] > summary::after { content: "\25B4"; }
     <div style="flex:1">
       <div class="q">{{ question }}</div>
       <div class="ask-meta">
-        {% if answered_at %}<span><i class="fa-regular fa-clock"></i> {{ answered_at|slice:":10" }} {{ answered_at|slice:"11:16" }}{% if elapsed_ms %} · {% widthratio elapsed_ms 1000 1 %}초{% endif %}</span>{% endif %}
+        {% if answered_at %}<span><i class="fa-regular fa-clock"></i> {{ answered_at|slice:":10" }} {{ answered_at|slice:"11:16" }}{% if elapsed_s %} · {{ elapsed_s }}초{% endif %}</span>{% endif %}
         {% if tools %}<span>실행: {% for t in tools %}<code>{{ t }}</code> {% endfor %}</span>{% endif %}
         {% if is_private %}<span><i class="fa-solid fa-lock"></i> 본인 보유분만 조회</span>{% endif %}
         {% if from_cache %}<span><i class="fa-solid fa-bookmark"></i> 저장된 결과 · 횟수 차감 없음</span>{% endif %}
@@ -235,8 +239,13 @@ details.basis[open] > summary::after { content: "\25B4"; }
     <b>거절 사유 코드</b> <code>{{ error.code }}</code> &mdash;
     질문·사유·응답은 호출 로그에 남고, 이 유형이 반복되면 데이터 확장 후보로 집계됩니다.
   </div>
-  {% elif answer %}
-  <div class="answer">{{ answer|linebreaks }}</div>
+  {% elif answer_html or answer %}
+  {% comment %}
+  answer_html 은 ask_agent.highlight() 가 만든다 — 본문을 먼저 이스케이프한 뒤
+  도구가 돌려준 표시값에만 .hl/.hl-red 를 씌운 것이라 강조 자체가 접지의 증거다.
+  그래서 여기만 |safe 다. 질문(question)은 사용자 입력이라 절대 |safe 하지 않는다.
+  {% endcomment %}
+  <div class="answer">{% if answer_html %}{{ answer_html|safe }}{% else %}{{ answer|linebreaks }}{% endif %}</div>
   {% endif %}
 
   {% for b in blocks %}
@@ -264,16 +273,24 @@ details.basis[open] > summary::after { content: "\25B4"; }
   <div class="chart-legend">
     {% for l in b.legend %}
     <span {% if not l.color %}style="color:var(--text-3)"{% endif %}>{% if l.color %}<span class="sw" style="background:{{ l.color }}"></span>{% endif %}{{ l.label }}</span>
+    {% comment %} 음영은 서버 legend 에 없다. 시세선 바로 뒤에 끼워 목업 순서를 지킨다. {% endcomment %}
+    {% if forloop.first and b.shade %}<span><span class="sw" style="background:#F7C9C2"></span>최대낙폭 구간</span>{% endif %}
     {% endfor %}
   </div>
   {% endif %}
   <div class="chart-wrap">
     <svg viewBox="{{ b.viewbox }}" style="width:100%;height:auto;display:block" role="img" aria-label="추이 차트">
+      {% if b.shade %}<rect x="{{ b.shade.x }}" y="{{ b.shade.y }}" width="{{ b.shade.w }}" height="{{ b.shade.h }}" fill="#F7C9C2" opacity=".35"/>{% endif %}
       {% for t in b.y_ticks %}
       <line x1="{{ b.x0 }}" x2="{{ b.x1 }}" y1="{{ t.y }}" y2="{{ t.y }}" stroke="#E5E8EB" stroke-width="1"{% if not t.solid %} stroke-dasharray="3 3"{% endif %}/>
       <text x="{{ b.x0|add:'-6' }}" y="{{ t.y|add:4 }}" text-anchor="end" font-size="10" fill="#8B95A1">{{ t.label }}</text>
       {% endfor %}
       <polyline fill="none" stroke="#3182F6" stroke-width="1.9" stroke-linejoin="round" points="{{ b.points }}"/>
+      {% comment %} filled=저점(채운 점, 라벨 아래) / 아니면 고점(빈 점, 라벨 위) {% endcomment %}
+      {% for m in b.markers %}
+      <circle cx="{{ m.cx }}" cy="{{ m.cy }}" r="3" {% if m.filled %}fill="#E5503C"{% else %}fill="#fff" stroke="#E5503C" stroke-width="1.6"{% endif %}/>
+      <text x="{% if m.filled %}{{ m.cx|add:3 }}{% else %}{{ m.cx }}{% endif %}" y="{% if m.filled %}{{ m.cy|add:13 }}{% else %}{{ m.cy|add:'-8' }}{% endif %}" text-anchor="{{ m.anchor|default:'middle' }}" font-size="10" font-weight="700" fill="#E5503C">{{ m.label }}</text>
+      {% endfor %}
       {% if b.last_label %}
       <circle cx="{{ b.last_x }}" cy="{{ b.last_y }}" r="3" fill="#3182F6"/>
       <text x="{{ b.last_x|add:'-4' }}" y="{{ b.last_y|add:'-7' }}" text-anchor="end" font-size="10.5" font-weight="700" fill="#1B64DA">{{ b.last_label }}</text>

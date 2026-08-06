@@ -20,11 +20,12 @@ from core.views import ASK_DISCLAIMERS, ASK_PRESETS
 # 렌더 결과에 템플릿 문법 흔적이 남아 있으면 그 사고다.
 COMMENT_LEAK = re.compile(r"\{[#%{]|[#%}]\}|\{%\s*comment|endcomment\s*%\}")
 
+# ask_tools.coverage() 실출력 모양 (운영 DB 기준 수치)
 COVERAGE = {
     "day": "2026-08-06", "price_first": "2016-08-05", "price_last": "2026-08-05",
-    "ticker_n": 42, "domestic_n": 18, "overseas_n": 24,
-    "product_n": 38412, "listed_n": 31005,
-    "stat_year_from": 2016, "stat_year_to": 2026,
+    "tickers": [], "ticker_n": 44, "domestic_n": 20, "overseas_n": 24,
+    "product_n": 4495, "listed_n": 4050, "excluded_types": ["ELB", "DLB"],
+    "stat_year_from": 2015, "stat_year_to": 2026,
 }
 
 
@@ -48,6 +49,12 @@ CHART_BLOCK = {
                 {"y": 120.6, "label": "100", "solid": False}],
     "x_ticks": [{"x": 46, "label": "2016"}, {"x": 706, "label": "2026"}],
     "y_bottom": 212, "y_top": 20, "x0": 46, "x1": 706,
+    "shade": {"x": 563.0, "y": 20, "w": 55.0, "h": 192},
+    "markers": [
+        {"kind": "peak", "cx": 563.0, "cy": 103.9, "label": "고점 $152.36",
+         "anchor": "middle", "filled": False},
+        {"kind": "trough", "cx": 618.0, "cy": 137.9, "label": "저점 $64.56 (-57.6%)",
+         "anchor": "start", "filled": True}],
     "legend": [{"color": "var(--blue)", "label": "Micron 조정종가"},
                {"color": None, "label": "로그 눈금 — 상승폭이 커서 선형 눈금이면 초반 구간이 보이지 않습니다"}],
     "last_label": "$893.19", "last_x": 706.0, "last_y": 33.6,
@@ -83,6 +90,11 @@ def _answer_ctx(**over):
         "question": "Micron 10년 추이랑 누적수익률, 연간수익률, 최대낙폭 정리해줘",
         "answer": "누적수익률은 +6,208.3%, 연평균 환산 +51.4%였습니다.\n\n"
                   "하루 기준 가장 큰 하락은 2020-03-16의 -19.8%였습니다.",
+        # ask_agent.highlight() 출력 — 이스케이프 뒤 도구 표시값만 감싼 HTML
+        "answer_html": '<p>누적수익률은 <span class="hl">+6,208.3%</span>, 연평균 환산 '
+                       '<span class="hl">+51.4%</span>였습니다.</p>'
+                       '<p>하루 기준 가장 큰 하락은 2020-03-16의 '
+                       '<span class="hl-red">-19.8%</span>였습니다.</p>',
         "blocks": [
             {"type": "stats", "cards": [
                 {"label": "누적수익률", "display": "+6,208.3%", "tone": "blue"},
@@ -106,6 +118,7 @@ def _answer_ctx(**over):
         "status": "ok",
         "tools": ["metric_calc", "price_series"],
         "elapsed_ms": 3241,
+        "elapsed_s": 3.2,
         "answered_at": "2026-08-06T09:41",
         "disclaimer": ASK_DISCLAIMERS["market"],
         "is_private": False,
@@ -117,7 +130,7 @@ def _answer_ctx(**over):
 def _refused_ctx(**over):
     ctx = _answer_ctx(
         question="2010년부터 Micron 수익률 보여줘",
-        answer=None, blocks=[], basis=None, followups=[], tools=[],
+        answer=None, answer_html=None, blocks=[], basis=None, followups=[], tools=[],
         status="refused", disclaimer=None,
         error={"code": "OUT_OF_RANGE",
                "message": "2010년 자료는 없습니다. 보유한 기초자산 시세는 2016-08-05부터입니다.",
@@ -131,9 +144,9 @@ def _quota_ctx(**over):
     at = timezone.make_aware(dt.datetime(2026, 8, 6, 9, 41))
     ctx = _answer_ctx(
         quota=_quota(used=3, limit=3, exhausted=True),
-        question=None, answer=None, blocks=[], basis=None, followups=[],
+        question=None, answer=None, answer_html=None, blocks=[], basis=None, followups=[],
         tools=[], status=None, disclaimer=None, error=None, answered_at=None,
-        elapsed_ms=None,
+        elapsed_ms=None, elapsed_s=None,
         history=[{"id": 101, "question": "Micron 10년 추이랑 누적수익률, 연간수익률, 최대낙폭 정리해줘",
                   "at": at, "status": "ok", "tools": ["metric_calc"]},
                  {"id": 102, "question": "낙인 40 이하 지수형 중 수익률 높은 3개",
@@ -157,8 +170,8 @@ class AskTemplateRenderTests(SimpleTestCase):
     def test_정상답변_요약_지표_차트_표_근거_면책이_모두_그려진다(self):
         h = self._render(_answer_ctx())
         self.assertIn("Micron 10년 추이랑", h)                        # 질문 에코
-        self.assertIn("누적수익률은 +6,208.3%", h)                    # 요약 문장
-        self.assertIn("2020-03-16의 -19.8%", h)
+        self.assertIn('누적수익률은 <span class="hl">+6,208.3%</span>', h)   # 요약 문장
+        self.assertIn('2020-03-16의 <span class="hl-red">-19.8%</span>', h)
         self.assertEqual(h.count('class="stat-card"'), 2)             # 지표 카드
         self.assertIn("+6,208.3%", h)
         self.assertIn("<polyline", h)                                 # 차트
@@ -177,13 +190,62 @@ class AskTemplateRenderTests(SimpleTestCase):
         body = h[h.index('<div class="answer">'):]
         self.assertEqual(body[:body.index("</div>")].count("<p>"), 2)
 
+    def test_answer_html의_수치강조가_그대로_나간다(self):
+        """ask_agent.highlight() 가 씌운 .hl/.hl-red 는 살아서 나와야 한다."""
+        h = self._render(_answer_ctx())
+        self.assertIn('<span class="hl">+6,208.3%</span>', h)
+        self.assertIn('<span class="hl-red">-19.8%</span>', h)
+
+    def test_강조_스타일이_실제로_정의돼_있다(self):
+        """마크업만 있고 CSS가 없으면 강조가 통째로 죽는다 — 눈으로만 알 수 있어서 못 박아 둔다."""
+        h = self._render(_answer_ctx())
+        self.assertIn(".answer .hl {", h)
+        self.assertIn(".answer .hl-red {", h)
+
+    def test_answer_html이_없으면_평문_문단으로_떨어진다(self):
+        h = self._render(_answer_ctx(answer_html=None))
+        self.assertIn("누적수익률은 +6,208.3%", h)
+        self.assertNotIn('<span class="hl">', h)
+
+    def test_질문은_이스케이프한다(self):
+        """|safe 는 서버가 만든 answer_html 에만 건다. 사용자 입력은 절대 아니다."""
+        h = self._render(_answer_ctx(question='<img src=x onerror="alert(1)">'))
+        self.assertNotIn('<img src=x', h)
+        self.assertIn("&lt;img src=x", h)
+
+    def test_answer_html에_들어온_스크립트는_통과시키지_않는다(self):
+        """highlight() 가 escape 후 태그를 끼우므로 원문 <script> 는 애초에 못 온다.
+        계약이 깨져 날것이 오면 화면에 실행 가능한 태그로 남는다는 것을 못 박아 둔다."""
+        h = self._render(_answer_ctx(answer_html="<p>&lt;script&gt;alert(1)&lt;/script&gt;</p>"))
+        self.assertNotIn("<script>alert(1)</script>", h)
+
     def test_메타줄에_시각_소요시간_실행도구_남은횟수가_나온다(self):
         h = self._render(_answer_ctx())
         self.assertIn("2026-08-06 09:41", h)
-        self.assertIn("3초", h)                       # elapsed_ms 3241 → 3초
+        self.assertIn("3.2초", h)                     # elapsed_s 소수 1자리
         self.assertIn("<code>metric_calc</code>", h)
         self.assertIn("<code>price_series</code>", h)
         self.assertIn("오늘 1 / 3회", h)
+
+    def test_차트에_낙폭음영과_고점저점_마커가_그려진다(self):
+        h = self._render(_answer_ctx())
+        self.assertIn('<rect x="563.0" y="20" width="55.0" height="192" '
+                      'fill="#F7C9C2" opacity=".35"/>', h)
+        self.assertIn("최대낙폭 구간", h)                                  # 범례
+        self.assertIn('fill="#fff" stroke="#E5503C" stroke-width="1.6"', h)  # 고점 빈 점
+        self.assertIn('cx="618.0" cy="137.9" r="3" fill="#E5503C"', h)       # 저점 채운 점
+        self.assertIn("고점 $152.36", h)
+        self.assertIn("저점 $64.56 (-57.6%)", h)
+        self.assertRegex(h, r'text-anchor="start"[^>]*>저점')
+
+    def test_낙폭구간이_없으면_음영도_마커도_안_그린다(self):
+        chart = dict(CHART_BLOCK, shade=None, markers=[])
+        blocks = [b if b.get("type") != "chart" else chart
+                  for b in _answer_ctx()["blocks"]]
+        h = self._render(_answer_ctx(blocks=blocks))
+        self.assertNotIn("최대낙폭 구간", h)
+        self.assertNotIn("#F7C9C2", h)
+        self.assertIn("<polyline", h)
 
     def test_표_정렬은_columns의_num을_따른다(self):
         """기초자산은 두 번째 열이지만 텍스트라 왼쪽 정렬이어야 한다."""
@@ -262,10 +324,12 @@ class AskTemplateRenderTests(SimpleTestCase):
         self.assertIn("오늘 <b style=\"color:var(--text-2)\">7</b>회", h)
         self.assertNotIn("하루 None회", h)
 
-    def test_조회범위_안내가_붙는다(self):
+    def test_조회범위_안내는_coverage_line과_같은_라벨을_쓴다(self):
+        """화면과 시스템 프롬프트가 서로 다른 수를 말하면 안 된다."""
         h = self._render(_answer_ctx())
-        self.assertIn("2016-08-05 ~ 2026-08-05", h)
-        self.assertIn("31,005건", h)
+        self.assertIn("기초자산 시세 44티커, 2016-08-05~2026-08-05", h)
+        self.assertIn("수집 상품 4,495건 중 검색·통계 대상은 ELB·DLB 제외 4,050건", h)
+        self.assertIn("SEIBro 상환 집계 2015~2026년", h)
 
     def test_어떤_상태에서도_템플릿_주석이_화면에_새지_않는다(self):
         states = {"정상": _answer_ctx(),
