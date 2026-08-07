@@ -1,5 +1,6 @@
 import calendar as pycalendar
 import logging
+import math
 from datetime import date, timedelta
 
 from django.conf import settings
@@ -109,6 +110,34 @@ def _week_range(offset: int = 0):
 WEEKLY_FILTER_PARAMS = ["asset", "ki_max", "yield_min", "currency",
                         "no_ki", "issuer", "preset", "sort", "dir"]
 
+# 주 이동 폭의 한계(약 100년). 이보다 크면 timedelta(weeks=offset)가 date 범위를
+# 벗어나 OverflowError를 낸다 — ?w=999999가 그랬다.
+MAX_WEEK_OFFSET = 5200
+
+
+def _int_param(raw, default=None, lo=None, hi=None):
+    """GET으로 들어온 문자열을 정수로. 무효하거나 범위 밖이면 default.
+
+    화면에 오류를 띄우지 않는다. 주소창을 손댔거나 링크가 깨진 것뿐이라
+    방문자가 할 수 있는 일이 없고, ?preset=abc를 공란으로 되돌린 것과 같은 처리다.
+    """
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    if (lo is not None and value < lo) or (hi is not None and value > hi):
+        return default
+    return value
+
+
+def _float_param(raw, default=None):
+    """같은 규칙의 실수판. nan·inf는 비교가 성립하지 않으므로 무효로 본다."""
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return value if math.isfinite(value) else default
+
 # 시장 국면 카드에 표시할 대표 지수
 REGIME_INDEXES = [("KOSPI200", "KOSPI200 Index"), ("S&P500", "S&P500 Index"),
                   ("Nikkei225", "Nikkei225 Index"), ("Euro Stoxx 50", "Euro Stoxx 50 Index")]
@@ -211,7 +240,11 @@ def weekly(request):
     _saved.pop("w", None)
     request.session["weekly_filters"] = _saved.urlencode()
 
-    offset = int(request.GET.get("w", 0))
+    # 주차 이동 w도 ?preset과 같은 유형이었다 — GET 문자열을 그대로 int()에 넣어
+    # 무효한 값이면 /weekly/가 통째로 500이었다. (2026-08-07 실측:
+    # ?w=abc·?w=1.5·?w=·?w=1e3·?w=0x10 → ValueError, ?w=999999 → timedelta의
+    # OverflowError.) 무효한 값은 조용히 이번 주(0)로 되돌린다.
+    offset = _int_param(request.GET.get("w"), 0, lo=-MAX_WEEK_OFFSET, hi=MAX_WEEK_OFFSET)
     monday, sunday = _week_range(offset)
 
     qs = Product.objects.listed().filter(sub_end__gte=monday, sub_end__lte=sunday)
@@ -236,6 +269,16 @@ def weekly(request):
     if preset is None:
         preset_id = ""
 
+    # 숫자 칸(낙인 이하 · 수익률 이상)도 같은 자리였다 — ?ki_max=abc·?ki_max=45.5·
+    # ?yield_min=abc가 int()·float()에서 ValueError를 내 500이었다(2026-08-07 실측).
+    # 무효하면 그 칸을 안 건 것으로 보고, 화면 입력칸도 공란으로 되돌린다.
+    v_ki_max = _int_param(f_ki_max)
+    if v_ki_max is None:
+        f_ki_max = ""
+    v_yield_min = _float_param(f_yield_min)
+    if v_yield_min is None:
+        f_yield_min = ""
+
     if preset:
         qs = preset.match_queryset(qs)
     else:
@@ -245,11 +288,11 @@ def weekly(request):
             qs = qs.filter(asset_type=f_asset)
         if f_currency:
             qs = qs.filter(currency=f_currency)
-        if f_yield_min:
-            qs = qs.filter(yield_rate__gte=float(f_yield_min))
-        if f_ki_max:
+        if v_yield_min is not None:
+            qs = qs.filter(yield_rate__gte=v_yield_min)
+        if v_ki_max is not None:
             from django.db.models import Q
-            cond = Q(is_no_ki=False, ki__lte=int(f_ki_max))
+            cond = Q(is_no_ki=False, ki__lte=v_ki_max)
             if f_no_ki != "exclude":
                 cond |= Q(is_no_ki=True)
             qs = qs.filter(cond)
