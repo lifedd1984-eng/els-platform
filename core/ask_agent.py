@@ -470,6 +470,89 @@ def normalize_question(q):
     return re.sub(r"\s+", " ", (q or "").strip())
 
 
+# ══════════════════════════════════════════════════════════════════
+# 상대 기간 — 서버가 계산한다
+# ══════════════════════════════════════════════════════════════════
+# 2026-08-07 조 팀장 첫 실사용에서 "지난 10년"을 물었는데 해석턴이
+# 2016-08-05~2024-08-06(8.00년)을 만들어 넘겼다. 틀린 구간의 숫자가
+# 사실처럼 표에 나갔다. 날짜는 모델이 생성할 값이 아니라 오늘에서
+# 기계적으로 나오는 값이라, 해석턴에 넘기기 전에 서버가 확정한다.
+
+# "지난/최근"이 없어도 "10년 추이"는 오늘 기준 10년이다 — 그 표현이
+# 실제로 가장 흔하고, 여기서 새면 모델이 다시 날짜를 지어낸다
+_REL_YEARS = re.compile(r"(?:지난|최근|근)?\s*(\d{1,2})\s*년(?:간|동안|치)?")
+_REL_MONTHS = re.compile(r"(?:지난|최근|근)?\s*(\d{1,3})\s*개월(?:간|동안|치)?")
+_THIS_YEAR = re.compile(r"올해|금년")
+_LAST_YEAR = re.compile(r"작년|지난해")
+_ABS_DATE = re.compile(r"\d{4}\s*년|\d{4}-\d{2}")
+
+
+def resolve_period(q, today=None):
+    """질문의 상대 기간 표현 → (start, end, 라벨). 없으면 (None, None, None).
+
+    절대 연도를 함께 적었으면(예: "2018년부터") 사용자가 구간을 직접
+    지정한 것이므로 건드리지 않는다.
+    """
+    today = today or date.today()
+    if not q or _ABS_DATE.search(q):
+        return None, None, None
+    end = today
+    m = _REL_YEARS.search(q)
+    if m:
+        n = int(m.group(1))
+        if not 1 <= n <= 30:
+            return None, None, None
+        try:
+            start = end.replace(year=end.year - n)
+        except ValueError:            # 2/29
+            start = end.replace(year=end.year - n, day=28)
+        return start.isoformat(), end.isoformat(), f"지난 {n}년"
+    m = _REL_MONTHS.search(q)
+    if m:
+        n = int(m.group(1))
+        if not 1 <= n <= 360:
+            return None, None, None
+        y, mo = end.year, end.month - n
+        while mo <= 0:
+            y, mo = y - 1, mo + 12
+        d = min(end.day, 28)
+        return date(y, mo, d).isoformat(), end.isoformat(), f"최근 {n}개월"
+    if _THIS_YEAR.search(q):
+        return date(end.year, 1, 1).isoformat(), end.isoformat(), "올해"
+    if _LAST_YEAR.search(q):
+        return (date(end.year - 1, 1, 1).isoformat(),
+                date(end.year - 1, 12, 31).isoformat(), "작년")
+    return None, None, None
+
+
+# "기초자산 전체"처럼 대상을 안 좁힌 질문 — 조용히 하나 고르면 안 된다
+_ALL_ASSETS = re.compile(r"(모든|전체|여러|각|주요)\s*기초자산|기초자산\s*(전체|별|들)")
+
+# 기능·사용법 질문 — 거절이 아니라 안내다. 모델까지 갈 일이 아니다
+_HELP_Q = re.compile(
+    r"(뭘|멀|무엇을|뭐를?|어떤\s*(걸|것|질문))\s*(할\s*수\s*있|물어|답)"
+    r"|사용법|어떻게\s*(쓰|써|사용|물어)|도움말|기능\s*(설명|소개|알려)"
+    r"|넌\s*(뭐|누구)|너는\s*(뭐|누구)|할\s*수\s*있는\s*(거|것)"
+)
+
+
+def help_answer():
+    """능력·사용법 질문에 대한 정형 안내. 모델을 부르지 않아 비용이 0이다."""
+    from django.conf import settings as _s
+    groups = getattr(_s, "ASK_PRESETS", None) or []
+    lines = []
+    for g in groups:
+        items = (g.get("items") or [])[:2]
+        if items:
+            lines.append(f"{g.get('label', '')}: " + " / ".join(items))
+    body = "\n".join(lines)
+    return (
+        "저장된 데이터를 조회해 사실과 통계로 답합니다. "
+        "추천, 매수·매도 의견, 시세 전망은 제공하지 않습니다.\n\n"
+        "이런 것을 물어보실 수 있습니다.\n" + body
+    )
+
+
 def question_key(q, stamp=None):
     """당일 캐시 키. 데이터 갱신일을 섞어 배치 전후 답이 섞이지 않게 한다.
 
@@ -512,9 +595,30 @@ def run(user, question):
         "ungrounded": [], "usage": usage_by_model, "cost_usd": 0.0, "elapsed_ms": 0,
     }
 
+    # ── 능력·사용법 질문은 모델을 부르지 않는다 ────────────
+    # "넌 뭘 할 수 있어?"가 OPINION_REQUESTED로 거절되던 것을 고친다
+    # (2026-08-07 조 팀장 첫 실사용). 첫 사용자가 가장 먼저 던지는 질문이다.
+    if _HELP_Q.search(q):
+        txt = help_answer()
+        out.update(answer=txt, answer_html=escape(txt).replace("\n", "<br>"),
+                   status="ok", tools=["help"])
+        out["elapsed_ms"] = int((time.monotonic() - t0) * 1000)
+        return out
+
+    # ── 상대 기간은 서버가 확정해 사실로 넘긴다 ─────────────
+    p_start, p_end, p_label = resolve_period(q)
+    hint = ""
+    if p_start:
+        hint = (f"\n[확정 기간] 이 질문의 '{p_label}'은 {p_start} ~ {p_end}이다. "
+                "도구의 start·end에 이 값을 그대로 쓴다. 다른 날짜를 만들지 않는다.\n")
+    if _ALL_ASSETS.search(q):
+        hint += ("\n[대상] 질문이 기초자산을 특정하지 않았다. 임의로 하나를 고르지 말고, "
+                 "여러 자산을 비교하려면 asset에 쉼표로 나열하거나, 어느 자산인지 "
+                 "되물어야 하면 refuse(code=NO_ASSET)로 후보를 제시한다.\n")
+
     # ── 턴 1: 해석 (Haiku) ─────────────────────────────
     try:
-        r1 = _call(m_interp, system_interpret(), DATA_TOOLS + [REFUSE_TOOL],
+        r1 = _call(m_interp, system_interpret() + hint, DATA_TOOLS + [REFUSE_TOOL],
                    [{"role": "user", "content": q}], limits["interpret"],
                    tool_choice={"type": "any"})
     except Exception:
@@ -549,6 +653,15 @@ def run(user, question):
         return out
 
     # ── 도구 실행 ──────────────────────────────────────
+    # 확정 기간이 있으면 모델이 준 날짜를 신뢰하지 않고 덮어쓴다. 프롬프트
+    # 지시만으로는 다시 샌다 — 실제로 "지난 10년"에 8년치를 만들어 넣었다.
+    for c in calls:
+        if p_start and c["name"] in ("metric_calc", "price_series"):
+            inp = c.setdefault("input", {}) or {}
+            if inp.get("start") != p_start or inp.get("end") != p_end:
+                out["guard_flags"].append("PERIOD_CORRECTED")
+            inp["start"], inp["end"] = p_start, p_end
+            c["input"] = inp
     results = []
     for c in calls:
         res = ask_tools.run(c["name"], user, c.get("input") or {})
