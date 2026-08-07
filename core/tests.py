@@ -596,6 +596,65 @@ class DisclosedRefPriceTest(SimpleTestCase):
         self.assertEqual(market.pick_ref_price(100.0, None), (None, "폴백"))
 
 
+class TickerMapKTTest(SimpleTestCase):
+    """KT·삼성중공업 티커 매핑 — 빠지면 시세가 통째로 없어진다.
+
+    매핑이 없으면 resolve_ticker가 None → v7_peak_gate가 (False, None)을 돌려
+    그 상품은 고점 게이트에서 무조건 탈락하고(결측=탈락 원칙), sync_prices의
+    일일 적재 대상에서도 빠진다. 운영 기준 KT 42건·삼성중공업 2건이 걸려 있다.
+
+    ⚠ 이 클래스의 핵심은 **KT ≠ KT&G**를 못박는 것이다. 둘은 통신사와 담배회사로
+      완전히 다른 회사인데 이름이 겹쳐 보인다. 실측 주가도 5.3만원 vs 18.7만원이라
+      잘못 붙으면 레벨이 3배 이상 틀어진다.
+    """
+
+    def test_KT와_삼성중공업이_티커맵에_있다(self):
+        from core import market
+        self.assertEqual(market.TICKER_MAP.get("KT"), "030200.KS")
+        self.assertEqual(market.TICKER_MAP.get("삼성중공업"), "010140.KS")
+
+    def test_KT는_KT앤지로_잘못_해석되지_않는다(self):
+        """KT&G(033780)가 KT(030200)로 붙으면 안 된다 — 오매핑 방지선."""
+        from core import market
+        self.assertEqual(market.resolve_ticker("KT"), "030200.KS")
+        # KT&G는 어떤 경우에도 KT의 티커를 받아선 안 된다.
+        # (지금은 매핑이 없어 None이다. 나중에 넣더라도 반드시 033780이어야 한다.)
+        ktg = market.resolve_ticker("KT&G")
+        self.assertNotEqual(ktg, "030200.KS")
+        if ktg is not None:
+            self.assertEqual(ktg, "033780.KS")
+
+    def test_KT앤지는_한_토큰으로_쪼개진다(self):
+        """'&'는 구분자가 아니다 — 쪼개지면 'KT' 조각이 생겨 오매핑으로 이어진다."""
+        from core import market
+        self.assertEqual(market.split_assets("KT&G"), ["KT&G"])
+        self.assertEqual(market.split_assets("KOSPI200 , KT&G"), ["KOSPI200", "KT&G"])
+        self.assertEqual(market.split_assets("KT"), ["KT"])
+        self.assertEqual(market.split_assets("삼성전자, 삼성중공업"),
+                         ["삼성전자", "삼성중공업"])
+
+    def test_운영_표기_그대로_티커가_잡힌다(self):
+        """운영 DB의 assets_raw 실제 표기(삼성증권 KT / 신한 삼성전자·삼성중공업)."""
+        from core import market
+        for raw, expect in (("KT", ["030200.KS"]),
+                            ("삼성전자, 삼성중공업", ["005930.KS", "010140.KS"])):
+            got = [market.resolve_ticker(n) for n in market.split_assets(raw)]
+            self.assertEqual(got, expect, raw)
+
+    def test_SEIBro_공시자산도_같은_티커로_맞춰진다(self):
+        """SEIBro는 '케이티'·'케이티앤지'로 표기한다 — ISIN으로 갈라져야 공시 기준가가 붙는다."""
+        from core import market
+        self.assertEqual(
+            market.resolve_seibro_ticker({"name": "케이티", "isin": "KR7030200000"}),
+            "030200.KS")
+        self.assertEqual(
+            market.resolve_seibro_ticker({"name": "케이티앤지", "isin": "KR7033780008"}),
+            "033780.KS")
+        self.assertEqual(
+            market.resolve_seibro_ticker({"name": "삼성중공업", "isin": "KR7010140002"}),
+            "010140.KS")
+
+
 class PeakIssueGateTest(SimpleTestCase):
     """고점 게이트는 '발행 시점' 기준이다 — 10년 검증 스크립트와 같은 식.
 
