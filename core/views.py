@@ -1461,11 +1461,20 @@ def market_trend(request):
 
 
 # ── 상환 캘린더 ───────────────────────────────────
+# 조회 가능한 연도. date가 다루는 1~9999에서 앞뒤 한 해씩 물러선다 —
+# 이전/다음 달 링크가 year±1을 만들기 때문이다.
+MIN_YEAR, MAX_YEAR = date.min.year + 1, date.max.year - 1
+
+
 @login_required
 def redemption_calendar(request):
     today = date.today()
-    year = int(request.GET.get("y", today.year))
-    month = int(request.GET.get("m", today.month))
+    # 주간 청약의 ?w와 같은 자리 — GET 문자열을 그대로 int()에 넣고 있었다.
+    # 2026-08-07 실측: ?y=abc·?m=abc는 ValueError, ?m=13·?m=0은 달력 생성에서
+    # IllegalMonthError, ?y=0·?y=999999는 date() 범위 초과로 전부 500이었다.
+    # 무효하면 조용히 이번 달로 돌아온다.
+    year = _int_param(request.GET.get("y"), today.year, lo=MIN_YEAR, hi=MAX_YEAR)
+    month = _int_param(request.GET.get("m"), today.month, lo=1, hi=12)
 
     prev_y, prev_m = (year - 1, 12) if month == 1 else (year, month - 1)
     next_y, next_m = (year + 1, 1) if month == 12 else (year, month + 1)
