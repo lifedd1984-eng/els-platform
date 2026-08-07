@@ -138,6 +138,7 @@ def _float_param(raw, default=None):
         return default
     return value if math.isfinite(value) else default
 
+
 # 시장 국면 카드에 표시할 대표 지수
 REGIME_INDEXES = [("KOSPI200", "KOSPI200 Index"), ("S&P500", "S&P500 Index"),
                   ("Nikkei225", "Nikkei225 Index"), ("Euro Stoxx 50", "Euro Stoxx 50 Index")]
