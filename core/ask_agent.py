@@ -367,18 +367,28 @@ def _grounded(token, allowed, haystack):
     return c in haystack or c.replace(",", "") in haystack
 
 
-def check_answer(text, tool_results, has_portfolio):
-    """(위반코드 리스트, 근거없는 수치 리스트)."""
+def check_answer(text, tool_results, has_portfolio, question=""):
+    """(위반코드 리스트, 근거없는 수치 리스트).
+
+    question을 함께 받는 이유: 사용자가 질문에 쓴 수치를 답이 되받아 쓰는 것은
+    지어낸 게 아니다. "최대하락폭 이후 100%상승까지"를 물으면 답에 '100%'가
+    나오는데, 이를 근거없는 수치로 보고 문장을 통째로 지우던 것을 고친다
+    (2026-08-07 조 팀장 실사용에서 bad=['100%']로 확인).
+    """
     flags, bad = [], []
     allowed = set()
     for r in tool_results:
         allowed |= ask_tools.displays(r)
     allowed = {a.replace(" ", "") for a in allowed}
     haystack = ask_tools.to_json(tool_results).replace(" ", "")
+    asked = (question or "").replace(" ", "")
 
     for tok in _NUM_TOKEN.findall(text):
+        t = tok.strip()
+        if t.replace(" ", "") in asked:      # 질문이 쓴 수치를 되받은 것
+            continue
         if not _grounded(tok, allowed, haystack):
-            bad.append(tok.strip())
+            bad.append(t)
     if bad:
         flags.append("NUMERIC_UNGROUNDED")
 
@@ -538,8 +548,10 @@ _HELP_Q = re.compile(
 
 def help_answer():
     """능력·사용법 질문에 대한 정형 안내. 모델을 부르지 않아 비용이 0이다."""
-    from django.conf import settings as _s
-    groups = getattr(_s, "ASK_PRESETS", None) or []
+    try:                                  # 예시는 화면과 같은 출처를 쓴다
+        from .views import ASK_PRESETS as groups
+    except Exception:
+        groups = []
     lines = []
     for g in groups:
         items = (g.get("items") or [])[:2]
@@ -734,7 +746,7 @@ def run(user, question):
         return out
 
     text = (final.get("input") or {}).get("text", "").strip()
-    flags, bad = check_answer(text, results, has_portfolio)
+    flags, bad = check_answer(text, results, has_portfolio, question=q)
     if flags:
         # ⚠ 숫자는 사실이라 지울 이유가 없다. 설명 문장만 정형 문구로 바꾸고
         #   표·차트·계산 근거는 그대로 노출한다.
