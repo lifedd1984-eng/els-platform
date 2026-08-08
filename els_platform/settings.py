@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -304,3 +305,14 @@ LOGGING = {
         "core": {"handlers": ["errfile", "console"], "level": "INFO", "propagate": False},
     },
 }
+
+# ── 테스트 실행 시에만 적용되는 가속 설정 ──────────────────────────
+# 운영 동작에는 영향이 없다. manage.py test 로 돌 때만 켜진다.
+#   · 비밀번호 해싱: 기본 PBKDF2는 의도적으로 느리다(보안). 테스트가
+#     사용자를 20번 만드는데 그때마다 수백 ms를 태울 이유가 없다.
+#   · 마이그레이션: 테스트 DB는 매번 27개를 순서대로 적용한다. 모델에서
+#     직접 만들면 그 시간이 통째로 빠진다.
+# (2026-08-09 — 전체 테스트가 6분을 넘겨 정리)
+if "test" in sys.argv:
+    PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+    LOGGING["loggers"]["core"]["level"] = "CRITICAL"

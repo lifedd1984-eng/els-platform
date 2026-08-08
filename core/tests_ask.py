@@ -33,6 +33,18 @@ def _resp(blocks, **usage):
     return {"content": blocks, "usage": u}
 
 
+def _seed_mu(n, start=date(2024, 1, 1), ticker="MU"):
+    """시세 n일치를 한 번에 넣는다.
+
+    한 건씩 create하면 테스트마다 수십 번 INSERT가 돌아 모듈 전체가
+    3분을 넘겼다. setUpTestData + bulk_create로 클래스당 1회로 줄인다.
+    """
+    PriceBar.objects.bulk_create([
+        PriceBar(ticker=ticker, date=d, close=100 + i, adj_close=100 + i)
+        for i, d in enumerate(_bdays(start, n))
+    ])
+
+
 class FakeAPI:
     """_call 대역. 턴1/턴2 응답을 순서대로 돌려준다."""
 
@@ -57,10 +69,11 @@ class ToolReasonCodeTests(TestCase):
     막으려는 상황이다.
     """
 
+    @classmethod
+    def setUpTestData(cls):
+        _seed_mu(40)
+
     def setUp(self):
-        for i, d in enumerate(_bdays(date(2024, 1, 1), 40)):
-            PriceBar.objects.create(ticker="MU", date=d,
-                                    close=100 + i, adj_close=100 + i)
         ask_tools._COV.update(day=None, data=None)
 
     def test_보유구간_이전을_물으면_OUT_OF_RANGE(self):
@@ -102,10 +115,11 @@ class ToolReasonCodeTests(TestCase):
 class ToolDisplayTests(TestCase):
     """도구는 원본값과 표시용 문자열을 함께 준다 (사후검사가 이걸 대조한다)."""
 
+    @classmethod
+    def setUpTestData(cls):
+        _seed_mu(60)
+
     def setUp(self):
-        for i, d in enumerate(_bdays(date(2024, 1, 1), 60)):
-            PriceBar.objects.create(ticker="MU", date=d,
-                                    close=100 + i, adj_close=100 + i)
         ask_tools._COV.update(day=None, data=None)
 
     def test_지표는_value와_display를_함께_준다(self):
@@ -365,11 +379,12 @@ class QuotaTests(TestCase):
 class GuardedAnswerKeepsFactsTest(TestCase):
     """사후검사에 걸려도 표·근거는 그대로 남아야 한다. 숫자는 사실이다."""
 
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user("u1", password="x")
+        _seed_mu(60)
+
     def setUp(self):
-        self.user = User.objects.create_user("u1", password="x")
-        for i, d in enumerate(_bdays(date(2024, 1, 1), 60)):
-            PriceBar.objects.create(ticker="MU", date=d,
-                                    close=100 + i, adj_close=100 + i)
         ask_tools._COV.update(day=None, data=None)
 
     def test_문장만_바뀌고_블록과_근거는_유지된다(self):
