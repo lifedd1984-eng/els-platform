@@ -272,6 +272,11 @@ def resolve_ticker(asset_name: str):
     name = asset_name.strip()
     # 지수형 자산명 뒤의 " Index" 접미사 제거 (예: "KOSPI200 Index" → "KOSPI200")
     name = re.sub(r"\sIndex$", "", name, flags=re.IGNORECASE).strip()
+    # 국가 접미사 제거 — "NVIDIA Corporation(US)" 형태 (하나증권 표기).
+    # auto_resolve_ticker에는 있었는데 여기 없어서, 라이브 경로는 이 표기를
+    # 통째로 해석하지 못하고 시세 결측으로 떨어졌다 (2026-08-07 확인).
+    name = re.sub(r"\(\s*(US|USA|JP|HK|KR|미국|일본|홍콩)\s*\)$", "",
+                  name, flags=re.IGNORECASE).strip()
     # 정식 회사명 → 축약명 정규화 (예: "Micron Technology" → "Micron",
     # "Palantir Technologies Inc. Class A" → "Palantir") — 표시용 맵 재사용
     name = _DISPLAY_SHORTEN_MAP.get(name.lower(), name)
