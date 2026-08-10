@@ -1,0 +1,7 @@
+{% comment %}fetch 응답용 껍데기 — 네비·헤드 없이 content 블록만 렌더한다.
+
+portfolio.html이 base를 변수(base_template)로 받아 쓰기 때문에, 평소 GET에는
+core/base.html이, fetch 요청에는 이 파일이 들어간다. 여기서 메시지를 그리지
+않는 것은 일부러다 — 조작 결과 문구는 JSON의 message로 따로 내려보내
+화면 위쪽 #pf-notice에 붙인다.{% endcomment %}
+{% block content %}{% endblock %}

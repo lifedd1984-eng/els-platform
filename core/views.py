@@ -9,7 +9,9 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
@@ -774,71 +776,114 @@ def watchlist(request):
 
 
 # ── 포트폴리오 ────────────────────────────────────
+# 조작(POST)은 fetch로 처리하고 바뀐 화면 조각만 돌려준다. 전체 새로고침을 하면
+# 리다이렉트가 지금 URL의 쿼리스트링(정렬·페이지)을 버려서 보던 화면이 풀린다.
+# 다만 JS가 없거나 fetch가 실패하면 예전처럼 일반 폼 제출 + 리다이렉트로 간다.
+# 조각의 경계(id="pf-*")는 portfolio.html에 있고, 어느 조각을 갈아끼울지는
+# 같은 파일의 PF_SECTIONS(JS)가 정한다 — 서버는 조각을 고르지 않는다.
+
+
+def _pf_is_fetch(request):
+    """fetch가 보낸 요청인지 — 일반 폼 제출과 갈라야 폴백이 성립한다."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+
 @login_required
 def portfolio(request):
     if request.method == "POST":
-        action = request.POST.get("action")
-        if action == "add":
-            product = get_object_or_404(Product, pk=request.POST.get("product_id"))
-            Investment.objects.create(
-                user=request.user,
-                product=product,
-                amount=int(request.POST.get("amount", "0").replace(",", "")),
-                # 발행일 미입력 시 상품 발행일 기준 — 실현수익 연환산이
-                # 발행일~상환일 실경과일로 계산되므로 발행일이 정확한 기준
-                invested_at=(request.POST.get("invested_at")
-                             or product.issued_on or date.today()),
-                broker_account=request.POST.get("broker_account", ""),
-                memo=request.POST.get("memo", ""),
-            )
-            _scope(WatchItem.objects.filter(product=product), request.user).delete()
-            messages.success(request, "투자를 등록했습니다.")
-        elif action == "redeem":
-            inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
-            inv.status = request.POST.get("status", "조기상환")
-            inv.redeemed_at = request.POST.get("redeemed_at") or date.today()
-            amt = request.POST.get("redeemed_amount", "").replace(",", "")
-            inv.redeemed_amount = int(amt) if amt else None
-            inv.save()
-            messages.success(request, "상환 처리했습니다.")
-        elif action == "edit":
-            inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
-            changed = False
-            if "amount" in request.POST:
-                a = request.POST.get("amount", "").replace(",", "").strip()
-                if a.isdigit() and int(a) > 0:
-                    inv.amount = int(a)
-                    changed = True
-            if "redeemed_amount" in request.POST:
-                r = request.POST.get("redeemed_amount", "").replace(",", "").strip()
-                inv.redeemed_amount = int(r) if r.isdigit() else None
-                changed = True
-            if changed:
-                inv.save()
-                messages.success(request, "금액을 수정했습니다.")
-        elif action in ("dismiss_verdict", "undismiss_verdict"):
-            # 판정이 틀렸을 때(증권사 확인 결과 상환이 아닌 경우) 그 회차 재알림만 멈춘다.
-            # 회차마다 행이 따로라 다음 회차 판정·알림은 그대로 동작한다.
-            inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
-            v = RedemptionVerdict.objects.filter(
-                investment=inv, round_no=request.POST.get("round_no")).first()
-            if v:
-                on = action == "dismiss_verdict"
-                v.dismissed_at = timezone.now() if on else None
-                v.save(update_fields=["dismissed_at"])
-                messages.success(
-                    request,
-                    "판정을 무시했습니다. 이 회차는 다시 알리지 않습니다."
-                    if on else "판정 무시를 해제했습니다.")
-        elif action == "delete":
-            Investment.objects.filter(pk=request.POST.get("id"), user=request.user).delete()
-            messages.success(request, "투자 기록을 삭제했습니다.")
-        elif action == "bulk_delete":
-            ids = request.POST.getlist("ids")
-            n, _ = Investment.objects.filter(pk__in=ids, user=request.user).delete()
-            messages.success(request, f"{n}건의 투자 기록을 삭제했습니다.")
+        _portfolio_action(request)
+        if _pf_is_fetch(request):
+            return _portfolio_fragment_response(request)
         return redirect(request.POST.get("next") or "portfolio")
+    return render(request, "core/portfolio.html", _portfolio_context(request))
 
+
+def _portfolio_fragment_response(request):
+    """페이지 전체 대신 content 블록만 렌더해 JSON으로 준다.
+
+    조각을 액션별로 골라 보내지 않고 항상 전부 보낸다 — 상환 처리 하나가
+    통계·리스크·보유·상환완료를 동시에 바꿔서, 액션마다 목록을 관리하면
+    빠뜨린 조각이 조용히 낡은 값으로 남는다. 실제로 DOM을 갈아끼우는 건
+    내용이 달라진 조각뿐이라(JS에서 비교) 화면 깜빡임은 없다.
+    """
+    # 메시지는 여기서 비운다 — 안 그러면 세션에 남아 다음 새로고침에 또 뜬다
+    storage = messages.get_messages(request)
+    texts = [str(m) for m in storage]
+    storage.used = True
+    ctx = _portfolio_context(request)
+    ctx["base_template"] = "core/_pf_fragment_base.html"
+    return JsonResponse({
+        "html": render_to_string("core/portfolio.html", ctx, request=request),
+        "message": " ".join(texts),
+    })
+
+
+def _portfolio_action(request):
+    """포트폴리오 화면의 데이터 조작 — 응답 형식과 무관한 부분."""
+    action = request.POST.get("action")
+    if action == "add":
+        product = get_object_or_404(Product, pk=request.POST.get("product_id"))
+        Investment.objects.create(
+            user=request.user,
+            product=product,
+            amount=int(request.POST.get("amount", "0").replace(",", "")),
+            # 발행일 미입력 시 상품 발행일 기준 — 실현수익 연환산이
+            # 발행일~상환일 실경과일로 계산되므로 발행일이 정확한 기준
+            invested_at=(request.POST.get("invested_at")
+                         or product.issued_on or date.today()),
+            broker_account=request.POST.get("broker_account", ""),
+            memo=request.POST.get("memo", ""),
+        )
+        _scope(WatchItem.objects.filter(product=product), request.user).delete()
+        messages.success(request, "투자를 등록했습니다.")
+    elif action == "redeem":
+        inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
+        inv.status = request.POST.get("status", "조기상환")
+        inv.redeemed_at = request.POST.get("redeemed_at") or date.today()
+        amt = request.POST.get("redeemed_amount", "").replace(",", "")
+        inv.redeemed_amount = int(amt) if amt else None
+        inv.save()
+        messages.success(request, "상환 처리했습니다.")
+    elif action == "edit":
+        inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
+        changed = False
+        if "amount" in request.POST:
+            a = request.POST.get("amount", "").replace(",", "").strip()
+            if a.isdigit() and int(a) > 0:
+                inv.amount = int(a)
+                changed = True
+        if "redeemed_amount" in request.POST:
+            r = request.POST.get("redeemed_amount", "").replace(",", "").strip()
+            inv.redeemed_amount = int(r) if r.isdigit() else None
+            changed = True
+        if changed:
+            inv.save()
+            messages.success(request, "금액을 수정했습니다.")
+    elif action in ("dismiss_verdict", "undismiss_verdict"):
+        # 판정이 틀렸을 때(증권사 확인 결과 상환이 아닌 경우) 그 회차 재알림만 멈춘다.
+        # 회차마다 행이 따로라 다음 회차 판정·알림은 그대로 동작한다.
+        inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
+        v = RedemptionVerdict.objects.filter(
+            investment=inv, round_no=request.POST.get("round_no")).first()
+        if v:
+            on = action == "dismiss_verdict"
+            v.dismissed_at = timezone.now() if on else None
+            v.save(update_fields=["dismissed_at"])
+            messages.success(
+                request,
+                "판정을 무시했습니다. 이 회차는 다시 알리지 않습니다."
+                if on else "판정 무시를 해제했습니다.")
+    elif action == "delete":
+        Investment.objects.filter(pk=request.POST.get("id"), user=request.user).delete()
+        messages.success(request, "투자 기록을 삭제했습니다.")
+    elif action == "bulk_delete":
+        ids = request.POST.getlist("ids")
+        n, _ = Investment.objects.filter(pk__in=ids, user=request.user).delete()
+        messages.success(request, f"{n}건의 투자 기록을 삭제했습니다.")
+
+
+def _portfolio_context(request):
+    """화면에 필요한 값 전부 — GET 렌더와 fetch 조각 렌더가 같이 쓴다."""
     invs = (Investment.objects.filter(user=request.user)
             .select_related("product").prefetch_related("ki_status", "verdicts"))
     holding = [i for i in invs if i.status == "보유중"]
@@ -1050,7 +1095,8 @@ def portfolio(request):
             "bars": bars,
         }
 
-    return render(request, "core/portfolio.html", {
+    return {
+        "base_template": "core/base.html",
         "vapid_public_key": settings.VAPID_PUBLIC_KEY,
         "perf": perf,
         "h_page": h_page, "d_page": d_page,
@@ -1081,7 +1127,7 @@ def portfolio(request):
         "candidates": candidates,
         "today": today,
         "active_nav": "portfolio",
-    })
+    }
 
 
 # ── 포트폴리오 엑셀 양식 다운로드 ─────────────────

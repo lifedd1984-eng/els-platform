@@ -1,4 +1,5 @@
-{% extends "core/base.html" %}
+{# fetch 응답일 때만 base가 바뀐다 — 그때는 네비 없이 이 content 블록만 렌더된다 #}
+{% extends base_template %}
 {% load humanize %}
 {% load els_extras %}
 {% block title %}포트폴리오 — ELS 레이더{% endblock %}
@@ -12,6 +13,10 @@
   <div style="text-align:right">{% include "core/_push_toggle.html" %}</div>
 </div>
 
+{# fetch 처리 결과·오류 알림 자리. 일반 폼 제출 때는 base.html의 messages가 뜬다 #}
+<div id="pf-notice" class="messages" style="display:none"></div>
+
+<div id="pf-stats">
 <div class="stat-grid cols-5">
   <div class="stat-card">
     <div class="stat-label">총 투자금액</div>
@@ -96,6 +101,7 @@
   </div>
 </div>
 {% endif %}
+</div>{# /pf-stats #}
 
 {# ── 접이식 카드 공통 — 리스크 분석·스트레스 테스트가 .fold-card를 쓴다 ── #}
 <style>
@@ -104,8 +110,12 @@
   .fold-chev{color:var(--text-3);transition:transform .15s}
   details.fold-card[open] .fold-chev{transform:rotate(180deg)}
   details.fold-card:not([open]) summary{margin-bottom:0}
+  /* 처리 중인 폼 — 버튼·입력칸을 잠가 두 번 눌리지 않게 한다 */
+  form.pf-form[data-busy] button,form.pf-form[data-busy] input,
+  form.pf-form[data-busy] select{opacity:.5;pointer-events:none}
 </style>
 
+<div id="pf-analysis">
 {% if risk %}
 <details class="card fold-card">
   <summary class="card-title">
@@ -284,11 +294,15 @@
   {% endif %}
 </div>
 {% endif %}
+</div>{# /pf-analysis #}
 
+<div id="pf-add">
 <div class="card">
   <div class="card-title"><i class="fa-solid fa-plus" style="color:var(--blue)"></i> 투자 등록</div>
-  <form method="post">{% csrf_token %}
+  {# next는 fetch가 아니라 폴백(일반 폼 제출) 때 쓰인다 — 정렬·페이지를 살려 돌아온다 #}
+  <form method="post" class="pf-form">{% csrf_token %}
     <input type="hidden" name="action" value="add">
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
     <div class="form-row">
       <div class="form-field" style="flex:1;min-width:280px">
         <label>상품</label>
@@ -336,9 +350,10 @@
     </div>
   </div>
 </div>
+</div>{# /pf-add #}
 
 <!-- 일괄삭제용 숨김 폼 (테이블 밖 — 중첩폼 방지) -->
-<form method="post" id="bulk-del-form" style="display:none">
+<form method="post" id="bulk-del-form" class="pf-form" style="display:none">
   {% csrf_token %}
   <input type="hidden" name="action" value="bulk_delete">
   <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -346,6 +361,7 @@
 </form>
 
 {# ── 상환 확정 대기: 배리어 충족 판정이 났는데 아직 상환 처리가 안 된 건 ── #}
+<div id="pf-pending">
 {% if pending %}
 <style>
   .pend-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;
@@ -393,7 +409,7 @@
         평가일 {{ v.eval_date|date:"Y.n.j" }} · 조기상환 기준 {{ v.barrier|default:"-" }}% / 가장 부진한 자산 <b style="color:var(--green)">{{ v.worst_level|default:"-" }}%</b>
       </div>
     </div>
-    <form method="post" class="pend-form">
+    <form method="post" class="pend-form pf-form">
       {% csrf_token %}
       <input type="hidden" name="action" value="redeem">
       <input type="hidden" name="id" value="{{ inv.id }}">
@@ -416,7 +432,7 @@
       </div>
       <button type="submit" class="btn btn-primary btn-sm pend-btn">상환 확정</button>
     </form>
-    <form method="post" class="pend-off-form">
+    <form method="post" class="pend-off-form pf-form">
       {% csrf_token %}
       <input type="hidden" name="action" value="{% if v.dismissed_at %}undismiss_verdict{% else %}dismiss_verdict{% endif %}">
       <input type="hidden" name="id" value="{{ inv.id }}">
@@ -430,7 +446,9 @@
   {% endfor %}
 </div>
 {% endif %}
+</div>{# /pf-pending #}
 
+<div id="pf-holding">
 <div class="card" style="padding:8px 16px">
   <div class="card-title" style="padding:12px 4px 4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <span>보유 중 {{ holding_count }}건</span>
@@ -516,10 +534,11 @@
           <td>
             <details style="position:relative">
               <summary class="btn btn-sm" style="list-style:none;cursor:pointer">상환 처리</summary>
-              <form method="post" style="position:absolute;right:0;top:32px;z-index:10;background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.08)">
+              <form method="post" class="pf-form" style="position:absolute;right:0;top:32px;z-index:10;background:#fff;border:1px solid var(--border);border-radius:8px;padding:14px;width:240px;box-shadow:0 4px 16px rgba(0,0,0,.08)">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="redeem">
                 <input type="hidden" name="id" value="{{ inv.id }}">
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <div class="form-field" style="margin-bottom:8px">
                   <label>상태</label>
                   <select name="status">
@@ -549,8 +568,10 @@
   <div class="empty" style="padding:24px 0">보유 중인 투자가 없습니다</div>
   {% endif %}
 </div>
+</div>{# /pf-holding #}
 
 {# ── 조기상환 실패: 지난 평가에서 배리어 미달이 확정된 보유 건 ── #}
+<div id="pf-missed">
 <div class="card" style="padding:8px 16px;border-left:3px solid var(--orange)">
   <div class="card-title" style="padding:12px 4px 4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <span><i class="fa-solid fa-rotate-left" style="color:var(--orange)"></i> 조기상환 실패 {{ missed_count }}건</span>
@@ -597,7 +618,9 @@
   </div>
   {% endif %}
 </div>
+</div>{# /pf-missed #}
 
+<div id="pf-done">
 {% if done_count %}
 <div class="card" style="padding:8px 16px">
   <div class="card-title" style="padding:12px 4px 4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -637,9 +660,10 @@
           </td>
           <td>{{ inv.redeemed_at|date:"Y.n.j"|default:"-" }}</td>
           <td>
-            <form method="post" onsubmit="return confirm('기록을 삭제할까요?')">{% csrf_token %}
+            <form method="post" class="pf-form" onsubmit="return confirm('기록을 삭제할까요?')">{% csrf_token %}
               <input type="hidden" name="action" value="delete">
               <input type="hidden" name="id" value="{{ inv.id }}">
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
               <button class="btn btn-icon"><i class="fa-solid fa-trash" style="color:var(--text-3)"></i></button>
             </form>
           </td>
@@ -651,18 +675,22 @@
   {% include "core/_pagination.html" with page=d_page param="dpage" %}
 </div>
 {% endif %}
+</div>{# /pf-done #}
 
 {% include "core/_disclaimer_inline.html" %}
 
 <script>
+// ── 보유 목록 체크박스 (선택 삭제용) ────────────────
 function els_chk_all(master) {
   document.querySelectorAll('.row-chk').forEach(c => c.checked = master.checked);
   els_chk_update();
 }
 function els_chk_update() {
   const n = document.querySelectorAll('.row-chk:checked').length;
-  document.getElementById('chk-count').textContent = n;
-  document.getElementById('bulk-del-btn').disabled = (n === 0);
+  const cnt = document.getElementById('chk-count');
+  const btn = document.getElementById('bulk-del-btn');
+  if (cnt) cnt.textContent = n;          // 목록이 통째로 새로 그려진 직후엔 없을 수 있다
+  if (btn) btn.disabled = (n === 0);
 }
 function els_bulk_delete() {
   const checked = [...document.querySelectorAll('.row-chk:checked')];
@@ -675,7 +703,103 @@ function els_bulk_delete() {
     inp.type = 'hidden'; inp.name = 'ids'; inp.value = c.value;
     box.appendChild(inp);
   });
-  document.getElementById('bulk-del-form').submit();
+  els_submit(document.getElementById('bulk-del-form'));
+}
+
+// ── 조작(POST)을 새로고침 없이 처리한다 ──────────────
+// 정렬·페이지 상태는 지금 URL 쿼리스트링에 들어 있다. 폼을 그냥 제출하면
+// 처리 후 리다이렉트가 그 쿼리스트링을 버려서 보던 화면이 풀린다. 그래서
+// 같은 URL로 fetch를 보내고, 돌아온 화면 조각 중 내용이 달라진 것만 갈아끼운다.
+// PF_OK가 거짓이면 리스너를 아예 안 걸어서 예전처럼 폼이 그대로 제출된다.
+var PF_SECTIONS = ['pf-stats', 'pf-analysis', 'pf-add', 'pf-pending',
+                   'pf-holding', 'pf-missed', 'pf-done'];
+var PF_OK = !!(window.fetch && window.FormData && window.DOMParser);
+
+// requestSubmit은 submit 이벤트를 띄워 아래 리스너를 태운다. 없는 브라우저면
+// 그냥 제출 — 전체 새로고침이지만 결과는 같다.
+function els_submit(form) {
+  if (form.requestSubmit) form.requestSubmit(); else form.submit();
+}
+
+if (PF_OK) {
+  document.addEventListener('submit', function (e) {
+    // onsubmit="return confirm(...)"에서 취소해도 이벤트는 여기까지 온다
+    if (e.defaultPrevented) return;
+    var form = e.target && e.target.closest ? e.target.closest('form.pf-form') : null;
+    if (!form) return;
+    e.preventDefault();
+    els_pf_send(form);
+  });
+}
+
+function els_pf_send(form) {
+  if (form.dataset.busy) return;              // 연타 방지
+  var body = new FormData(form);              // 잠그기 전에 값부터 담는다
+  form.dataset.busy = '1';                    // CSS가 버튼·입력칸을 잠근다
+  els_pf_notice('', false);
+  fetch(window.location.href, {
+    method: 'POST', body: body, credentials: 'same-origin',
+    headers: {'X-Requested-With': 'XMLHttpRequest'}
+  }).then(function (res) {
+    if (!res.ok) throw new Error('서버가 ' + res.status + '로 응답했습니다.');
+    var ct = res.headers.get('content-type') || '';
+    if (ct.indexOf('application/json') < 0) {
+      // 로그인이 풀려 화면이 통째로 돌아온 경우 — 그 주소로 넘긴다
+      window.location.href = res.url || window.location.href;
+      return null;
+    }
+    return res.json();
+  }).then(function (data) {
+    delete form.dataset.busy;
+    if (!data) return;                        // 위에서 페이지를 넘긴 경우
+    els_pf_paint(data.html);
+    els_pf_notice(data.message, false);
+  }).catch(function (err) {
+    delete form.dataset.busy;
+    els_pf_fail(form, err);
+  });
+}
+
+// 조각 비교 후 달라진 것만 교체 — 안 바뀐 카드는 접힘 상태·입력 중인 값이 그대로 남는다
+function els_pf_paint(html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  PF_SECTIONS.forEach(function (id) {
+    var cur = document.getElementById(id), next = doc.getElementById(id);
+    if (!cur || !next) return;
+    if (cur.innerHTML !== next.innerHTML) cur.innerHTML = next.innerHTML;
+  });
+  els_chk_update();
+}
+
+function els_pf_fail(form, err) {
+  // 응답을 못 받으면 서버에 닿았는지 알 수 없다. 다시 보내도 결과가 같은 조작만
+  // 일반 폼 제출로 넘기고, 투자 등록은 중복 등록이 될 수 있어 사람이 확인하게 둔다.
+  var act = form.querySelector('[name=action]');
+  var action = act ? act.value : '';
+  if ((err instanceof TypeError) && action !== 'add') { form.submit(); return; }
+  els_pf_notice(action === 'add'
+    ? '등록 결과를 확인하지 못했습니다. 새로고침해 등록 여부를 확인한 뒤 다시 시도하세요.'
+    : '처리하지 못했습니다. ' + (err.message || '') + ' 새로고침 후 다시 시도하세요.', true);
+}
+
+var els_pf_timer = null;
+function els_pf_notice(text, isError) {
+  var box = document.getElementById('pf-notice');
+  if (!box) return;
+  clearTimeout(els_pf_timer);
+  if (!text) { box.style.display = 'none'; box.textContent = ''; return; }
+  var div = document.createElement('div');
+  div.className = 'message';
+  if (isError) { div.style.background = 'var(--red-bg)'; div.style.color = 'var(--red)'; }
+  var icon = document.createElement('i');
+  icon.className = 'fa-solid ' + (isError ? 'fa-triangle-exclamation' : 'fa-circle-check');
+  div.appendChild(icon);
+  div.appendChild(document.createTextNode(' ' + text));
+  box.textContent = '';
+  box.appendChild(div);
+  box.style.display = '';
+  if (isError) box.scrollIntoView({block: 'nearest'});   // 실패는 반드시 보이게
+  else els_pf_timer = setTimeout(function () { els_pf_notice('', false); }, 5000);
 }
 </script>
 {% endblock %}
