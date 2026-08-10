@@ -608,8 +608,19 @@
     <table>
       <thead>
         <tr>
-          <th>상품</th><th>상태</th><th class="num">투자금액</th>
-          <th class="num">상환금액</th><th class="num">실현수익률</th><th>상환일</th><th></th>
+          {# 상태 칸은 url이 비어 있어 글자만 나온다 — 정렬 대상이 아니다 #}
+          {% for c in d_cols %}
+          <th class="{% if c.num %}num{% endif %}" style="white-space:nowrap">
+            {% if c.url %}
+            <a href="{{ c.url }}" style="color:inherit;text-decoration:none;{% if c.active %}color:var(--blue-dark);font-weight:700{% endif %}">
+              {{ c.label }}
+              {% if c.active %}<i class="fa-solid fa-caret-{% if c.dir == 'asc' %}up{% else %}down{% endif %}"></i>
+              {% else %}<i class="fa-solid fa-sort" style="color:var(--border)"></i>{% endif %}
+            </a>
+            {% else %}{{ c.label }}{% endif %}
+          </th>
+          {% endfor %}
+          <th></th>
         </tr>
       </thead>
       <tbody>

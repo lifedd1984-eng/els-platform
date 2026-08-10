@@ -948,9 +948,41 @@ def portfolio(request):
     pending.sort(key=lambda i: (i.redemption_pending.dismissed_at is not None,
                                 i.redemption_pending.eval_date))
 
+    # ── 상환 완료 리스트 정렬 ──
+    # 상환금액·실현수익률·상환일은 비어 있을 수 있다(상태만 바꾸고 상환금을 넣지
+    # 않은 과거 기록). None끼리 비교하면 TypeError로 500이 나므로 H_SORT처럼
+    # 실제 값보다 항상 작은/큰 대체값을 넣는다. 실현수익률은 음수(-40% 등)가
+    # 정상 값이라 -1을 못 쓴다 — 그래서 -inf다.
+    _MISSING = float("-inf")
+    D_SORT = {
+        "issuer": lambda i: (i.product.issuer or ""),
+        "amount": lambda i: i.amount or 0,
+        "redeemed": lambda i: (i.redeemed_amount
+                               if i.redeemed_amount is not None else _MISSING),
+        "realized": lambda i: (i.realized_return_pct
+                               if i.realized_return_pct is not None else _MISSING),
+        "redeemed_at": lambda i: (i.redeemed_at or date.max),
+    }
+    # 기본값은 '정렬 없음'이다. 지금 done은 Investment.Meta.ordering(-created_at),
+    # 즉 등록 최신순으로 나오는데 그 순서에 해당하는 컬럼이 목록에 없다.
+    # 아무 컬럼이나 기본값으로 잡으면 정렬 기능만 붙였는데 첫 화면 순서가 바뀐다.
+    d_sort = request.GET.get("dsort", "")
+    if d_sort not in D_SORT:
+        d_sort = ""
+    d_dir = request.GET.get("ddir", "asc")
+    if d_sort:
+        done.sort(key=D_SORT[d_sort], reverse=(d_dir == "desc"))
+
     def _hsort_url(key):
         d = "desc" if (h_sort == key and h_dir == "asc") else "asc"
-        return f"?hsort={key}&hdir={d}&psize={page_size}"
+        # 상환완료 정렬을 같이 실어 보낸다 — 위 표를 정렬했다고 아래 표 정렬이
+        # 풀리면 안 되기 때문이다. 아래 표가 기본 순서면 예전 URL 그대로다.
+        keep = f"&dsort={d_sort}&ddir={d_dir}" if d_sort else ""
+        return f"?hsort={key}&hdir={d}{keep}&psize={page_size}"
+
+    def _dsort_url(key):
+        d = "desc" if (d_sort == key and d_dir == "asc") else "asc"
+        return f"?dsort={key}&ddir={d}&hsort={h_sort}&hdir={h_dir}&psize={page_size}"
 
     # ── 페이지네이션 ──
     from django.core.paginator import Paginator
@@ -974,6 +1006,17 @@ def portfolio(request):
             ("issue", "발행일", False),
             ("next", "다음 평가일", False), ("pretax", "예상상환금", True),
             ("loss", "손실확률", True),
+        ]
+    ]
+
+    # key가 None인 칸(상태)은 정렬 링크 없이 글자만 — 값이 네 종류뿐이라 실익이 없다
+    d_cols = [
+        {"key": k, "label": lbl, "num": num, "url": _dsort_url(k) if k else "",
+         "active": bool(k) and d_sort == k, "dir": d_dir}
+        for k, lbl, num in [
+            ("issuer", "상품", False), (None, "상태", False),
+            ("amount", "투자금액", True), ("redeemed", "상환금액", True),
+            ("realized", "실현수익률", True), ("redeemed_at", "상환일", False),
         ]
     ]
 
@@ -1020,7 +1063,7 @@ def portfolio(request):
         "dismissed_count": sum(1 for i in pending
                                if i.redemption_pending.dismissed_at is not None),
         "holding_total_count": len(holding),  # 빈 상태 문구용 (보유 전체)
-        "h_cols": h_cols, "page_size": page_size,
+        "h_cols": h_cols, "d_cols": d_cols, "page_size": page_size,
         "total_invested": total_invested,
         "holding_by_type": holding_by_type,
         "this_month_evals": this_month_evals,
