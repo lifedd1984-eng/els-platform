@@ -1,8 +1,9 @@
 """
-배치 실행 결과 텔레그램 보고. run_scrape.bat 마지막에 호출된다.
+배치 실행 결과 텔레그램 보고. EC2 daily.sh 마지막에 호출된다
+(PC 시절엔 run_scrape.bat이 불렀다 — 2026-07-23 EC2 이전으로 폐기).
 
 사용: python manage.py notify_batch --results "scrape=0,prices=0,redeem=0,simulate=0,digest=0"
-(각 값은 해당 단계의 ERRORLEVEL, 0=성공)
+(각 값은 해당 단계의 종료 코드, 0=성공)
 """
 
 from datetime import datetime

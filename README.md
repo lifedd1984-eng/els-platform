@@ -38,7 +38,11 @@ python manage.py scrape_kofia      # KOFIA 자동 수집 (권장, exe 불필요)
 python manage.py import_els        # 새 엑셀 감지 → 임포트 + 알림 (백업 경로)
 python manage.py update_prices     # 보유 상품 낙인 시세 갱신
 ```
-Windows 매일 09:00 자동화: `register_scheduler.ps1` (관리자 PowerShell)
+**운영 자동화(EC2, 2026-07-23~)**: `daily.sh`가 위 순서 전체 + 시세·상환·시뮬레이션·검증·백업까지
+09:30 KST 크론으로 돈다. 현재 크론 원문은 `deploy/crontab`에 캡처해 뒀다 — 서버가 사라져도
+`crontab deploy/crontab`으로 그대로 복원된다.
+(Windows PC 스케줄러로 돌리던 시절의 `register_scheduler.ps1`·`run_web.bat`·`run_scrape.bat`는
+`legacy/`로 옮겼다. 지금 서비스는 이 코드를 안 쓴다.)
 
 ### scrape_kofia 참고사항
 - KOFIA의 비공식 내부 API(`DISDlsOfferSO.selectSubscribing`)를 그대로 호출 — 문서화된

@@ -1,0 +1,28 @@
+# ── ELS 레이더 ─────────────────────────────────────────────
+# 일일 배치 09:30 KST (시스템 TZ가 UTC)
+30 0 * * * /home/ubuntu/els/daily.sh
+# 아침 알림 08:00 KST
+0 23 * * * /home/ubuntu/els/morning.sh
+
+# 스레드 게시 — 1~14편 저녁 21:30 KST (+랜덤 0~20분)
+30 12 * * * /home/ubuntu/els/threads_daily.sh
+# 스레드 게시 — 15~30편 아침 07:30 KST. 편 번호로 자동 전환(--slot)이라
+# 8/16에 사람이 손댈 게 없다. 23:10 UTC 절세해 게시와 20분 이상 벌려 둔다.
+30 22 * * * /home/ubuntu/els/threads_morning.sh
+
+# 스레드 댓글 수집·응답 — 2026-08-05 조 팀장 지시로 제외.
+#   경위: 2026-08-04 새벽 Meta가 앱 API를 통째로 막았고(API access blocked)
+#   10분 간격 → 9시간 간격(하루 2회)으로 낮춰 복구했는데 또 막혔다.
+#   댓글 수집 자체를 안 하기로 했다. 게시(threads_daily/threads_morning)는 유지.
+#   되살리려면 아래 한 줄을 풀면 된다. 스크립트는 지우지 않았다.
+# 0 1,10 * * * /home/ubuntu/els/threads_replies.sh
+
+# ── 절세해 (별도 시스템 — 건드리지 말 것) ──────────────────
+0 19 * * * /home/ubuntu/threads/refresh_token.sh >/dev/null 2>&1
+# 발행 중지 — 2026-08-06 조 팀장 지시.
+#   사유: 절세해 앱만 API access blocked 상태(ELS 앱은 같은 날 복구됨).
+#   차단 중에 매일 호출해봐야 실패 로그만 쌓이고 심사에도 불리하다.
+#   원고 큐 28편은 /home/ubuntu/threads/queue 에 그대로 있다.
+#   토큰 갱신(refresh_token)은 살려둔다 — 풀렸을 때 바로 쓰려면 토큰이 살아 있어야 한다.
+#   재개: 아래 한 줄 주석만 풀면 된다.
+# 10 23 * * * /home/ubuntu/threads/taxdown_daily.sh >/dev/null 2>&1
