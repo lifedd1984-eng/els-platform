@@ -32,7 +32,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         notify = not opts["no_notify"]
-        holdings = Investment.objects.filter(status="보유중").select_related("product")
+        holdings = Investment.objects.filter(status="보유중").select_related("product", "user")
         if not holdings:
             self.stdout.write("보유 상품 없음")
             return
@@ -94,9 +94,13 @@ class Command(BaseCommand):
         _, created = KnockInAlert.objects.get_or_create(investment=inv, level_band=band)
         if not created:
             return
+        if not telegram.is_alert_target(inv.user):
+            return
         worst = inv.worst_ki_status
+        account = f" · {inv.broker_account}" if inv.broker_account else ""
         telegram.send_message(
             f"[낙인 {band}] {inv.product.issuer} {inv.product.product_no}\n"
+            f"투자금액 {inv.amount:,}원{account}\n"
             f"기초자산 '{worst.asset_name}' 현재 레벨 {worst.level_pct}%\n"
             f"KI배리어 {inv.product.ki}% 까지 {buffer}%p 남음\n"
             f"대시보드: {settings.SITE_URL}/portfolio/"

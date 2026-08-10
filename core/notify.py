@@ -51,7 +51,7 @@ def notify_preset_matches(stdout=None):
 def notify_redemptions(stdout=None):
     """보유 투자 평가일 D-7/D-1 알림. RedemptionAlert로 중복 발송 방지."""
     today = date.today()
-    for inv in Investment.objects.filter(status="보유중").select_related("product"):
+    for inv in Investment.objects.filter(status="보유중").select_related("product", "user"):
         nxt = inv.next_evaluation
         if not nxt:
             continue
@@ -69,11 +69,16 @@ def notify_redemptions(stdout=None):
         if not created:
             continue
         expected = f"{nxt['expected']:,}원" if nxt["expected"] else "-"
-        telegram.send_message(
-            f"[상환 평가 {alert_type}] {inv.product.issuer} {inv.product.product_no}\n"
-            f"{nxt['n']}회차 평가일: {nxt['date']:%Y-%m-%d}\n"
-            f"배리어: {nxt['barrier'] or '-'}% / 예상상환금: {expected}"
-        )
+        # 텔레그램은 공용 채널이라 지정 계정 것만 보낸다. 웹 푸시는 계정별로 가므로
+        # 아래 send_to_user는 제한하지 않는다 — 다른 계정도 본인 알림은 계속 받는다.
+        if telegram.is_alert_target(inv.user):
+            account = f" · {inv.broker_account}" if inv.broker_account else ""
+            telegram.send_message(
+                f"[상환 평가 {alert_type}] {inv.product.issuer} {inv.product.product_no}\n"
+                f"투자금액 {inv.amount:,}원{account}\n"
+                f"{nxt['n']}회차 평가일: {nxt['date']:%Y-%m-%d}\n"
+                f"배리어: {nxt['barrier'] or '-'}% / 예상상환금: {expected}"
+            )
         n_push = push.send_to_user(
             inv.user,
             f"[상환 평가 {alert_type}] {inv.product.issuer} {inv.product.product_no}",

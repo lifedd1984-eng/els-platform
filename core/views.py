@@ -832,7 +832,12 @@ def portfolio(request):
     # 조기상환 실패: 지난 평가에서 배리어 미달이 확정된 건 (통계에는 보유중으로 포함,
     # 리스트 표시만 분리 — 돈은 여전히 들어가 있는 상태이므로)
     missed = [i for i in holding if i.missed_redemption]
-    holding_display = [i for i in holding if not i.missed_redemption]
+    # 상환 확정 대기: 배리어 충족 판정이 났는데 아직 상환 처리가 안 된 건.
+    # 보유 목록에 작은 배지로만 있으면 그냥 지나친다 — 2026-08-03 판정된 키움 1863
+    # 한 건이 일주일간 방치된 원인이라, 실패 건과 같은 방식으로 맨 위 전용 카드로 뺀다.
+    pending = [i for i in holding if i.redemption_pending]
+    holding_display = [i for i in holding
+                       if not i.missed_redemption and not i.redemption_pending]
 
     today = date.today()
     month_end = date(today.year, today.month, pycalendar.monthrange(today.year, today.month)[1])
@@ -925,6 +930,7 @@ def portfolio(request):
     h_dir = request.GET.get("hdir", "asc")
     holding_display.sort(key=H_SORT[h_sort], reverse=(h_dir == "desc"))
     missed.sort(key=lambda i: i.missed_redemption.eval_date)  # 오래 놓친 순
+    pending.sort(key=lambda i: i.redemption_pending.eval_date)  # 오래 방치된 순
 
     def _hsort_url(key):
         d = "desc" if (h_sort == key and h_dir == "asc") else "asc"
@@ -991,6 +997,7 @@ def portfolio(request):
         "h_page": h_page, "d_page": d_page,
         "holding_count": len(holding_display), "done_count": len(done),
         "missed": missed, "missed_count": len(missed),
+        "pending": pending, "pending_count": len(pending),
         "holding_total_count": len(holding),  # 빈 상태 문구용 (보유 전체)
         "h_cols": h_cols, "page_size": page_size,
         "total_invested": total_invested,

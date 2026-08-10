@@ -432,6 +432,25 @@ def prev_business_day(d):
     return d
 
 
+def business_days_between(start, end):
+    """start 다음날부터 end까지의 영업일수 (주말만 뺀다).
+
+    prev_business_day와 같은 이유로 공휴일은 보지 않는다 — 재알림 주기를
+    재는 용도라 하루이틀 오차가 판단을 바꾸지 않는다.
+    end가 start보다 앞이면 0.
+    """
+    from datetime import timedelta
+    if end <= start:
+        return 0
+    days = 0
+    d = start
+    while d < end:
+        d += timedelta(days=1)
+        if d.weekday() < 5:
+            days += 1
+    return days
+
+
 def base_price_date(product):
     """상품의 최초기준가격 산정일 → (기준일, 0). 기준일이 없으면 (None, 0).
 

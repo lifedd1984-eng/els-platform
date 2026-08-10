@@ -1152,6 +1152,24 @@ class Investment(models.Model):
         return v if (v and v.met) else None
 
     @property
+    def redemption_expected(self):
+        """확정 대기 중인 회차의 예상 상환금(세전, 원). 판정이 없으면 None.
+
+        schedule의 값을 그대로 쓴다 — 화면·엑셀·알림이 다른 숫자를 내지 않게
+        계산은 schedule 한 곳에만 둔다.
+        세전값을 쓰는 이유: 실제 입금액과 대조해 확인했다. 키움 1863(inv552,
+        5,000,000원)의 실제 상환금은 5,328,500원이고, schedule의 세전 expected가
+        정확히 같은 값이다(세후 환산은 5,277,911원으로 어긋난다). 2026-08-10 확인.
+        """
+        v = self.redemption_pending
+        if not v:
+            return None
+        sched = self.schedule
+        if 1 <= v.round_no <= len(sched):
+            return sched[v.round_no - 1]["expected"]
+        return None
+
+    @property
     def missed_redemption(self):
         """직전 회차 배리어 미달 판정. 놓쳤으면 verdict, 아니면 None.
 
@@ -1288,6 +1306,10 @@ class RedemptionVerdict(models.Model):
     worst_asset = models.CharField(max_length=50, blank=True)
     met = models.BooleanField("충족 여부", null=True)  # None=시세 미확보로 판정불가
     checked_at = models.DateTimeField(auto_now=True)
+    # 알림 시각은 checked_at과 따로 둔다 — checked_at은 auto_now라 재판정마다
+    # 밀려서 '언제 알렸나'의 기준이 되지 못한다.
+    notified_at = models.DateTimeField("최초 알림", null=True, blank=True)
+    last_notified_at = models.DateTimeField("최근 알림", null=True, blank=True)
 
     class Meta:
         constraints = [

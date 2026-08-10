@@ -345,6 +345,77 @@
   <div id="bulk-del-ids"></div>
 </form>
 
+{# ── 상환 확정 대기: 배리어 충족 판정이 났는데 아직 상환 처리가 안 된 건 ── #}
+{% if pending %}
+<style>
+  .pend-row{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;
+            padding:12px 4px;border-top:1px solid var(--border)}
+  .pend-info{flex:1 1 300px;min-width:0}
+  .pend-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:3px}
+  .pend-sub{font-size:12.5px;color:var(--text-2);margin-top:2px}
+  .pend-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+  .pend-form .form-field{margin:0}
+  .pend-form input[type=text]{width:130px}
+  .pend-btn{white-space:nowrap;height:34px}
+  @media(max-width:640px){
+    .pend-form{width:100%}
+    .pend-form .form-field{flex:1 1 120px}
+    .pend-form input[type=text],.pend-form input[type=date],.pend-form select{width:100%}
+    .pend-btn{width:100%}
+  }
+</style>
+<div class="card" style="padding:8px 16px;border-left:3px solid var(--green)">
+  <div class="card-title" style="padding:12px 4px 4px">
+    <span><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> 상환 확정 대기 {{ pending_count }}건</span>
+  </div>
+  <div style="font-size:12.5px;color:var(--text-3);padding:0 4px 10px">
+    조기상환 기준을 충족한 건입니다. 증권사 확인 후 실제 입금액으로 고쳐 확정하세요.
+  </div>
+  {% for inv in pending %}
+  {% with v=inv.redemption_pending %}
+  <div class="pend-row">
+    <div class="pend-info">
+      <div class="pend-head">
+        <a href="{% url 'product_detail' inv.product.id %}" style="color:var(--blue-dark);font-weight:700">{{ inv.product.issuer }} {{ inv.product.product_no }}</a>
+        <span class="badge" style="background:var(--green);color:#fff">{{ v.round_no }}회차 충족</span>
+        {% if inv.broker_account %}<span class="badge">{{ inv.broker_account }}</span>{% endif %}
+      </div>
+      <div class="pend-sub">
+        투자금액 <b>{{ inv.amount|intcomma }}원</b> · {{ inv.product.assets_raw|asset_short }}
+      </div>
+      <div class="pend-sub">
+        평가일 {{ v.eval_date|date:"Y.n.j" }} · 조기상환 기준 {{ v.barrier|default:"-" }}% / 가장 부진한 자산 <b style="color:var(--green)">{{ v.worst_level|default:"-" }}%</b>
+      </div>
+    </div>
+    <form method="post" class="pend-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="redeem">
+      <input type="hidden" name="id" value="{{ inv.id }}">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="form-field">
+        <label>상환금액(원) <span style="color:var(--text-3);font-weight:400">예상</span></label>
+        <input type="text" name="redeemed_amount" inputmode="numeric" autocomplete="off"
+               value="{% if inv.redemption_expected %}{{ inv.redemption_expected|intcomma }}{% endif %}"
+               placeholder="-" oninput="els_comma(this)">
+      </div>
+      <div class="form-field">
+        <label>상환일</label>
+        <input type="date" name="redeemed_at" value="{{ today|date:'Y-m-d' }}">
+      </div>
+      <div class="form-field">
+        <label>상태</label>
+        <select name="status">
+          <option>조기상환</option><option>만기상환</option><option>낙인후상환</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm pend-btn">상환 확정</button>
+    </form>
+  </div>
+  {% endwith %}
+  {% endfor %}
+</div>
+{% endif %}
+
 <div class="card" style="padding:8px 16px">
   <div class="card-title" style="padding:12px 4px 4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
     <span>보유 중 {{ holding_count }}건</span>

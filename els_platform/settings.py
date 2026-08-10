@@ -203,6 +203,17 @@ ELS_DOWNLOADS_DIR = os.environ.get(
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+# 개인 투자 알림(조기상환 판정·평가일 D-7/D-1·낙인 근접)을 받을 계정.
+# 텔레그램은 chat_id 하나짜리 공용 채널이라 전 계정 투자가 한 방에 섞여 온다.
+# 2026-08-10 조 팀장 지시로 admin 소유 투자만 남긴다.
+# 쉼표로 여러 계정을 넣을 수 있다 — 되돌리거나 계정을 추가할 때 .env만 고치면
+# 되도록 상수가 아니라 설정으로 뒀다. 빈 값이면 제한하지 않는다(전 계정 발송).
+# 집계성 알림(주간 다이제스트·배치 보고·헬스체크)에는 적용되지 않는다.
+TELEGRAM_ALERT_USERNAMES = [
+    u.strip() for u in os.environ.get("TELEGRAM_ALERT_USERNAMES", "admin").split(",")
+    if u.strip()
+]
+
 # 웹 푸시 (VAPID — .env에 키 보관, 로컬/EC2 동일 키. 미설정 시 푸시 발송·버튼 비활성)
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
