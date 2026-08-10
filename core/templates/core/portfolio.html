@@ -354,31 +354,37 @@
   .pend-head{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:3px}
   .pend-sub{font-size:12.5px;color:var(--text-2);margin-top:2px}
   .pend-form{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+  .pend-off-form{display:flex;align-items:flex-end}
   .pend-form .form-field{margin:0}
   .pend-form input[type=text]{width:130px}
   .pend-btn{white-space:nowrap;height:34px}
+  .pend-row.is-off .pend-info{opacity:.55}
+  .pend-off-note{font-size:12px;color:var(--text-3);margin-right:8px}
   @media(max-width:640px){
     .pend-form{width:100%}
     .pend-form .form-field{flex:1 1 120px}
     .pend-form input[type=text],.pend-form input[type=date],.pend-form select{width:100%}
     .pend-btn{width:100%}
+    .pend-off-form{width:100%}
+    .pend-off-note{width:100%;margin:0 0 4px}
   }
 </style>
 <div class="card" style="padding:8px 16px;border-left:3px solid var(--green)">
   <div class="card-title" style="padding:12px 4px 4px">
-    <span><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> 상환 확정 대기 {{ pending_count }}건</span>
+    <span><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> 상환 확정 대기 {{ pending_count }}건{% if dismissed_count %} <span style="font-weight:400;color:var(--text-3)">(무시 {{ dismissed_count }}건)</span>{% endif %}</span>
   </div>
   <div style="font-size:12.5px;color:var(--text-3);padding:0 4px 10px">
     조기상환 기준을 충족한 건입니다. 증권사 확인 후 실제 입금액으로 고쳐 확정하세요.
   </div>
   {% for inv in pending %}
   {% with v=inv.redemption_pending %}
-  <div class="pend-row">
+  <div class="pend-row{% if v.dismissed_at %} is-off{% endif %}">
     <div class="pend-info">
       <div class="pend-head">
         <a href="{% url 'product_detail' inv.product.id %}" style="color:var(--blue-dark);font-weight:700">{{ inv.product.issuer }} {{ inv.product.product_no }}</a>
         <span class="badge" style="background:var(--green);color:#fff">{{ v.round_no }}회차 충족</span>
         {% if inv.broker_account %}<span class="badge">{{ inv.broker_account }}</span>{% endif %}
+        {% if v.dismissed_at %}<span class="badge" title="{{ v.dismissed_at|date:'Y.n.j' }}에 무시함 — 이 회차는 다시 알리지 않습니다">무시함</span>{% endif %}
       </div>
       <div class="pend-sub">
         투자금액 <b>{{ inv.amount|intcomma }}원</b> · {{ inv.product.assets_raw|asset_short }}
@@ -409,6 +415,15 @@
         </select>
       </div>
       <button type="submit" class="btn btn-primary btn-sm pend-btn">상환 확정</button>
+    </form>
+    <form method="post" class="pend-off-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="{% if v.dismissed_at %}undismiss_verdict{% else %}dismiss_verdict{% endif %}">
+      <input type="hidden" name="id" value="{{ inv.id }}">
+      <input type="hidden" name="round_no" value="{{ v.round_no }}">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" class="btn btn-sm pend-btn"
+              title="{% if v.dismissed_at %}다시 알림을 받습니다{% else %}증권사 확인 결과 상환이 아닐 때 — 이 회차만 다시 알리지 않습니다{% endif %}">{% if v.dismissed_at %}무시 해제{% else %}이 판정 무시{% endif %}</button>
     </form>
   </div>
   {% endwith %}

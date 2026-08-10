@@ -17,6 +17,18 @@ from core.models import (
 )
 
 
+def _alert_scope_holdings():
+    """텔레그램에 실을 보유 투자 — 지정 계정 것만(설정이 비면 전 계정).
+
+    개별 알림(조기상환 판정·평가일 D-7/D-1·낙인 근접)과 같은 기준을 주간 요약에도
+    쓴다. 요약 안에 여러 계정 투자가 섞여 나열되던 것을 2026-08-10 조 팀장 지시로
+    맞췄다. 배치 보고·헬스체크는 서비스 전체 상태라 이 제한을 걸지 않는다.
+    """
+    qs = Investment.objects.filter(status="보유중").select_related("product")
+    names = telegram.alert_usernames()
+    return qs.filter(user__username__in=names) if names else qs
+
+
 def notify_preset_matches(stdout=None):
     """신규 프리셋 매칭 상품 알림. NotifiedMatch로 중복 발송 방지."""
     today = date.today()
@@ -190,9 +202,9 @@ def notify_weekly_digest(stdout=None):
                 f"· 낙인 {p.ki} · ~{p.sub_end.month}/{p.sub_end.day}"
             )
 
-    # ② 향후 7일 보유상품 평가예정
+    # ② 향후 7일 보유상품 평가예정 (알림 대상 계정 보유분만)
     upcoming = []
-    for inv in Investment.objects.filter(status="보유중").select_related("product"):
+    for inv in _alert_scope_holdings():
         nxt = inv.next_evaluation
         if nxt and today <= nxt["date"] <= week_end:
             upcoming.append((nxt["date"], inv, nxt))
@@ -203,9 +215,9 @@ def notify_weekly_digest(stdout=None):
     if len(upcoming) > 5:
         lines.append(f"... 외 {len(upcoming)-5}건")
 
-    # ③ 낙인 현황 (update_prices가 채운 KnockInStatus 기반)
+    # ③ 낙인 현황 (update_prices가 채운 KnockInStatus 기반, 알림 대상 계정 보유분만)
     danger = warn = safe = 0
-    for inv in Investment.objects.filter(status="보유중").select_related("product"):
+    for inv in _alert_scope_holdings():
         buf = inv.ki_buffer
         if buf is None:
             continue

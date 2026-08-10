@@ -15,8 +15,8 @@ from django.views.decorators.http import require_POST
 
 from . import ask_tools, portfolio_facts
 from .models import (
-    ImportLog, Investment, Preset, Product, WatchItem, attach_peak_ratios,
-    peak_ratios,
+    ImportLog, Investment, Preset, Product, RedemptionVerdict, WatchItem,
+    attach_peak_ratios, peak_ratios,
 )
 
 logger = logging.getLogger(__name__)
@@ -816,6 +816,20 @@ def portfolio(request):
             if changed:
                 inv.save()
                 messages.success(request, "금액을 수정했습니다.")
+        elif action in ("dismiss_verdict", "undismiss_verdict"):
+            # 판정이 틀렸을 때(증권사 확인 결과 상환이 아닌 경우) 그 회차 재알림만 멈춘다.
+            # 회차마다 행이 따로라 다음 회차 판정·알림은 그대로 동작한다.
+            inv = get_object_or_404(Investment, pk=request.POST.get("id"), user=request.user)
+            v = RedemptionVerdict.objects.filter(
+                investment=inv, round_no=request.POST.get("round_no")).first()
+            if v:
+                on = action == "dismiss_verdict"
+                v.dismissed_at = timezone.now() if on else None
+                v.save(update_fields=["dismissed_at"])
+                messages.success(
+                    request,
+                    "판정을 무시했습니다. 이 회차는 다시 알리지 않습니다."
+                    if on else "판정 무시를 해제했습니다.")
         elif action == "delete":
             Investment.objects.filter(pk=request.POST.get("id"), user=request.user).delete()
             messages.success(request, "투자 기록을 삭제했습니다.")
@@ -930,7 +944,9 @@ def portfolio(request):
     h_dir = request.GET.get("hdir", "asc")
     holding_display.sort(key=H_SORT[h_sort], reverse=(h_dir == "desc"))
     missed.sort(key=lambda i: i.missed_redemption.eval_date)  # 오래 놓친 순
-    pending.sort(key=lambda i: i.redemption_pending.eval_date)  # 오래 방치된 순
+    # 무시한 건은 아래로, 나머지는 오래 방치된 순
+    pending.sort(key=lambda i: (i.redemption_pending.dismissed_at is not None,
+                                i.redemption_pending.eval_date))
 
     def _hsort_url(key):
         d = "desc" if (h_sort == key and h_dir == "asc") else "asc"
@@ -997,7 +1013,12 @@ def portfolio(request):
         "h_page": h_page, "d_page": d_page,
         "holding_count": len(holding_display), "done_count": len(done),
         "missed": missed, "missed_count": len(missed),
-        "pending": pending, "pending_count": len(pending),
+        # 무시한 건은 '대기' 건수에서 뺀다 — 할 일 개수를 부풀리지 않기 위해서다
+        "pending": pending,
+        "pending_count": sum(1 for i in pending
+                             if i.redemption_pending.dismissed_at is None),
+        "dismissed_count": sum(1 for i in pending
+                               if i.redemption_pending.dismissed_at is not None),
         "holding_total_count": len(holding),  # 빈 상태 문구용 (보유 전체)
         "h_cols": h_cols, "page_size": page_size,
         "total_invested": total_invested,

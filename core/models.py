@@ -1309,6 +1309,9 @@ class RedemptionVerdict(models.Model):
     # 알림 시각은 checked_at과 따로 둔다 — checked_at은 auto_now라 재판정마다
     # 밀려서 '언제 알렸나'의 기준이 되지 못한다.
     notified_at = models.DateTimeField("최초 알림", null=True, blank=True)
+    # 판정이 틀렸을 때(증권사 확인 결과 상환이 아닌 경우) 이 회차 재알림만 멈춘다.
+    # 회차마다 행이 따로라 다음 회차 판정·알림은 영향받지 않는다.
+    dismissed_at = models.DateTimeField("판정 무시", null=True, blank=True)
     last_notified_at = models.DateTimeField("최근 알림", null=True, blank=True)
 
     class Meta:

@@ -49,9 +49,10 @@ class _Base(TestCase):
             user=user, product=self.product, amount=amount,
             invested_at=date(2026, 5, 4), broker_account=account, status="보유중")
 
-    def _verdict(self, inv, met=True, notified_days_ago=None):
+    def _verdict(self, inv, met=True, notified_days_ago=None,
+                 round_no=1, eval_date=date(2026, 7, 30)):
         v = RedemptionVerdict.objects.create(
-            investment=inv, round_no=1, eval_date=date(2026, 7, 30),
+            investment=inv, round_no=round_no, eval_date=eval_date,
             barrier=85.0, worst_level=93.1, met=met)
         if notified_days_ago is not None:
             ts = timezone.now() - timedelta(days=notified_days_ago)
@@ -238,10 +239,113 @@ class 텔레그램스코프(_Base):
             call_command("check_redemptions", stdout=mock.MagicMock())
         self.assertEqual(tg.call_count, 1)
 
-    def test_집계성_알림은_계정을_가리지_않는다(self):
-        """주간 다이제스트는 서비스 전체 상태 보고라 범위 밖이다."""
+    def test_주간요약도_admin_보유분만_싣는다(self):
+        """2026-08-10 조 팀장 확정 — 요약 안에 여러 계정 투자가 섞여 나가던 것을 맞췄다."""
+        from core.models import KnockInStatus
         from core.notify import notify_weekly_digest
-        self._inv(self.other, 20_000_000)
+        for user in (self.admin, self.other):
+            inv = self._inv(user, 5_000_000)
+            KnockInStatus.objects.create(
+                investment=inv, asset_name="S&P500", ref_price=100.0,
+                current_price=32.0, level_pct=32.0)   # KI 30 → 버퍼 2%p = 위험
         with mock.patch("core.telegram.send_message", return_value=True) as tg:
             notify_weekly_digest()
+        text = tg.call_args_list[0].args[0]
+        self.assertIn("7일내 조기상환 평가 0건", text)   # 두 건 다 평가일이 7일 밖
+        self.assertIn("위험 1 / 경고 0 / 안전 0", text)  # admin 것만 세었다
+
+    def test_주간요약은_제한이_없으면_전_계정을_센다(self):
+        from core.models import KnockInStatus
+        from core.notify import notify_weekly_digest
+        for user in (self.admin, self.other):
+            inv = self._inv(user, 5_000_000)
+            KnockInStatus.objects.create(
+                investment=inv, asset_name="S&P500", ref_price=100.0,
+                current_price=32.0, level_pct=32.0)
+        with override_settings(TELEGRAM_ALERT_USERNAMES=[]), \
+             mock.patch("core.telegram.send_message", return_value=True) as tg:
+            notify_weekly_digest()
+        self.assertIn("위험 2 / 경고 0 / 안전 0", tg.call_args_list[0].args[0])
+
+    def test_배치보고는_계정을_가리지_않는다(self):
+        """notify_batch는 서비스 전체 상태 보고라 범위 밖이다."""
+        self._inv(self.other, 20_000_000)
+        with mock.patch("core.telegram.send_message", return_value=True) as tg:
+            call_command("notify_batch", results="scrape=0", stdout=mock.MagicMock())
         self.assertEqual(tg.call_count, 1)
+
+
+@override_settings(TELEGRAM_ALERT_USERNAMES=["admin"])
+class 오판정무시(_Base):
+    """증권사 확인 결과 상환이 아니면 그 회차 재알림만 멈춘다."""
+
+    def setUp(self):
+        super().setUp()
+        self.inv = self._inv(self.admin, 5_000_000, "키움 CMA")
+        self.client.force_login(self.admin)
+
+    def _dismiss(self, round_no=1, undo=False):
+        return self.client.post("/portfolio/", {
+            "action": "undismiss_verdict" if undo else "dismiss_verdict",
+            "id": self.inv.id, "round_no": round_no,
+        })
+
+    def test_무시_버튼이_확정대기_카드에_있다(self):
+        self._verdict(self.inv)
+        html = self.client.get("/portfolio/").content.decode()
+        self.assertIn("이 판정 무시", html)
+        self.assertNotIn("무시함", html)
+
+    def test_무시하면_배지가_뜨고_숨지_않는다(self):
+        self._verdict(self.inv)
+        self._dismiss()
+        html = self.client.get("/portfolio/").content.decode()
+        self.assertIn("무시함", html)
+        self.assertIn("키움증권 1863", html)          # 완전히 숨기지 않는다
+        self.assertIn("무시 해제", html)
+        self.assertIn("상환 확정 대기 0건", html)      # 할 일 건수에선 빠진다
+        self.assertIn("(무시 1건)", html)
+
+    def test_무시하면_재알림이_멈춘다(self):
+        self._verdict(self.inv, notified_days_ago=9)
+        self._dismiss()
+        with mock.patch("core.telegram.send_message", return_value=True) as tg:
+            call_command("check_redemptions", stdout=mock.MagicMock())
+        self.assertEqual(tg.call_count, 0)
+
+    def test_무시를_해제하면_다시_알린다(self):
+        self._verdict(self.inv, notified_days_ago=9)
+        self._dismiss()
+        self._dismiss(undo=True)
+        with mock.patch("core.telegram.send_message", return_value=True) as tg:
+            call_command("check_redemptions", stdout=mock.MagicMock())
+        self.assertEqual(tg.call_count, 1)
+
+    def test_무시해도_다음_회차는_정상_알린다(self):
+        """한 번 틀렸다고 다음 회차까지 막으면 안 된다."""
+        self._verdict(self.inv, notified_days_ago=9)
+        self._dismiss(round_no=1)
+        self._verdict(self.inv, notified_days_ago=9,
+                      round_no=2, eval_date=date(2026, 10, 30))
+        with mock.patch("core.telegram.send_message", return_value=True) as tg:
+            call_command("check_redemptions", stdout=mock.MagicMock())
+        self.assertEqual(tg.call_count, 1)
+        self.assertIn("2회차", tg.call_args_list[0].args[0])
+
+    def test_무시해도_확정은_그대로_할_수_있다(self):
+        self._verdict(self.inv)
+        self._dismiss()
+        self.client.post("/portfolio/", {
+            "action": "redeem", "id": self.inv.id, "status": "조기상환",
+            "redeemed_at": "2026-08-10", "redeemed_amount": "5,328,500",
+        })
+        self.inv.refresh_from_db()
+        self.assertEqual(self.inv.status, "조기상환")
+
+    def test_남의_판정은_무시할_수_없다(self):
+        other_inv = self._inv(self.other, 20_000_000)
+        v = self._verdict(other_inv)
+        self.client.post("/portfolio/", {
+            "action": "dismiss_verdict", "id": other_inv.id, "round_no": 1})
+        v.refresh_from_db()
+        self.assertIsNone(v.dismissed_at)

@@ -118,10 +118,13 @@ class Command(BaseCommand):
         판정 루프는 이미 판정한 회차를 건너뛰므로(중복 판정 방지) 알림도 최초 1회로
         끝났다 — 조용히 잊히는 경로가 여기였다. 확정(=상태가 보유중에서 바뀜)될
         때까지 remind_days 영업일마다 다시 알린다.
+
+        사용자가 무시한 회차(dismissed_at)는 뺀다 — 판정이 틀렸는데도 영원히
+        울리는 걸 막는다. 무시는 그 회차 행에만 걸리므로 다음 회차는 정상 알린다.
         """
         sent_cnt = 0
         for v in (RedemptionVerdict.objects
-                  .filter(met=True, investment__status="보유중")
+                  .filter(met=True, investment__status="보유중", dismissed_at__isnull=True)
                   .select_related("investment__product", "investment__user")):
             inv = v.investment
             if not telegram.is_alert_target(inv.user):
