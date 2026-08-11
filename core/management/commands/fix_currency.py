@@ -21,13 +21,25 @@
   ② 간이투자설명서(prospectus_url) — 있으면 '발행통화' 항목에서 통화코드까지 읽는다.
   ③ KOFIA 상품설명 원문(description) — '발행통화 : USD' 표기.
 
-⚠ 왜 자동으로 채우지 않는가
-  ①은 통화코드를 주지 않고, ③은 currency를 만들어 낸 바로 그 문자열이라
-  혼자서는 근거가 되지 못한다(같은 값을 되풀이하는 셈이다).
-  그래서 이 명령은 근거를 **나란히 보여 주기만** 하고, 값은 --currency로
-  사람이 지정한다. fix_missing_assets와 같은 원칙이다.
+  ④ 설명서의 '1증권당 액면가액' 항목 — 발행 조건 자체라 통화코드가 붙어 나온다.
+     외화: '1증권당 액면가액 미화 일천 달러(USD 1,000)'
+     원화: '1증권당 액면가액 10,000원'
+     (2026-08-11 실측 24건·16개사 전수 일치 — 원화 22건, 외화 2건 모두 정확)
 
-  다만 사람이 지정한 값이 ①과 어긋나면(원화인데 USD, 외화인데 KRW) 저장을 막는다.
+⚠ 근거로 삼지 않는 것
+  ③은 currency를 만들어 낸 바로 그 문자열이라 혼자서는 근거가 되지 못한다
+  (같은 값을 되풀이하는 셈이다). ①은 원화냐 아니냐만 말해 준다.
+
+  설명서 **본문**의 '통화' 낱말도 근거가 아니다. 위험등급 안내문에 통화 이름이
+  그냥 나열돼 있어서(예: '해외표준통화인 미국, 스위스, 영국, 일본, 캐나다의
+  법정통화 및 유로화…', '미국 통화(USD)로 투자하는 증권은…') 통화와 무관한
+  원화 상품이 EUR·USD로 잡힌다 — 확정 원화 22건 중 2건이 그렇게 오탐이었다.
+  그래서 설명서에서는 ④(액면가액)만 본다.
+
+자동 판정
+  ④는 통화코드를 직접 주므로 사람이 값을 옮겨 적지 않아도 된다. --auto를 쓰면
+  ④가 읽힌 건에 한해 그 값을 쓴다. ①과 어긋나면 여전히 저장하지 않는다.
+  ④가 안 읽히면 예전처럼 근거만 보여 주고 --currency를 기다린다.
 
 사용:
   python manage.py fix_currency                              # 근거와 어긋난 상품 점검 (dry-run)
@@ -35,6 +47,8 @@
   python manage.py fix_currency --product-code KR6SH0009A78
   python manage.py fix_currency --id 2796 --currency USD           # 미리보기
   python manage.py fix_currency --id 2796 --currency USD --apply   # 실제 저장
+  python manage.py fix_currency --auto                             # 설명서 근거로 일괄 미리보기
+  python manage.py fix_currency --auto --apply                     # 설명서 근거로 일괄 저장
 
 보정 후
   currency는 화면 배지(USD)와 통화 필터·프리셋 조건에만 쓰인다.
@@ -85,6 +99,33 @@ def extract_currency(text: str):
     return None, ""
 
 
+# 간이투자설명서 '상품개요' 표의 액면가액·발행가액 항목. 유의사항 본문과 달리
+# 발행 조건 자체라 상품마다 값이 다르고, 통화코드가 금액에 붙어 나온다.
+_PAR_LABEL = re.compile(r"(?:1\s*증권\s*당\s*)?(?:액\s*면|발\s*행)\s*가\s*액\s*")
+# '10,000원' / '10,000 원'
+_PAR_KRW = re.compile(r"^[\d,]{3,}\s*원")
+# '미화 일천 달러(USD 1,000)' — 한글 금액 표기를 건너뛰고 괄호 안 코드를 읽는다
+_PAR_FX = re.compile(
+    r"^(?:미화|외화)?\s*[가-힣\s]{0,10}?\(\s*(" + "|".join(KNOWN_CURRENCIES) + r")\s*[\d,]+\s*\)")
+
+
+def extract_issue_currency(text: str):
+    """간이투자설명서 전문 → (통화코드, 근거 원문). 못 찾으면 (None, "").
+
+    액면가액 항목만 본다 — 이유는 파일 첫머리 '근거로 삼지 않는 것' 참조.
+    """
+    if not text:
+        return None, ""
+    for m in _PAR_LABEL.finditer(text):
+        tail = text[m.end(): m.end() + 40]
+        fx = _PAR_FX.match(tail)
+        if fx:
+            return fx.group(1), text[max(0, m.start() - 30): m.end() + fx.end()].strip()
+        if _PAR_KRW.match(tail):
+            return "KRW", text[max(0, m.start() - 30): m.end() + 12].strip()
+    return None, ""
+
+
 def seibro_conflict(currency: str, currency_name: str) -> bool:
     """Product.currency와 SEIBro 등록 통화가 어긋나는가."""
     if currency_name == SEIBRO_KRW:
@@ -105,6 +146,9 @@ class Command(BaseCommand):
         parser.add_argument("--currency", type=str.upper, default="",
                             choices=KNOWN_CURRENCIES, metavar="CODE",
                             help=f"확인된 통화코드를 직접 지정 ({'·'.join(KNOWN_CURRENCIES)})")
+        parser.add_argument("--auto", action="store_true",
+                            help="설명서 액면가액에서 읽힌 통화코드를 값으로 쓴다 "
+                                 "(SEIBro와 어긋나면 저장하지 않음)")
         parser.add_argument("--apply", action="store_true",
                             help="실제로 저장 (없으면 dry-run — 아무것도 쓰지 않음)")
         parser.add_argument("--no-fetch", action="store_true",
@@ -123,8 +167,14 @@ class Command(BaseCommand):
             raise CommandError(
                 "--currency는 한 건에만 쓸 수 있습니다. --id 또는 --product-code로 좁혀 주세요."
             )
+        if value and opts["auto"]:
+            raise CommandError("--currency와 --auto는 함께 쓸 수 없습니다.")
+        if opts["auto"] and opts["no_fetch"]:
+            raise CommandError("--auto는 설명서를 읽어야 합니다. --no-fetch와 함께 쓸 수 없습니다.")
 
         mode = "적용" if opts["apply"] else "DRY-RUN (저장하지 않음)"
+        if opts["auto"]:
+            mode += " / 설명서 액면가액으로 자동 판정"
         self.stdout.write(f"대상 {len(targets)}건 / 모드: {mode}\n")
 
         applied = 0
@@ -135,8 +185,9 @@ class Command(BaseCommand):
         if opts["apply"]:
             self.stdout.write(self.style.SUCCESS(f"보정 완료 {applied}건"))
         else:
+            hint = ("--auto --apply" if opts["auto"] else "--currency \"USD\" --apply")
             self.stdout.write("dry-run이라 아무것도 저장하지 않았습니다. "
-                              "적용하려면 --currency \"USD\" --apply 를 붙이세요.")
+                              f"적용하려면 {hint} 를 붙이세요.")
 
     # ------------------------------------------------------------------ 대상
     def _targets(self, opts):
@@ -203,18 +254,25 @@ class Command(BaseCommand):
         if desc_evidence:
             self.stdout.write(f"    설명근거 : …{desc_evidence}… → {desc_code!r}")
 
-        # ── 근거 ③ 간이투자설명서 ──
+        # ── 근거 ④ 간이투자설명서 액면가액 ──
         pdf_code, pdf_evidence = None, ""
         if p.prospectus_url and not opts["no_fetch"]:
             from core.management.commands.fix_missing_assets import fetch_prospectus_text
             try:
-                pdf_code, pdf_evidence = extract_currency(fetch_prospectus_text(p.prospectus_url))
+                pdf_code, pdf_evidence = extract_issue_currency(
+                    fetch_prospectus_text(p.prospectus_url))
             except Exception as e:                      # noqa: BLE001 — 조사용, 계속 진행
                 self.stdout.write(self.style.WARNING(f"    설명서 조회 실패: {e}"))
         if pdf_evidence:
             self.stdout.write(f"    설명서근거: …{pdf_evidence}… → {pdf_code!r}")
         elif not p.prospectus_url:
             self.stdout.write("    설명서   : URL이 없습니다 (청약 종료 후 수집분)")
+        elif not opts["no_fetch"]:
+            self.stdout.write("    설명서   : 액면가액 항목을 찾지 못했습니다")
+
+        if opts["auto"] and pdf_code:
+            value = pdf_code
+            self.stdout.write(f"    → 설명서 액면가액에서 확정: {value!r}")
 
         if not value:
             self.stdout.write(

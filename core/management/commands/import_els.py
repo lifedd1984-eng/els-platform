@@ -206,31 +206,38 @@ class Command(BaseCommand):
             product_type = parsers.classify_product_type(
                 str(cell(row, "name") or "").strip(), desc, ki_val)
 
-            currency = "USD" if ("USD" in desc.upper() or "달러" in desc) else "KRW"
+            # 발행통화도 같은 parsers 함수를 쓴다. 못 읽으면 None —
+            # scrape_kofia와 같은 이유로 KRW로 단정하지 않는다(아래 defaults 참조).
+            currency = parsers.currency_from_description(desc)
+
+            defaults = dict(
+                name=str(cell(row, "name") or "").strip(),
+                product_type=product_type,
+                yield_rate=_to_float(cell(row, "yield_rate")),
+                max_loss=_to_float(cell(row, "max_loss")),
+                ki=ki_val,
+                is_no_ki=is_no_ki,
+                barrier_first=int(barriers[0]) if barriers else None,
+                barrier_last=int(barriers[-1]) if barriers else None,
+                barriers_raw=[int(b) for b in barriers] if barriers else None,
+                period_months=period,
+                asset_type=asset_type,
+                assets_raw=assets.strip(),
+                issue_date=issue_date,
+                expiry_date=expiry_date,
+                sub_start=_to_date(cell(row, "sub_start")),
+                description=desc,
+            )
+            # 설명이 통화를 밝힌 경우에만 쓴다. 안 밝히면 신규는 모델 기본값 KRW로
+            # 만들어지고, 기존 행은 이미 확정된 값을 그대로 둔다.
+            if currency:
+                defaults["currency"] = currency
 
             _, created = Product.objects.update_or_create(
                 issuer=issuer,
                 product_no=str(cell(row, "name") or "").strip(),
                 sub_end=sub_end,
-                defaults=dict(
-                    name=str(cell(row, "name") or "").strip(),
-                    product_type=product_type,
-                    yield_rate=_to_float(cell(row, "yield_rate")),
-                    max_loss=_to_float(cell(row, "max_loss")),
-                    ki=ki_val,
-                    is_no_ki=is_no_ki,
-                    barrier_first=int(barriers[0]) if barriers else None,
-                    barrier_last=int(barriers[-1]) if barriers else None,
-                    barriers_raw=[int(b) for b in barriers] if barriers else None,
-                    period_months=period,
-                    asset_type=asset_type,
-                    assets_raw=assets.strip(),
-                    issue_date=issue_date,
-                    expiry_date=expiry_date,
-                    sub_start=_to_date(cell(row, "sub_start")),
-                    currency=currency,
-                    description=desc,
-                ),
+                defaults=defaults,
             )
             if created:
                 n_new += 1

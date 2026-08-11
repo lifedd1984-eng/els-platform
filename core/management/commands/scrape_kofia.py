@@ -114,7 +114,18 @@ class Command(BaseCommand):
             # 판정은 parsers 한 곳에 있고 import_els·reparse_products도 같은 것을 쓴다.
             product_type = parsers.classify_product_type(row["name"], desc, ki_val)
 
-            currency = "USD" if ("USD" in desc.upper() or "달러" in desc) else "KRW"
+            # 발행통화는 설명 원문이 **밝힌 경우에만** 정한다.
+            #
+            # 예전 한 줄은 못 읽으면 무조건 KRW로 단정했다. KOFIA 응답에는 통화
+            # 필드가 없고(val 전수 확인) 설명이 통화를 말하지 않는 상품이 대부분이라,
+            # 외화 상품이 그대로 원화로 굳었다 — 2026-08-07 실측 55건.
+            # 게다가 이 값은 매 배치 upsert가 덮어써서, 사람이 fix_currency로
+            # 바로잡아 놔도 청약중이면 다음 배치에 KRW로 되돌아갈 수 있었다.
+            # 이제 못 읽으면 defaults에서 빼고, 통화는
+            #   · 신규 → 모델 기본값 KRW
+            #   · 기존 → 이미 들어 있는 값 보존 (assets_raw와 같은 원칙)
+            # 확정은 발행 후 설명서·SEIBro 근거로 parse_prospectus_dates·fix_currency가 한다.
+            currency = parsers.currency_from_description(desc)
 
             defaults = dict(
                 issuer=row["issuer"],
@@ -135,11 +146,12 @@ class Command(BaseCommand):
                 expiry_date=row["expiry_date"],
                 sub_start=row["sub_start"],
                 sub_end=row["sub_end"],
-                currency=currency,
                 description=desc,
                 broker_url=row.get("broker_url", ""),
                 prospectus_url=row.get("prospectus_url", ""),
             )
+            if currency:
+                defaults["currency"] = currency
 
             created = self._upsert_product(row, defaults)
             if created:

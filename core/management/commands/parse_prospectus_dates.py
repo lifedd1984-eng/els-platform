@@ -46,7 +46,8 @@ import urllib3
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from core.models import Product
+from core.management.commands.fix_currency import extract_issue_currency, seibro_conflict
+from core.models import HistoricalIssue, Product
 
 LOG_PATH = Path(settings.BASE_DIR) / "logs" / "prospectus_dates.log"
 
@@ -415,6 +416,8 @@ class Command(BaseCommand):
         fail_reasons = defaultdict(int)          # 사유 → 건수
         fail_by_type = defaultdict(int)          # 상품유형 → 실패 건수
         sched_reasons = defaultdict(int)         # 평가일 실패 사유 → 건수
+        cur_counts = defaultdict(int)            # 발행통화 판정 → 건수
+        cur_changed = []                         # 발행통화가 바뀐 상품
         sched_formats = defaultdict(int)         # 포맷 → 성공 건수
         deltas = defaultdict(lambda: defaultdict(int))   # 발행사 → {일수차: 건수}
         started = time.time()
@@ -471,6 +474,11 @@ class Command(BaseCommand):
                     sched_fail += 1
                     sched_reasons[detail] += 1
 
+                cur_verdict, cur_detail = self._handle_currency(p, text)
+                cur_counts[cur_verdict] += 1
+                if cur_verdict == "저장":
+                    cur_changed.append(f"{p.issuer} {p.product_no}: {cur_detail}")
+
                 if i % 20 == 0 or i == total:
                     elapsed = (time.time() - started) / 60
                     line = (f"진행 {i}/{total}, 성공 {ok}, 실패 {fail}, "
@@ -511,6 +519,18 @@ class Command(BaseCommand):
             self.stdout.write(line)
             self._log(line)
 
+        # ── 발행통화 결과 ──
+        if cur_counts:
+            detail = " / ".join(f"{k} {v}건" for k, v
+                                in sorted(cur_counts.items(), key=lambda x: -x[1]))
+        else:
+            detail = "처리 없음"
+        line = f"[발행통화] {detail}"
+        self.stdout.write(self.style.SUCCESS(line))
+        self._log(line)
+        for c in cur_changed[:20]:
+            self.stdout.write(f"  통화 보정 {c}")
+
         # ── 발행사별 (평가일 − issue_date) 분포 ──
         # issue_date는 실제로는 청약종료일이므로 이 차이가 곧 '며칠 뒤가 기준일인가'다.
         if deltas:
@@ -546,6 +566,49 @@ class Command(BaseCommand):
         self._log(f"  [{p.id}] {p.issuer} {p.product_no} 평가일 {len(iso)}회차 저장({why}) "
                   f"{iso[0]}~{iso[-1]}")
         return "저장", why
+
+    # ------------------------------------------------------------------ 발행통화
+    def _handle_currency(self, p, text):
+        """설명서 액면가액에서 발행통화를 읽어 저장한다. 반환 (판정, 상세).
+
+        왜 여기인가
+          Product.currency는 수집 단계에서 상품설명 문자열로만 정해진다. 그런데
+          KOFIA 청약중 응답에는 통화 필드가 아예 없고(val 전수 확인), 설명이
+          통화를 말하지 않는 상품이 대부분이라 외화 상품이 원화로 굳어 왔다
+          (2026-08-07 실측 55건). SEIBro 등록통화는 발행 **뒤에** 들어오므로
+          수집 시점엔 쓸 수 없다.
+
+          설명서는 청약 시작과 함께 나오고, 이 명령이 이미 그 PDF를 내려받아
+          텍스트를 손에 들고 있다. 통화를 여기서 읽으면 **추가 요청이 0건**이고
+          등록 당일 확정된다. 평가일을 같은 이유로 여기서 읽는 것과 같은 결이다.
+
+        무엇을 근거로 보는가
+          '1증권당 액면가액' 항목 하나만 본다. 설명서 본문의 '통화' 낱말은
+          위험등급 안내문에 통화 이름이 나열돼 있어 근거가 되지 못한다
+          (자세한 이유는 fix_currency 파일 첫머리 참조).
+        """
+        code, evidence = extract_issue_currency(text)
+        if not code:
+            return "미검출", ""
+        if code == p.currency:
+            return "동일", code
+
+        # SEIBro 등록통화(예탁결제원 원부)와 어긋나면 저장하지 않는다.
+        # 다른 차수의 설명서를 읽었을 때 통화가 통째로 뒤집히는 것을 막는다.
+        issue = (HistoricalIssue.objects.filter(isin=p.product_code).first()
+                 if p.product_code else None)
+        registered = issue.currency_name if issue else ""
+        if seibro_conflict(code, registered):
+            self._log(f"  [{p.id}] {p.issuer} {p.product_no} 발행통화 상충 "
+                      f"(설명서 {code} vs SEIBro {registered!r}) — 저장 안 함")
+            return "상충", code
+
+        before = p.currency
+        p.currency = code
+        p.save(update_fields=["currency"])
+        self._log(f"  [{p.id}] {p.issuer} {p.product_no} 발행통화 {before!r} → {code!r} "
+                  f"(근거: {evidence[:80]})")
+        return "저장", code
 
     # ------------------------------------------------------------------ 수집
     def _fetch_text(self, url):

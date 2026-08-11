@@ -39,6 +39,23 @@ _RE_BOND_TOKEN = re.compile(r'(?<![A-Za-z])(?:ELB|DLB)(?![A-Za-z])', re.I)
 # 기초자산이 주가가 아닌 부류(DLS·DLB) 표기
 _RE_OTHER_TOKEN = re.compile(r'(?<![A-Za-z])(?:DLS|DLB)(?![A-Za-z])', re.I)
 
+# 발행통화 표기 — 설명 원문이 통화를 **밝힌 경우에만** 잡는다.
+CURRENCY_CODES = ('KRW', 'USD', 'EUR', 'JPY', 'CNY', 'CNH', 'HKD', 'GBP', 'AUD')
+_CODES = '|'.join(CURRENCY_CODES)
+
+# ⚠ 'USD/KRW 매매기준율'·'USD환율'은 **기초자산 이름**이지 발행통화가 아니다.
+#   통화어를 찾기 전에 이 표기부터 지운다. 안 지우면 환율연계 DLS·DLB가
+#   기초자산 이름만 보고 통화를 배정받는다.
+#   운영 실데이터 8건이 그렇게 USD로 저장돼 있다 — 하나 3824·3826·3828·3829·
+#   3831·3833, 메리츠 543·544. 이 중 설명서가 남아 있는 하나 3833은 '1증권당
+#   액면가액 10,000원'으로 **원화가 확인**됐고, 나머지 7건은 설명이 같은 꼴이나
+#   설명서 URL이 없어 확인하지 못했다.
+#   코드는 대문자로만 쓰이므로 대소문자 무시를 걸지 않는다.
+_RE_FX_ASSET = re.compile(rf'(?:{_CODES})\s*/\s*(?:{_CODES})|(?:{_CODES})\s*환율')
+
+_RE_USD_WORD = re.compile(r'USD|미\s*달러|미화|달러', re.I)
+_RE_KRW_WORD = re.compile(r'KRW|원화', re.I)
+
 # 법정 명칭 — 원금보장형은 '파생결합사채', 원금비보장형은 '파생결합증권'이다.
 # (운영 4,769건 실측: '파생결합사채'와 ELS/DLS 토큰이 함께 든 상품명 0건.)
 _BOND_WORD = '파생결합사채'
@@ -100,6 +117,30 @@ def classify_product_type(name, description=None, ki=None):
     if protected:
         return 'DLB' if other else 'ELB'
     return 'DLS' if other else 'ELS'
+
+
+def currency_from_description(description):
+    """상품설명 원문 → 통화코드. 통화를 말하지 않으면 None.
+
+    KOFIA 청약중 응답에는 통화 필드가 아예 없다(2026-08-11 전수 확인: val1~val30
+    및 부가 태그 어디에도 원화/외화 구분이 없다). 그래서 수집 단계에서 통화를
+    알 수 있는 유일한 단서가 이 설명 문자열이다.
+
+    ⚠ 예전 한 줄은 `"USD" if ("USD" in desc.upper() or "달러" in desc) else "KRW"`였다.
+      설명이 통화를 말하지 않는 흔한 경우까지 KRW로 **단정**해 버려서, 외화 상품이
+      원화로 굳었다(2026-08-07 실측 55건). 여기서는 못 읽으면 None을 돌려주고,
+      '모르는 것'과 '원화로 확인된 것'을 호출부가 구분하게 한다.
+    """
+    text = str(description or '')
+    if not text:
+        return None
+    # 기초자산 이름으로 쓰인 통화쌍·환율 표기는 근거가 아니다
+    text = _RE_FX_ASSET.sub(' ', text)
+    if _RE_USD_WORD.search(text):
+        return 'USD'
+    if _RE_KRW_WORD.search(text):
+        return 'KRW'
+    return None
 
 
 def classify_asset(text):
