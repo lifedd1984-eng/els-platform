@@ -1,8 +1,8 @@
 """포트폴리오 '상환 완료' 목록 정렬.
 
 '보유중' 목록에만 있던 정렬을 '상환 완료' 목록에도 붙이면서 고정하는 것은 셋이다.
-  ① 정렬 파라미터가 없을 때의 순서는 예전 그대로다(등록 최신순 = -created_at).
-     정렬 기능을 붙였다고 첫 화면 순서가 바뀌면 안 된다.
+  ① 정렬 파라미터가 없으면 상환일 내림차순(최근 상환 먼저)이 기본이다
+     (2026-08-11 조 팀장 지시 — 최초 배포 때는 '정렬 없음'이었다).
   ② 상환금액·실현수익률·상환일이 비어 있는 행이 섞여도 500이 나지 않는다.
      상태만 바꾸고 상환금을 넣지 않은 기록이 실제로 있다.
   ③ 실현수익률의 결측 대체값은 -1이 아니다 — 음수(-40% 등)가 정상 값이라
@@ -46,15 +46,17 @@ class _Base(TestCase):
 
 
 class 기본순서(_Base):
-    def test_정렬_파라미터가_없으면_등록_최신순_그대로다(self):
-        self.assertEqual(self._order(), ["404", "303", "202", "101"])
+    def test_정렬_파라미터가_없으면_상환일_내림차순이다(self):
+        # 404는 redeemed_at이 없다 — date.max로 대체되어 desc에서 맨 앞이다.
+        self.assertEqual(self._order(), ["404", "303", "101", "202"])
 
     def test_모르는_컬럼을_넣어도_기본순서로_돌아간다(self):
-        self.assertEqual(self._order(dsort="없는컬럼"), ["404", "303", "202", "101"])
+        self.assertEqual(self._order(dsort="없는컬럼"), ["404", "303", "101", "202"])
 
-    def test_기본화면에서는_어느_컬럼도_활성_상태가_아니다(self):
+    def test_기본화면에서는_상환일_컬럼만_활성_상태다(self):
         resp = self.client.get("/portfolio/")
-        self.assertEqual([c["label"] for c in resp.context["d_cols"] if c["active"]], [])
+        active = [c["label"] for c in resp.context["d_cols"] if c["active"]]
+        self.assertEqual(active, ["상환일"])
 
 
 class 컬럼별정렬(_Base):
@@ -153,6 +155,10 @@ class 헤더렌더(_Base):
         self.assertIn("?hsort=amount&amp;hdir=asc&amp;dsort=issuer&amp;ddir=desc&amp;psize=10",
                       html)
 
-    def test_상환완료가_기본순서면_보유중_링크는_예전_그대로다(self):
+    def test_기본순서_상태에서도_보유중_링크에_상환일_정렬이_실린다(self):
+        # 이제 '기본 정렬 없음' 상태가 없다 — 페이지 기본값(상환일 내림차순)도
+        # 하나의 정렬 상태라 위 표 링크에 항상 실려 간다.
         html = self.client.get("/portfolio/").content.decode()
-        self.assertIn('href="?hsort=amount&amp;hdir=asc&amp;psize=10"', html)
+        self.assertIn(
+            'href="?hsort=amount&amp;hdir=asc&amp;dsort=redeemed_at&amp;ddir=desc'
+            '&amp;psize=10"', html)

@@ -1013,22 +1013,25 @@ def _portfolio_context(request):
                                if i.realized_return_pct is not None else _MISSING),
         "redeemed_at": lambda i: (i.redeemed_at or date.max),
     }
-    # 기본값은 '정렬 없음'이다. 지금 done은 Investment.Meta.ordering(-created_at),
-    # 즉 등록 최신순으로 나오는데 그 순서에 해당하는 컬럼이 목록에 없다.
-    # 아무 컬럼이나 기본값으로 잡으면 정렬 기능만 붙였는데 첫 화면 순서가 바뀐다.
-    d_sort = request.GET.get("dsort", "")
-    if d_sort not in D_SORT:
-        d_sort = ""
-    d_dir = request.GET.get("ddir", "asc")
-    if d_sort:
-        done.sort(key=D_SORT[d_sort], reverse=(d_dir == "desc"))
+    # 정렬 파라미터가 없거나(또는 모르는 컬럼이면) 상환일 내림차순(최근 상환
+    # 먼저)이 기본이다 — 조 팀장 지시(2026-08-11). 컬럼을 명시적으로 골랐는데
+    # 방향(ddir)만 안 왔으면 그 컬럼의 기본인 오름차순을 쓴다 — 페이지 기본값
+    # "desc"를 아무 컬럼에나 덮어씌우면 방금 누른 컬럼 방향이 뒤집혀 버린다.
+    _raw_dsort = request.GET.get("dsort", "")
+    if _raw_dsort in D_SORT:
+        d_sort = _raw_dsort
+        d_dir = request.GET.get("ddir", "asc")
+    else:
+        d_sort = "redeemed_at"
+        d_dir = request.GET.get("ddir", "desc")
+    done.sort(key=D_SORT[d_sort], reverse=(d_dir == "desc"))
 
     def _hsort_url(key):
         d = "desc" if (h_sort == key and h_dir == "asc") else "asc"
         # 상환완료 정렬을 같이 실어 보낸다 — 위 표를 정렬했다고 아래 표 정렬이
-        # 풀리면 안 되기 때문이다. 아래 표가 기본 순서면 예전 URL 그대로다.
-        keep = f"&dsort={d_sort}&ddir={d_dir}" if d_sort else ""
-        return f"?hsort={key}&hdir={d}{keep}&psize={page_size}"
+        # 풀리면 안 되기 때문이다. d_sort는 기본값(상환일 내림차순)도 포함해
+        # 항상 값이 있으므로 매번 실어 보낸다.
+        return f"?hsort={key}&hdir={d}&dsort={d_sort}&ddir={d_dir}&psize={page_size}"
 
     def _dsort_url(key):
         d = "desc" if (d_sort == key and d_dir == "asc") else "asc"
