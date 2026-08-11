@@ -152,10 +152,15 @@ REGIME_INDEXES = [("KOSPI200", "KOSPI200 Index"), ("S&P500", "S&P500 Index"),
 def _market_regime(monday, sunday):
     """시장 국면 — 이번 주 조건 통과율 + 대표 지수 위치.
 
-    통과율은 시세가 필요 없는 두 게이트(낙인 p30 · 1차 배리어)로만 계산한다.
+    통과율은 시세가 필요 없는 두 조건(직전 연도 낙인 컷 · 1차 배리어)으로만 센다.
     10년 분기 검증에서 통과율 ↔ 이후 1년 주식수익률 상관 +0.52 — 즉 조건이
     나쁜 시기는 시장도 과열된 시기였다. '갈아타라'가 아니라 '지금이 어디인가'를
     읽는 용도. (regime_signal.py 검증, 2026-08-02)
+
+    ⚠ 여기 쓰는 컷(v7_ki_cut)은 **배지 게이트가 아니다.** v8부터 배지는 그 주차
+    그룹 내부 분포에서 컷을 잡는다(models._compute_radar_pool). 이 계기판만
+    직전 연도 절대 컷으로 남긴 것은 의도한 것이다 — 그룹 상대 컷으로 바꾸면
+    통과율이 정의상 늘 40% 근처가 돼 국면을 전혀 못 읽는다. (2026-08-11)
     """
     from core import market as _m
     from core.models import (
@@ -416,10 +421,10 @@ def weekly(request):
         TRACK_META = {
             "지수형": {"label": "지수형 TOP5",
                       "sub": "1차 조기상환 90 이하 · 고점 회피(완만한 상승은 예외) · "
-                             "낙인이 가장 낮은 30% 미만", "icon": "fa-shield-halved"},
+                             "낙인이 가장 낮은 40% 미만", "icon": "fa-shield-halved"},
             "종목형": {"label": "종목형 TOP5",
                       "sub": "1차 조기상환 80 이하 · 고점 회피(완만한 상승은 예외) · "
-                             "낙인이 가장 낮은 30% 미만", "icon": "fa-rocket"},
+                             "낙인이 가장 낮은 40% 미만", "icon": "fa-rocket"},
         }
         for tier in ("지수형", "종목형"):
             items = []
