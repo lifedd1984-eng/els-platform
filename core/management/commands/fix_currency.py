@@ -97,12 +97,21 @@ def extract_currency(text: str):
 
 # 간이투자설명서 '상품개요' 표의 액면가액·발행가액 항목. 유의사항 본문과 달리
 # 발행 조건 자체라 상품마다 값이 다르고, 통화코드가 금액에 붙어 나온다.
-_PAR_LABEL = re.compile(r"(?:1\s*증권\s*당\s*)?(?:액\s*면|발\s*행)\s*가\s*액\s*")
+#
+# 표기는 발행사마다 갈린다 (2026-08-11 설명서 1,004건 전수 확인):
+#   · 라벨   '액면가액'(대부분) / '액면금액'(신영증권)
+#   · 원화   '1증권당 액면가액 10,000원'  '… 10,000 원'
+#   · 외화   '… 미화 일천 달러(USD 1,000)'  (하나·NH·한국투자·신영)
+#            '… USD 1,000'                 (신한투자·KB — 한글 표기 없이 코드만)
+# 셋 다 받지 않으면 외화 상품을 통째로 놓친다(코드만 쓰는 두 발행사가 12건이었다).
+_PAR_LABEL = re.compile(r"(?:1\s*증권\s*당\s*)?(?:액\s*면|발\s*행)\s*(?:가|금)\s*액\s*")
 # '10,000원' / '10,000 원'
 _PAR_KRW = re.compile(r"^[\d,]{3,}\s*원")
 # '미화 일천 달러(USD 1,000)' — 한글 금액 표기를 건너뛰고 괄호 안 코드를 읽는다
-_PAR_FX = re.compile(
+_PAR_FX_PAREN = re.compile(
     r"^(?:미화|외화)?\s*[가-힣\s]{0,10}?\(\s*(" + "|".join(KNOWN_CURRENCIES) + r")\s*[\d,]+\s*\)")
+# 'USD 1,000' — 코드가 금액 앞에 바로 붙는 형태
+_PAR_FX_CODE = re.compile(r"^(" + "|".join(KNOWN_CURRENCIES) + r")\s*[\d,]{3,}")
 
 
 def extract_issue_currency(text: str):
@@ -114,11 +123,12 @@ def extract_issue_currency(text: str):
         return None, ""
     for m in _PAR_LABEL.finditer(text):
         tail = text[m.end(): m.end() + 40]
-        fx = _PAR_FX.match(tail)
-        if fx:
-            return fx.group(1), text[max(0, m.start() - 30): m.end() + fx.end()].strip()
+        for pattern in (_PAR_FX_PAREN, _PAR_FX_CODE):
+            hit = pattern.match(tail)
+            if hit:
+                return hit.group(1), text[max(0, m.start() - 40): m.end() + hit.end()].strip()
         if _PAR_KRW.match(tail):
-            return "KRW", text[max(0, m.start() - 30): m.end() + 12].strip()
+            return "KRW", text[max(0, m.start() - 40): m.end() + 12].strip()
     return None, ""
 
 

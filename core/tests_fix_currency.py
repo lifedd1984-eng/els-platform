@@ -269,6 +269,28 @@ class ExtractIssueCurrencyTest(TestCase):
             with self.subTest(text=text):
                 self.assertEqual(extract_issue_currency(text)[0], None)
 
+    def test_발행사별_표기_변형을_모두_읽는다(self):
+        """설명서 1,004건 전수에서 확인된 표기 변형 (2026-08-11).
+
+        코드만 쓰는 형태를 못 읽어 신한투자·KB 12건이 통째로 미검출이었다.
+        """
+        cases = [
+            # 신한투자증권·KB증권 — 한글 금액 표기 없이 코드만
+            ("1증권당 액면가액 USD 1,000 1증권당 발행가액 USD 1,000", "USD"),
+            ("모 집 총 액 USD 10,000,000 1증권당 액면가액 USD 1,000", "USD"),
+            # 신영증권 — 라벨이 '액면금액'
+            ("1증권당 액면금액 미화 일십 달러(USD 10)", "USD"),
+            ("1증권당 액면금액 10,000원", "KRW"),
+            # 하나·NH·한국투자 — 한글 금액 + 괄호 코드
+            ("1증권당 액면가액 미화 일천 달러(USD 1,000)", "USD"),
+            # 원화 표기 변형
+            ("1증권당 액면가액 10,000 원", "KRW"),
+            ("1증권당 발행가액 100,000원", "KRW"),
+        ]
+        for text, expected in cases:
+            with self.subTest(text=text[:40]):
+                self.assertEqual(extract_issue_currency(text)[0], expected)
+
 
 class CurrencyFromDescriptionTest(TestCase):
     """수집 단계 파생 — 설명이 밝힌 경우에만 정한다."""
