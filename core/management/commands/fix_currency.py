@@ -1,14 +1,11 @@
 """발행통화(currency)가 실물 근거와 어긋난 상품을 확인·보정한다.
 
 왜 필요한가
-  Product.currency는 수집 단계에서 **상품설명 문자열로부터 파생**된다.
-  scrape_kofia·import_els 둘 다 같은 한 줄이다.
-
-      currency = "USD" if ("USD" in desc.upper() or "달러" in desc) else "KRW"
-
-  그래서 설명이 짧거나 비어 있으면 외화 상품도 KRW로 굳는다. 게다가 파생은
-  수집 시점에 한 번만 일어나므로, 중복행 병합으로 설명이 뒤늦게 채워져도
-  currency는 그대로 남는다.
+  Product.currency는 수집 단계에서 상품설명 문자열로부터 정해진다
+  (parsers.currency_from_description — scrape_kofia·import_els가 같이 쓴다).
+  설명이 통화를 말하지 않는 상품이 대부분이라 그 값은 '아직 모른다'에 가깝고,
+  KOFIA 응답에는 통화 필드가 아예 없어 수집 시점에는 더 나은 근거가 없다.
+  실물 근거로 확정하는 일이 이 명령의 몫이다.
 
   (2026-08-07 실측: 신한투자증권 27659[id 2796]이 그 경우.
    fix_dup_products --merge로 설명에 '발행통화 : USD'가 들어왔는데 currency는 KRW.
@@ -18,28 +15,27 @@
   ① SEIBro 발행내역(HistoricalIssue) — 예탁결제원 등록 원부. product_code(ISIN)로
      맞물린다. currency_name이 '원화'/'외화' 둘 중 하나로 온다.
      ⚠ 어느 외화인지까지는 말해 주지 않는다. 원화냐 아니냐만 확정할 수 있다.
-  ② 간이투자설명서(prospectus_url) — 있으면 '발행통화' 항목에서 통화코드까지 읽는다.
-  ③ KOFIA 상품설명 원문(description) — '발행통화 : USD' 표기.
-
-  ④ 설명서의 '1증권당 액면가액' 항목 — 발행 조건 자체라 통화코드가 붙어 나온다.
+     ⚠ 발행 **뒤에** 들어온다. 청약중 상품에는 아직 없다.
+  ② 간이투자설명서의 '1증권당 액면가액' — 발행 조건 자체라 통화코드가 붙어 나온다.
      외화: '1증권당 액면가액 미화 일천 달러(USD 1,000)'
      원화: '1증권당 액면가액 10,000원'
      (2026-08-11 실측 24건·16개사 전수 일치 — 원화 22건, 외화 2건 모두 정확)
+  ③ KOFIA 상품설명 원문(description) — '발행통화 : USD' 표기.
 
 ⚠ 근거로 삼지 않는 것
   ③은 currency를 만들어 낸 바로 그 문자열이라 혼자서는 근거가 되지 못한다
-  (같은 값을 되풀이하는 셈이다). ①은 원화냐 아니냐만 말해 준다.
+  (같은 값을 되풀이하는 셈이다). 화면에 보여 주기만 한다.
 
   설명서 **본문**의 '통화' 낱말도 근거가 아니다. 위험등급 안내문에 통화 이름이
   그냥 나열돼 있어서(예: '해외표준통화인 미국, 스위스, 영국, 일본, 캐나다의
   법정통화 및 유로화…', '미국 통화(USD)로 투자하는 증권은…') 통화와 무관한
   원화 상품이 EUR·USD로 잡힌다 — 확정 원화 22건 중 2건이 그렇게 오탐이었다.
-  그래서 설명서에서는 ④(액면가액)만 본다.
+  그래서 설명서에서는 ②(액면가액)만 본다.
 
 자동 판정
-  ④는 통화코드를 직접 주므로 사람이 값을 옮겨 적지 않아도 된다. --auto를 쓰면
-  ④가 읽힌 건에 한해 그 값을 쓴다. ①과 어긋나면 여전히 저장하지 않는다.
-  ④가 안 읽히면 예전처럼 근거만 보여 주고 --currency를 기다린다.
+  ②는 통화코드를 직접 주므로 사람이 값을 옮겨 적지 않아도 된다. --auto를 쓰면
+  ②가 읽힌 건에 한해 그 값을 쓴다. ①과 어긋나면 여전히 저장하지 않는다.
+  ②가 안 읽히면 예전처럼 근거만 보여 주고 --currency를 기다린다.
 
 사용:
   python manage.py fix_currency                              # 근거와 어긋난 상품 점검 (dry-run)
@@ -248,13 +244,13 @@ class Command(BaseCommand):
                 "    SEIBro   : 발행내역에서 찾지 못했습니다 "
                 "(product_code가 비었거나 수집 범위 밖)"))
 
-        # ── 근거 ② 상품설명 원문 ──
+        # ── 근거 ③ 상품설명 원문 (보여 주기만 한다) ──
         desc_code, desc_evidence = extract_currency(p.description or "")
         self.stdout.write(f"    설명원문 : {p.description or '(없음)'}")
         if desc_evidence:
             self.stdout.write(f"    설명근거 : …{desc_evidence}… → {desc_code!r}")
 
-        # ── 근거 ④ 간이투자설명서 액면가액 ──
+        # ── 근거 ② 간이투자설명서 액면가액 ──
         pdf_code, pdf_evidence = None, ""
         if p.prospectus_url and not opts["no_fetch"]:
             from core.management.commands.fix_missing_assets import fetch_prospectus_text
