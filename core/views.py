@@ -414,10 +414,10 @@ def weekly(request):
         TRACK_META = {
             "지수형": {"label": "지수형 TOP5",
                       "sub": "1차 조기상환 90 이하 · 고점 회피(완만한 상승은 예외) · "
-                             "낙인이 가장 낮은 30% 미만", "icon": "fa-shield-halved"},
+                             "낙인이 가장 낮은 40% 미만", "icon": "fa-shield-halved"},
             "종목형": {"label": "종목형 TOP5",
                       "sub": "1차 조기상환 80 이하 · 고점 회피(완만한 상승은 예외) · "
-                             "낙인이 가장 낮은 30% 미만", "icon": "fa-rocket"},
+                             "낙인이 가장 낮은 40% 미만", "icon": "fa-rocket"},
         }
         for tier in ("지수형", "종목형"):
             items = []
