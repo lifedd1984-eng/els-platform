@@ -53,19 +53,28 @@ RADAR_TOP_WEAK = 15     # (상위)+1 ~ 이 순위 = 강한 신호, 그 외 배�
 #   기준가 ÷ 발행 직전 1년 최고였는데 서비스 코드만 오늘 종가를 쓰고 있었다.
 #   → 규칙 변경이 아니라 검증 복원. 되돌린 코드로 10년을 다시 돌려
 #     5,392건·99.68%·손실 17건(지수형 4,566 / 종목형 826)을 그대로 재현 확인.
-# 2026-08-11 낙인 퍼센타일 컷만 하위 30%→40%로 완화. 1차 배리어·고점 게이트는
-#   손대지 않았다. 2026년 실효 컷 변화: 지수형 50 그대로, 종목형 30→35.
-#   ⚠ v8 튜닝에서 나온 목표 수치(5,544건·정상상환 99.57%·손실 24·주당 10.70)는
-#     이 상수 하나로는 재현되지 않는다. 그 수치는 백테스트 스윕의 별도 선정식에서
-#     나온 값이다 — 낙인 컷을 '직전 연도'가 아니라 '그 주차×유형 그룹 내부' 분포에서
-#     잡고(이하 비교), 쿠폰 주차 상위 70% 필터를 걸고, 낙인 5단위 버킷마다 쿠폰
-#     상위 5개만 남기는 정원을 둔다. 이 상수만 40%로 바꾼 10년 성적은
-#     10,633건·99.71%·손실 31·주당 20.53 (2016~2025 발행 69,903건 기준).
+# ── 레이더 v8 (2026-08-11 확정, 같은 10개년 69,903건 백테스트 근거) ────
+# v8은 낙인 퍼센타일 하나가 아니라 네 가지를 함께 바꾼 것이다. 넷 중 하나라도
+# 빠지면 목표 수치가 안 나온다 — 사다리를 그대로 옮겨 적는다(EC2 k1_decomp.py 실측,
+# 괄호는 건수·정상상환·손실·주당):
+#   (a) v7 직전연도 30% 미만    5,392 · 99.68% · 17 · 10.41   ← 종전
+#   (b) 직전연도 40% 미만      10,633 · 99.71% · 31 · 20.53   ← 상수만 바꾼 것
+#   (c) 주차 그룹 40% 미만      8,385 · 99.79% · 18 · 16.19
+#   (d) 주차 그룹 40% 이하     16,206 · 99.78% · 35 · 31.29
+#   (e) + 쿠폰 주차 상위 70%   12,613 · 99.76% · 30 · 24.35
+#   (f) + 낙인 5단위 버킷 top5  5,544 · 99.57% · 24 · 10.70   ← v8 확정
+# (b)만 반영하면 공급이 두 배(주당 20.53)로 터진다. 정원 (f)가 그걸 되돌린다 —
+# (e)에서 7,069건(56.0%)을 잘라낸다. 공급량은 v7과 거의 같은데(10.41→10.70)
+# 배지 없는 주가 141주→101주로 줄어 주간 편차가 고르게 펴진 것이 v8의 이득이다.
+# 손실은 17→24건으로 늘지만 정상상환 99.57%로 목표선(99.5%) 위에 남는다.
 RADAR_V7_B0_MAX = {"종목형": 80, "지수형": 90}   # ① 1차 조기상환 배리어 이하
 RADAR_V7_PEAK_MAX = 95    # ② 발행 시점 기준가의 직전 52주 최고 대비 위치(%) 미만
 RADAR_V7_RELAX_RET1Y = 15  # ②-완화: 고점 95% 이상이어도 직전 1년 상승률이 이 값(%) 이하면 통과
-RADAR_V7_KI_PCT = 0.40    # ③ 낙인 < 직전 연도 같은 유형 분포 하위 40% 값 (미만)
+RADAR_V7_KI_PCT = 0.40    # ③ 낙인 ≤ 분포 하위 40% 값 (이하)
 RADAR_V7_KI_MIN_SAMPLE = 100   # 직전 연도 표본이 이보다 적으면 v6 고정 컷으로 폴백
+RADAR_V8_YLD_PCT = 0.30   # ④ 쿠폰 ≥ 같은 그룹 분포 하위 30% 값 (= 상위 70%)
+RADAR_V8_KI_BUCKET = 5    # ⑤ 낙인 5단위 버킷 — **선정 정원에만** 쓴다
+RADAR_V8_BUCKET_TOP = 5   # ⑤ 버킷마다 쿠폰 상위 이 개수까지만 배지
 RADAR_V7_TIER = "타겟 신호"   # 두 유형 공통 배지명 (유형 구분은 지수형/종목형 배지가 담당)
 
 RADAR_COLORS = {
@@ -189,8 +198,43 @@ def _radar_axes(p, ax):
 _V7_KI_CUT_CACHE = {}   # (오늘, 유형) → 컷 값
 
 
+def group_cut(values, pct):
+    """그룹 분포의 하위 pct 지점 값 → 이 값과 비교해 통과를 가른다.
+
+    10년 백테스트 스윕(EC2 i_norm.py build)이 쓴 색인식을 글자 그대로 옮긴 것이다.
+        vals[min(int(len(vals) * pct), len(vals) - 1)]
+    분위수 보간을 하지 않는다 — 정렬 후 색인을 끊어 고르므로 실제 발행된 낙인·쿠폰
+    값 중 하나가 그대로 컷이 된다. numpy.percentile 같은 보간식으로 바꾸면 컷이
+    표본에 없는 값(예: 42.5)이 되고 이하/이상 경계에 걸린 상품이 통째로 달라진다.
+    값이 없으면 None — 부르는 쪽이 '그 그룹은 배지 없음'으로 처리한다.
+    """
+    vals = sorted(v for v in values if v is not None)
+    if not vals:
+        return None
+    return vals[min(int(len(vals) * pct), len(vals) - 1)]
+
+
+def v8_ki_bucket(ki):
+    """낙인 → 5단위 버킷 (43→45, 47→45, 48→50). **정원 계산 전용**이다.
+
+    화면에 낙인을 보여줄 때는 절대 이 값을 쓰지 않는다 — 반올림한 낙인을 상품
+    정보로 내보내면 사용자가 실제와 다른 조건을 보게 된다. 여기서 하는 일은
+    '비슷한 낙인끼리 한 줄에 세워 그중 쿠폰 상위 몇 개만 뽑는다'뿐이다.
+    낙인은 정수라 k/5.0이 정확히 .5로 떨어지는 경우가 없다(그러려면 42.5 같은
+    값이어야 한다) → 파이썬 round의 짝수 반올림이 끼어들 여지가 없다.
+    """
+    return int(round(ki / float(RADAR_V8_KI_BUCKET))) * RADAR_V8_KI_BUCKET
+
+
 def v7_ki_cut(asset_type):
-    """낙인 컷 = 직전 연도 같은 유형 발행 분포의 하위 40% 값 (조건: ki < 컷).
+    """낙인 컷 = 직전 연도 같은 유형 발행 분포의 하위 40% 값.
+
+    ⚠ 배지 게이트가 아니다. v8부터 배지는 '그 주차×유형 그룹 내부' 분포에서
+    컷을 잡는다(_compute_radar_pool 참고). 이 함수가 남은 자리는 화면의 시장
+    국면 계기판(views._market_regime) 하나다 — 거기서는 컷이 절대 기준이어야
+    한다. 그룹 상대 컷을 쓰면 통과율이 항상 40% 근처로 고정돼 '이번 주 조건이
+    좋은가'라는 물음 자체가 성립하지 않는다(10년 분기 검증 상관 +0.52의 근거가
+    사라진다).
 
     SEIBro 발행이력(HistoricalIssue)에서 산출하며 하루 단위 캐시.
     표본 부족 시 v6 고정 컷(RADAR_KI_EXCL)으로 폴백한다.
@@ -506,16 +550,75 @@ def v7_peak_gate(p, refs=None):
     return True, peak_disp
 
 
+def v8_cheap_gate(group, asset_type):
+    """(주차, 유형) 그룹 → ①1차 배리어 ②낙인 ③쿠폰을 통과한 상품 목록.
+
+    시세가 필요 없는 세 게이트만 본다. ②③의 컷은 **이 그룹 내부** 분포에서
+    나오므로 group에는 그 주차·유형 상품이 빠짐없이 들어와야 한다. 일부만 넣어
+    부르면 컷이 달라져 조용히 다른 답이 나온다.
+
+    컷의 모수는 게이트 통과자가 아니라 그룹 전체다(백테스트와 동일). 낙인·쿠폰이
+    비어 있는 상품만 각자의 분포에서 빠진다 — 노낙인은 낙인 분포에 못 들어가고,
+    쿠폰 미상은 쿠폰 분포에 못 들어간다.
+
+    _compute_radar_pool이 쓰는 실제 게이트이고, 10년 백테스트 재현도 이 함수를
+    그대로 부른다. 판정을 다른 곳에 베껴 쓰지 말 것.
+    """
+    b0_max = RADAR_V7_B0_MAX[asset_type]
+    ki_cut = group_cut([p.ki for p in group if not p.is_no_ki], RADAR_V7_KI_PCT)
+    yld_cut = group_cut([p.yield_rate for p in group], RADAR_V8_YLD_PCT)
+    if ki_cut is None or yld_cut is None:
+        return []                          # 낙인이나 쿠폰이 하나도 없는 주 → 배지 없음
+    return [p for p in group if (
+        (not p.is_no_ki and p.ki is not None) and p.ki <= ki_cut       # ② 낙인
+        and p.yield_rate is not None and p.yield_rate >= yld_cut       # ③ 쿠폰
+        and p.barrier_first is not None and p.barrier_first <= b0_max  # ① 1차 배리어
+    )]
+
+
+def v8_bucket_quota(survivors):
+    """⑤ 정원 — 낙인 5단위 버킷마다 쿠폰 상위 RADAR_V8_BUCKET_TOP개만 남긴다.
+
+    survivors: [(product, peak)] → 같은 형식으로 걸러 반환.
+    이게 v8에서 공급량을 되돌리는 장치다. 이것만 빼면 10년 배지가 12,613건
+    (주당 24.35)으로 v7의 두 배가 넘게 터진다 — 정원이 7,069건(56.0%)을 잘라
+    5,544건·주당 10.70으로 맞춘다.
+
+    동점은 상품코드·id로 갈라 언제 다시 계산해도 같은 상품이 뽑히게 한다
+    (백테스트는 isin으로 갈랐다. 청약 중이라 상품코드가 아직 없으면 id로 간다).
+    """
+    buckets = {}
+    for p, peak in survivors:
+        buckets.setdefault(v8_ki_bucket(p.ki), []).append((p, peak))
+    picked = []
+    for _, members in sorted(buckets.items()):
+        members.sort(key=lambda t: (-(t[0].yield_rate or 0),
+                                    t[0].product_code or "", t[0].id))
+        picked += members[:RADAR_V8_BUCKET_TOP]
+    return picked
+
+
 def _compute_radar_pool(monday, asset_type):
-    """(주차, 유형) 그룹의 {product_id: radar_result} 계산 — v7 3중 게이트.
+    """(주차, 유형) 그룹의 {product_id: radar_result} 계산 — v8 선정식.
 
     ① 1차 배리어 ≤ 유형별 상한 (지수 90 / 종목 80)
-    ② 낙인 < 직전 연도 같은 유형 분포 하위 40% (미만)
-    ③ 고점 발행 회피 — **발행 시점** 기준가가 그 직전 52주 최고 대비 95% 미만
+    ② 낙인 ≤ **이 그룹** 낙인 분포 하위 40% 값 (이하)
+    ③ 쿠폰 ≥ **이 그룹** 쿠폰 분포 하위 30% 값 (= 상위 70%)
+    ④ 고점 발행 회피 — **발행 시점** 기준가가 그 직전 52주 최고 대비 95% 미만
        (95% 이상이어도 직전 1년 상승률 15% 이하면 통과 — 완만한 우상향 예외)
-    통과자 전원 타겟 신호 배지, 순위는 수익률순.
+    ⑤ 정원 — ④까지 통과한 것을 낙인 5단위 버킷으로 나누고, 버킷마다 쿠폰 상위
+       5개까지만 배지. 남은 것 전원이 타겟 신호이고 순위는 수익률순.
 
-    ③이 발행 시점 기준이라 발행이 끝난 주차의 결과는 오늘 시세와 무관하다 →
+    ②③이 '그룹 내부' 분포인 것이 v7과의 핵심 차이다. 그래서 상품 하나만 놓고는
+    배지 여부를 정할 수 없고 반드시 같은 주차·유형 전체를 함께 봐야 한다 — 이
+    함수가 처음부터 (주차, 유형) 단위인 이유이며 Product.radar도 자기 id를 이
+    결과에서 찾아 쓴다. 절대 컷으로 되돌리면 안 된다: 낙인이 통상 50~65였던
+    2016~2022년 빈티지와 30~35인 2025년을 같은 잣대로 재게 된다.
+    분포의 모수는 게이트 통과자가 아니라 **그 주차 그룹 전체**다(백테스트와 동일).
+
+    ⑤의 버킷은 선정에만 쓰고 화면에는 원래 낙인값을 그대로 보여준다(v8_ki_bucket).
+
+    ④가 발행 시점 기준이라 발행이 끝난 주차의 결과는 오늘 시세와 무관하다 →
     같은 주차를 언제 다시 계산해도 답이 같다(_radar_pool 캐시가 날아가도 안전).
 
     group에서 원금지급형(ELB·DLB)을 뺀다(.listed()). 게이트 통과자는 그대로다 —
@@ -531,22 +634,16 @@ def _compute_radar_pool(monday, asset_type):
         sub_end__gte=monday, sub_end__lte=sunday, asset_type=asset_type))
     if not group:
         return {}
-    b0_max = RADAR_V7_B0_MAX[asset_type]
-    ki_cut = v7_ki_cut(asset_type)
-
-    # 값싼 게이트(배리어·낙인) 먼저, 시세가 필요한 고점 게이트는 생존자에만
-    cheap = [p for p in group if (
-        (not p.is_no_ki and p.ki is not None) and p.ki < ki_cut       # ② 낙인
-        and p.barrier_first is not None and p.barrier_first <= b0_max  # ① 1차 배리어
-    )]
+    cheap = v8_cheap_gate(group, asset_type)   # ①②③ 시세 없이 되는 것 먼저
     refs = peak_ref_prices(cheap)          # 공시 기준가 한 번에 (상품별 왕복 방지)
     survivors = []
     for p in cheap:
-        ok, peak = v7_peak_gate(p, refs.get(p.id))                     # ③ 고점 회피(완화 포함)
+        ok, peak = v7_peak_gate(p, refs.get(p.id))                     # ④ 고점 회피(완화 포함)
         if ok and peak is not None:
             survivors.append((p, peak))
 
-    ranked = sorted(survivors, key=lambda t: -(t[0].yield_rate or 0))
+    picked = v8_bucket_quota(survivors)                                # ⑤ 정원
+    ranked = sorted(picked, key=lambda t: -(t[0].yield_rate or 0))
     eligible_n = len(ranked)
     tier = RADAR_V7_TIER
     yield_col = [p.yield_rate or 0 for p in group]
@@ -854,11 +951,16 @@ class Product(models.Model):
 
     @property
     def radar(self):
-        """레이더 신호 — 상품이 속한 (청약 주차 × 유형) 그룹에서 상위 15위 안에
-        든 경우에만 배지 정보를 반환. 그 외(게이트 탈락·순위 밖)는 None.
+        """레이더 신호 — 상품이 속한 (청약 주차 × 유형) 그룹에서 v8 선정식을
+        통과한 경우에만 배지 정보를 반환. 그 외(게이트 탈락·정원 밖)는 None.
+
+        상품 하나만 봐서는 답이 안 나온다. 낙인·쿠폰 컷이 그룹 분포에서 나오고
+        정원도 그룹 안에서 매겨지므로 _radar_pool이 그 주차·유형 전체를 한꺼번에
+        계산하고 여기서는 자기 id를 찾아 쓰기만 한다.
 
         반환: {tier, color, srank, group_n, score, points, mini_points, axes[4]}
-        상세 산식은 모듈 상단 _compute_radar_pool 참고.
+        srank·group_n은 배지를 받은 상품들 안에서의 순위·모수다.
+        상세 산식은 _compute_radar_pool 참고.
         """
         if not self.sub_end:
             return None

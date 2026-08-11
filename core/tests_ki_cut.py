@@ -1,20 +1,23 @@
-"""낙인 퍼센타일 컷 테스트 — RADAR_V7_KI_PCT.
+"""낙인 컷 테스트 — 컷을 어디서 뽑고 어떻게 비교하는가.
 
 배경 (2026-08-11)
-  v7은 낙인 컷을 '직전 연도 같은 유형 발행 분포의 하위 30%'로 잡았다.
-  v8에서 이 퍼센타일 하나만 40%로 완화했다. 1차 배리어·고점 게이트는 그대로다.
+  v7은 낙인 컷을 '직전 연도 같은 유형 발행 분포의 하위 30%'로 잡고 미만으로
+  비교했다. v8은 컷의 출처를 '그 주차×유형 그룹 내부'로 옮기고 이하로 비교한다.
+  퍼센타일 자체도 30%→40%로 완화했다.
 
 여기서 못 박는 것
   ① 퍼센타일 상수는 0.40이다
-  ② 컷은 '직전 연도 전체 분포'에서 나온다 — 그 주차 그룹 분포가 아니다
-  ③ 비교는 '미만'이다 — 낙인이 컷과 같으면 탈락
-  ④ 직전 연도 표본이 RADAR_V7_KI_MIN_SAMPLE 미만이면 v6 고정 컷으로 폴백한다
-  ⑤ 배지에 정원이 없다 — 게이트 통과자는 전원 배지다
+  ② 배지 컷은 **그 주차 그룹 분포**에서 나온다 — 직전 연도 분포가 아니다
+  ③ 비교는 '이하'다 — 낙인이 컷과 같으면 통과한다
+  ④ group_cut은 색인식이다 (분위수 보간을 하지 않는다)
+  ⑤ v7_ki_cut(직전 연도 컷)은 남아 있되 배지가 아니라 시장 국면 계기판 몫이다
 
-⑤를 못 박는 이유: v8 튜닝에 쓰인 백테스트 스윕은 '낙인 5단위 버킷마다 쿠폰
-상위 5개'라는 정원을 두고 목표 수치를 냈는데, 서비스 코드에는 그런 정원이
-없다. 두 구조를 같은 것으로 착각하면 배지 공급량이 두 배로 어긋난다.
-(서비스의 TOP5는 radar_tracks의 화면 표시 상한이고 배지 자격과 무관하다.)
+②를 못 박는 이유: 절대 컷으로 되돌리면 낙인이 통상 50~65였던 2016~2022년
+빈티지와 30~35인 2025년을 같은 잣대로 재게 된다. ⑤를 갈라 두는 이유: 국면
+계기판까지 그룹 상대 컷으로 바꾸면 통과율이 정의상 늘 40% 근처에 붙어
+'이번 주 조건이 좋은가'를 못 읽는다.
+
+쿠폰 필터·정원은 tests_radar_v8.py가 맡는다.
 """
 
 from datetime import date, timedelta
@@ -24,7 +27,8 @@ from django.test import TestCase
 
 from core.models import (
     _RADAR_POOL_CACHE, _V7_KI_CUT_CACHE, RADAR_KI_EXCL, RADAR_V7_KI_MIN_SAMPLE,
-    RADAR_V7_KI_PCT, HistoricalIssue, Product, _compute_radar_pool, v7_ki_cut,
+    RADAR_V7_KI_PCT, HistoricalIssue, Product, _compute_radar_pool, group_cut,
+    v7_ki_cut,
 )
 
 TODAY = date.today()
@@ -57,8 +61,30 @@ def make(**kw):
     return Product.objects.create(**base)
 
 
+class GroupCutTest(TestCase):
+    """group_cut — 백테스트 스윕이 쓴 색인식 그대로인가."""
+
+    def test_하위_40퍼센트_색인의_값을_고른다(self):
+        # int(5 * 0.40) = 2 → 정렬 후 세 번째 값
+        self.assertEqual(group_cut([50, 20, 40, 30, 10], 0.40), 30)
+
+    def test_보간하지_않는다(self):
+        """분위수 보간이면 42.5가 나오는 자리 — 표본에 있는 값이어야 한다."""
+        self.assertEqual(group_cut([40, 45], 0.50), 45)
+
+    def test_색인이_넘치면_마지막_값에서_멈춘다(self):
+        self.assertEqual(group_cut([10, 20], 1.0), 20)
+
+    def test_None은_분포에서_빠진다(self):
+        self.assertEqual(group_cut([10, None, 20, None, 30], 0.40), 20)
+
+    def test_값이_없으면_None이다(self):
+        self.assertIsNone(group_cut([], 0.40))
+        self.assertIsNone(group_cut([None, None], 0.40))
+
+
 class KiCutValueTest(TestCase):
-    """v7_ki_cut이 직전 연도 분포에서 뽑는 값."""
+    """v7_ki_cut — 직전 연도 절대 컷. 배지가 아니라 시장 국면 계기판이 쓴다."""
 
     def setUp(self):
         _V7_KI_CUT_CACHE.clear()
@@ -71,15 +97,6 @@ class KiCutValueTest(TestCase):
         # 정렬하면 인덱스 0~34가 30, 35~99가 45.
         # 하위 30% → 인덱스 30 → 30 / 하위 40% → 인덱스 40 → 45
         seed_dist([30] * 35 + [45] * 65)
-        self.assertEqual(v7_ki_cut("지수형"), 45)
-
-    def test_30퍼센트였다면_같은_분포에서_컷이_더_낮았다(self):
-        """완화 전후를 같은 표본에서 대조한다 — 상수 하나가 원인임을 못 박는다."""
-        seed_dist([30] * 35 + [45] * 65)
-        with mock.patch("core.models.RADAR_V7_KI_PCT", 0.30):
-            _V7_KI_CUT_CACHE.clear()
-            self.assertEqual(v7_ki_cut("지수형"), 30)
-        _V7_KI_CUT_CACHE.clear()
         self.assertEqual(v7_ki_cut("지수형"), 45)
 
     def test_유형별로_따로_센다(self):
@@ -100,8 +117,8 @@ class KiCutValueTest(TestCase):
         self.assertEqual(v7_ki_cut("지수형"), 45)
 
 
-class KiCutGateTest(TestCase):
-    """컷이 배지 판정에서 쓰이는 방식 — 미만 비교, 정원 없음."""
+class KiGateTest(TestCase):
+    """배지 낙인 게이트 — 그 주차 그룹 분포에서 컷을 잡고 이하로 비교한다."""
 
     def setUp(self):
         _RADAR_POOL_CACHE.clear()
@@ -112,38 +129,44 @@ class KiCutGateTest(TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def _pool(self, cut=35):
+    def _pool(self):
         """고점 게이트만 통과로 고정하고 실제 _compute_radar_pool을 돌린다."""
-        with mock.patch("core.models.v7_peak_gate", return_value=(True, 80)), \
-                mock.patch("core.models.v7_ki_cut", return_value=cut):
+        with mock.patch("core.models.v7_peak_gate", return_value=(True, 80)):
             return _compute_radar_pool(MONDAY, "지수형")
 
-    def test_낙인이_컷과_같으면_탈락이다(self):
-        same = make(product_no="7001", ki=35)
-        under = make(product_no="7002", ki=34)
-        pool = self._pool(cut=35)
-        self.assertNotIn(same.id, pool)
-        self.assertIn(under.id, pool)
+    def _ladder(self):
+        """낙인 20·25·30·35·40 다섯 건. 쿠폰은 같아서 쿠폰 필터가 안 걸린다.
 
-    def test_컷이_40퍼센트로_올라가면_통과가_늘어난다(self):
-        """같은 상품 집합에서 컷만 30→35로 바꾼 효과."""
-        low = make(product_no="7101", ki=25)
-        mid = make(product_no="7102", ki=32)
-        self.assertEqual(set(self._pool(cut=30)), {low.id})
-        self.assertEqual(set(self._pool(cut=35)), {low.id, mid.id})
+        낙인 컷 = 정렬 [20,25,30,35,40]의 int(5*0.40)=2번째 = 30.
+        낙인이 다 달라 5단위 버킷도 전부 1건씩 → 정원도 안 걸린다.
+        """
+        return {ki: make(product_no=f"75{ki}", ki=ki)
+                for ki in (20, 25, 30, 35, 40)}
 
-    def test_배지에_정원이_없다(self):
-        """낙인이 같은(=같은 5단위 버킷) 상품이 8개면 8개 전부 배지다."""
-        ids = {make(product_no=f"72{i:02d}", ki=30, yield_rate=10.0 + i).id
-               for i in range(8)}
-        pool = self._pool(cut=35)
-        self.assertEqual(set(pool), ids)
-        self.assertEqual(len(pool), 8)
+    def test_컷은_그_주차_그룹에서_나온다(self):
+        """직전 연도 분포를 아무리 넣어도 배지 결과가 안 바뀐다."""
+        p = self._ladder()
+        before = set(self._pool())
+        seed_dist([90] * 500)          # 연간 컷이었다면 90 → 다섯 건 전부 통과
+        _RADAR_POOL_CACHE.clear()
+        _V7_KI_CUT_CACHE.clear()
+        self.assertEqual(set(self._pool()), before)
+        self.assertEqual(before, {p[20].id, p[25].id, p[30].id})
 
-    def test_통과자_전원이_같은_배지를_받는다(self):
-        """순위는 매기되 등급을 가르지 않는다 — v6의 상위 5/15 정원은 없다."""
-        for i in range(8):
-            make(product_no=f"73{i:02d}", ki=30, yield_rate=10.0 + i)
-        pool = self._pool(cut=35)
-        self.assertEqual({r["tier"] for r in pool.values()}, {"타겟 신호"})
-        self.assertEqual(sorted(r["srank"] for r in pool.values()), list(range(1, 9)))
+    def test_낙인이_컷과_같으면_통과한다(self):
+        """v7은 미만이라 탈락시켰다 — v8에서 뒤집힌 자리다."""
+        p = self._ladder()
+        self.assertIn(p[30].id, self._pool())      # 컷 = 30
+
+    def test_컷보다_높으면_탈락한다(self):
+        p = self._ladder()
+        pool = self._pool()
+        self.assertNotIn(p[35].id, pool)
+        self.assertNotIn(p[40].id, pool)
+
+    def test_노낙인은_낙인_분포에도_배지에도_못_들어간다(self):
+        p = self._ladder()
+        for i in range(4):
+            make(product_no=f"76{i}", ki=None, is_no_ki=True)
+        # 노낙인이 분포에 끼면 컷이 흔들린다 — 컷도 통과자도 그대로여야 한다
+        self.assertEqual(set(self._pool()), {p[20].id, p[25].id, p[30].id})
