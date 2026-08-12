@@ -94,6 +94,10 @@ class Command(BaseCommand):
         _, created = KnockInAlert.objects.get_or_create(investment=inv, level_band=band)
         if not created:
             return
+        # 텔레그램 발송은 2026-08-11 조 팀장 지시로 비활성화(설정 기본값 꺼짐).
+        # KnockInStatus 갱신(handle)과 위 KnockInAlert 기록은 그대로 남는다.
+        if not settings.TELEGRAM_KNOCKIN_ALERT_ENABLED:
+            return
         if not telegram.is_alert_target(inv.user):
             return
         worst = inv.worst_ki_status

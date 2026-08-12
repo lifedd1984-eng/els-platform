@@ -214,6 +214,24 @@ TELEGRAM_ALERT_USERNAMES = [
     if u.strip()
 ]
 
+# ── 텔레그램 알림 종류별 킬스위치 ────────────────────────────
+# 아래 3종은 2026-08-11 조 팀장 지시로 비활성화했다. 기본값 꺼짐.
+# 끄는 것은 **텔레그램 발송뿐**이다. 판정 로직과 DB 기록(RedemptionAlert·
+# KnockInAlert·KnockInStatus·NotifiedMatch)은 그대로 돌고, 웹 푸시도 그대로
+# 나간다 — 웹 푸시는 계정별 채널이라 공용 텔레그램과 별개다(core/notify.py 주석).
+# 코드를 지우지 않고 조건 분기로만 막았으므로, 다시 켜려면 .env에
+# 해당 이름을 1로 넣고 재기동하면 된다(배포 불필요).
+#
+# 보유 투자 평가일 D-7/D-1 임박 — core/notify.py notify_redemptions
+TELEGRAM_REDEMPTION_ALERT_ENABLED = os.environ.get(
+    "TELEGRAM_REDEMPTION_ALERT_ENABLED", "0") == "1"
+# 낙인 근접 경보(위험·경고) — core/management/commands/update_prices.py _maybe_alert
+TELEGRAM_KNOCKIN_ALERT_ENABLED = os.environ.get(
+    "TELEGRAM_KNOCKIN_ALERT_ENABLED", "0") == "1"
+# 신규 프리셋 매칭 상품 — core/notify.py notify_preset_matches
+TELEGRAM_PRESET_MATCH_ALERT_ENABLED = os.environ.get(
+    "TELEGRAM_PRESET_MATCH_ALERT_ENABLED", "0") == "1"
+
 # 웹 푸시 (VAPID — .env에 키 보관, 로컬/EC2 동일 키. 미설정 시 푸시 발송·버튼 비활성)
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")

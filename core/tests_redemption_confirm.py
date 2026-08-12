@@ -214,7 +214,10 @@ class 텔레그램스코프(_Base):
             call_command("check_redemptions", stdout=mock.MagicMock())
         self.assertEqual(tg.call_count, 0)
 
+    @override_settings(TELEGRAM_REDEMPTION_ALERT_ENABLED=True)
     def test_평가일_D_7_텔레그램은_admin_것만_나간다(self):
+        # 발송 자체는 2026-08-11부터 기본 꺼짐이다. 여기서 고정하려는 것은
+        # '켜져 있을 때 지정 계정 것만 나간다'이므로 토글만 켜고 본다.
         from core.notify import notify_redemptions
         self._inv(self.other, 20_000_000)
         admin_inv = self._inv(self.admin, 5_000_000)

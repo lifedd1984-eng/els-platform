@@ -18,7 +18,7 @@ from datetime import date, timedelta
 from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from core.models import (
@@ -172,7 +172,10 @@ class PresetAndNotifyTest(OfflineMixin, TestCase):
         got = set(self._preset().match_queryset().values_list("id", flat=True))
         self.assertEqual(got, {self.els.id})
 
+    @override_settings(TELEGRAM_PRESET_MATCH_ALERT_ENABLED=True)
     def test_텔레그램_발송_목록에서도_빠진다(self):
+        # 발송 자체는 2026-08-11부터 기본 꺼짐이다. 여기서 고정하려는 것은
+        # '켜져 있을 때 ELB가 목록에 실리지 않는다'이므로 토글만 켜고 본다.
         from core import notify
         with mock.patch("core.telegram.send_message", return_value=True) as tg:
             notify.notify_preset_matches()

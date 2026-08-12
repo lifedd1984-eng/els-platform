@@ -11,6 +11,11 @@ from django.core.management.base import BaseCommand
 from core import kofia_scraper, notify, parsers, telegram
 from core.models import ImportLog, Product
 
+# 수집 완료 알림에 나열할 신규 상품 최대 건수. 넘으면 "... 외 N건"으로 접는다.
+# 다른 알림(notify.notify_preset_matches·기초자산 누락 경보)과 같은 상한이다 —
+# 신규가 수십 건 나오는 날 메시지가 텔레그램 상한(4096자)까지 늘어나는 것을 막는다.
+NEW_LIST_LIMIT = 10
+
 
 class Command(BaseCommand):
     help = "KOFIA 전자공시에서 청약중인 ELS/DLS/ELB/DLB 자동 수집"
@@ -72,6 +77,7 @@ class Command(BaseCommand):
             return
 
         n_new = 0
+        new_rows = []         # 이번 배치에서 새로 만들어진 상품 (완료 알림 목록용)
         missing_assets = []   # KOFIA가 기초자산을 빈 값으로 내려준 상품 (경보용)
         odd_period = []       # 상품기간÷배리어단계로 역산한 주기와 어긋난 상품 (경보용)
         for row in rows:
@@ -156,6 +162,7 @@ class Command(BaseCommand):
             created = self._upsert_product(row, defaults)
             if created:
                 n_new += 1
+                new_rows.append(row)
 
         self.stdout.write(f"[자동수집] KOFIA {len(rows)}건 중 신규 {n_new}건")
 
@@ -209,11 +216,18 @@ class Command(BaseCommand):
 
         if should_notify:
             from django.conf import settings
-            telegram.send_message(
-                f"[ELS 레이더] KOFIA 자동수집 완료\n"
-                f"전체 {len(rows)}건 / 신규 {n_new}건\n"
-                f"대시보드: {settings.SITE_URL}"
-            )
+            # 건수만 오던 알림에 신규 상품 목록(발행사·상품번호)을 싣는다.
+            # 2026-08-11 조 팀장 지시 — 몇 건인지만 보고 무엇이 들어왔는지 알 수 없었다.
+            lines = [
+                "[ELS 레이더] KOFIA 자동수집 완료",
+                f"전체 {len(rows)}건 / 신규 {n_new}건",
+            ]
+            for r in new_rows[:NEW_LIST_LIMIT]:
+                lines.append(f"- {r['issuer']} {r['product_no']}")
+            if len(new_rows) > NEW_LIST_LIMIT:
+                lines.append(f"... 외 {len(new_rows) - NEW_LIST_LIMIT}건")
+            lines.append(f"대시보드: {settings.SITE_URL}")
+            telegram.send_message("\n".join(lines))
 
 
 def timezone_today():

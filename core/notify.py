@@ -51,13 +51,19 @@ def notify_preset_matches(stdout=None):
         if len(new_matches) > 10:
             lines.append(f"... 외 {len(new_matches)-10}건")
         lines.append(f"대시보드: {settings.SITE_URL}")
-        if telegram.send_message("\n".join(lines)):
+        # 텔레그램 발송은 2026-08-11 조 팀장 지시로 비활성화(설정 기본값 꺼짐).
+        # NotifiedMatch 기록은 껐을 때도 남긴다 — 안 남기면 매 배치가 같은 매칭을
+        # 신규로 다시 세고, 나중에 다시 켰을 때 밀린 건이 한꺼번에 쏟아진다.
+        enabled = settings.TELEGRAM_PRESET_MATCH_ALERT_ENABLED
+        recorded = telegram.send_message("\n".join(lines)) if enabled else True
+        if recorded:
             NotifiedMatch.objects.bulk_create(
                 [NotifiedMatch(preset=preset, product=p) for p in new_matches],
                 ignore_conflicts=True,
             )
             if stdout:
-                stdout.write(f"[알림] {preset.name}: {len(new_matches)}건 발송")
+                state = "발송" if enabled else "기록만 (텔레그램 발송 꺼짐)"
+                stdout.write(f"[알림] {preset.name}: {len(new_matches)}건 {state}")
 
 
 def notify_redemptions(stdout=None):
@@ -83,7 +89,9 @@ def notify_redemptions(stdout=None):
         expected = f"{nxt['expected']:,}원" if nxt["expected"] else "-"
         # 텔레그램은 공용 채널이라 지정 계정 것만 보낸다. 웹 푸시는 계정별로 가므로
         # 아래 send_to_user는 제한하지 않는다 — 다른 계정도 본인 알림은 계속 받는다.
-        if telegram.is_alert_target(inv.user):
+        # 텔레그램 발송 자체는 2026-08-11 조 팀장 지시로 비활성화(설정 기본값 꺼짐).
+        # 위 RedemptionAlert 기록과 아래 웹 푸시는 그대로 돈다.
+        if settings.TELEGRAM_REDEMPTION_ALERT_ENABLED and telegram.is_alert_target(inv.user):
             account = f" · {inv.broker_account}" if inv.broker_account else ""
             telegram.send_message(
                 f"[상환 평가 {alert_type}] {inv.product.issuer} {inv.product.product_no}\n"
