@@ -224,10 +224,15 @@ def _market_regime(monday, sunday):
         if len(stocks) >= 5:
             break
 
-    # 통과 조건을 화면에 그대로 노출 (컷은 매년 자동 산출되므로 하드코딩 금지)
-    cond = " · ".join(
+    # 통과 조건을 화면에 그대로 노출 (컷은 매년 자동 산출되므로 하드코딩 금지).
+    # 유형별로 줄을 나눈다 — 한 줄로 붙여 쓰면 두 유형 조건이 섞여 읽힌다
+    # (2026-08-11 조 팀장 지시). 낙인은 "미만"(<), 1차 조기상환은 "이하"(<=)로
+    # 표기가 다른데, 아래 판정 로직(180행)과 정확히 맞춰 쓴 것이라 통일하지
+    # 않았다 — 실제로 다른 비교연산이라 말을 맞추면 표시가 거짓말이 된다.
+    cond = [
         f"{t} 낙인 {v7_ki_cut(t)} 미만 · 1차 조기상환 {RADAR_V7_B0_MAX[t]} 이하"
-        for t in ("지수형", "종목형"))
+        for t in ("지수형", "종목형")
+    ]
     return {"n_all": n_all, "n_pass": n_pass, "rate": round(rate, 1),
             "cond": cond, "indexes": idx, "stocks": stocks}
 

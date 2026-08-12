@@ -122,7 +122,8 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
       <div style="font-size:11.5px;color:var(--text-2);line-height:1.6">
         이번 주 청약 상품 중 낙인·1차 조기상환 조건을 통과한 비율입니다.</div>
       <div style="font-size:11px;color:var(--text-3);line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-        <b style="color:var(--text-2)">통과 조건</b><br>{{ regime.cond }}</div>
+        <b style="color:var(--text-2)">통과 조건</b><br>
+        {% for line in regime.cond %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div>
     </div>
     <div>
       {% comment %}
