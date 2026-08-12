@@ -227,6 +227,15 @@ class KOFIA수집완료알림(TestCase):
         self.assertIn("- NH투자증권 25065", text)
         self.assertIn("- NH투자증권 25066", text)
 
+    def test_목록에_낙인과_쿠폰이_같이_나온다(self):
+        # _kofia_row 기본 description "80-80-80-80-75-70/30 KI" → 낙인 30.
+        text = self._run([_kofia_row("25065")])
+        self.assertIn("- NH투자증권 25065 낙인30% 쿠폰20.2%", text)
+
+    def test_노낙인_상품은_낙인없음으로_나온다(self):
+        text = self._run([_kofia_row("25065", description="원금보장형, NoKI")])
+        self.assertIn("낙인없음", text)
+
     def test_이미_있는_상품은_목록에_실리지_않는다(self):
         self._run([_kofia_row("25065")])                       # 먼저 수집
         text = self._run([_kofia_row("25065"), _kofia_row("25067")])

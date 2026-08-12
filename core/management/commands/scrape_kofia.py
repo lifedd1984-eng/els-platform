@@ -162,7 +162,9 @@ class Command(BaseCommand):
             created = self._upsert_product(row, defaults)
             if created:
                 n_new += 1
-                new_rows.append(row)
+                # row 자체는 안 건드린다 — 위 upsert가 이미 끝났어도 아래에서
+                # 쓰는 건 완료 알림용 사본 하나뿐이다.
+                new_rows.append({**row, "ki_val": ki_val, "is_no_ki": is_no_ki})
 
         self.stdout.write(f"[자동수집] KOFIA {len(rows)}건 중 신규 {n_new}건")
 
@@ -223,7 +225,11 @@ class Command(BaseCommand):
                 f"전체 {len(rows)}건 / 신규 {n_new}건",
             ]
             for r in new_rows[:NEW_LIST_LIMIT]:
-                lines.append(f"- {r['issuer']} {r['product_no']}")
+                ki_txt = "없음" if r["is_no_ki"] else (
+                    f"{r['ki_val']}%" if r["ki_val"] is not None else "-")
+                yld_txt = f"{r['yield_rate']:g}%" if r["yield_rate"] is not None else "-"
+                lines.append(
+                    f"- {r['issuer']} {r['product_no']} 낙인{ki_txt} 쿠폰{yld_txt}")
             if len(new_rows) > NEW_LIST_LIMIT:
                 lines.append(f"... 외 {len(new_rows) - NEW_LIST_LIMIT}건")
             lines.append(f"대시보드: {settings.SITE_URL}")
