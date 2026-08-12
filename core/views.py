@@ -179,7 +179,14 @@ def _market_regime(monday, sunday):
             continue
         n_all += 1
         cut = v7_ki_cut(p.asset_type)
-        if (not p.is_no_ki and p.ki is not None and cut is not None and p.ki < cut
+        # 낙인 비교를 "이하"(<=)로 쓴다 — 2026-08-11 조 팀장 지시.
+        # ⚠ v7_ki_cut이 실제 배지 선정에 쓰이던 시절(v8 이전)엔 "미만"(<)이
+        # 필수였다 — "이하"면 컷과 정확히 같은 낙인 상품이 새어 들어와
+        # 2018·2021년 손실로 이어진 이력이 있다(els-radar-badge-constants
+        # 검증). v8부터 배지 선정은 이 함수를 아예 안 쓰고 그 주차 그룹
+        # 상대 컷(models.group_cut)을 쓰므로 그 위험은 더는 안 걸린다 —
+        # v7_ki_cut은 지금 이 국면 계기판에서만 참고용으로 남아 있다.
+        if (not p.is_no_ki and p.ki is not None and cut is not None and p.ki <= cut
                 and p.barrier_first is not None
                 and p.barrier_first <= RADAR_V7_B0_MAX[p.asset_type]):
             n_pass += 1
@@ -226,11 +233,10 @@ def _market_regime(monday, sunday):
 
     # 통과 조건을 화면에 그대로 노출 (컷은 매년 자동 산출되므로 하드코딩 금지).
     # 유형별로 줄을 나눈다 — 한 줄로 붙여 쓰면 두 유형 조건이 섞여 읽힌다
-    # (2026-08-11 조 팀장 지시). 낙인은 "미만"(<), 1차 조기상환은 "이하"(<=)로
-    # 표기가 다른데, 아래 판정 로직(180행)과 정확히 맞춰 쓴 것이라 통일하지
-    # 않았다 — 실제로 다른 비교연산이라 말을 맞추면 표시가 거짓말이 된다.
+    # (2026-08-11 조 팀장 지시). 낙인·1차 조기상환 둘 다 "이하"로 통일 —
+    # 위 판정 로직과 맞춘 것이다.
     cond = [
-        f"{t} 낙인 {v7_ki_cut(t)} 미만 · 1차 조기상환 {RADAR_V7_B0_MAX[t]} 이하"
+        f"{t} 낙인 {v7_ki_cut(t)} 이하 · 1차 조기상환 {RADAR_V7_B0_MAX[t]} 이하"
         for t in ("지수형", "종목형")
     ]
     return {"n_all": n_all, "n_pass": n_pass, "rate": round(rate, 1),

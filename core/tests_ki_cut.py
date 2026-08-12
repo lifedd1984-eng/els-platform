@@ -170,3 +170,41 @@ class KiGateTest(TestCase):
             make(product_no=f"76{i}", ki=None, is_no_ki=True)
         # 노낙인이 분포에 끼면 컷이 흔들린다 — 컷도 통과자도 그대로여야 한다
         self.assertEqual(set(self._pool()), {p[20].id, p[25].id, p[30].id})
+
+
+class MarketRegimeKiCompareTest(TestCase):
+    """시장 국면 계기판의 낙인 비교 — 2026-08-11 조 팀장 지시로 이하로 바꿨다.
+
+    v7_ki_cut 자체는 여기서만 쓰인다(KiCutValueTest 독스트링 참고, 배지는
+    group_cut을 쓴다). 그래서 이 비교를 이하로 바꿔도 배지 선정에는 안
+    번진다 — 그 전제를 이 클래스가 지킨다.
+    """
+
+    def setUp(self):
+        _V7_KI_CUT_CACHE.clear()
+        self.addCleanup(_V7_KI_CUT_CACHE.clear)
+        patcher = mock.patch("core.market.resolve_ticker", return_value=None)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _regime(self):
+        from core.views import _market_regime
+        sunday = MONDAY + timedelta(days=6)
+        return _market_regime(MONDAY, sunday)
+
+    def test_낙인이_컷과_같으면_통과한다(self):
+        seed_dist([30] * 35 + [45] * 65)   # 지수형 컷 = 45 (KiCutValueTest와 동일)
+        make(ki=45, barrier_first=90, asset_type="지수형")
+        self.assertEqual(self._regime()["n_pass"], 1)
+
+    def test_컷보다_높으면_탈락한다(self):
+        seed_dist([30] * 35 + [45] * 65)
+        make(ki=46, barrier_first=90, asset_type="지수형")
+        self.assertEqual(self._regime()["n_pass"], 0)
+
+    def test_통과조건_문구는_낙인도_이하다(self):
+        seed_dist([30] * 35 + [45] * 65)
+        make(ki=45, barrier_first=90, asset_type="지수형")
+        cond = self._regime()["cond"]
+        self.assertEqual(len(cond), 2)
+        self.assertIn("지수형 낙인 45 이하 · 1차 조기상환 90 이하", cond)
