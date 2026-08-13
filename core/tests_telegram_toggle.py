@@ -8,6 +8,7 @@
   ④ KOFIA 자동수집 완료 알림에 신규 상품 목록(발행사·상품번호)을 싣는다.
   ⑤ 평가일 D-7은 통째로 없앴다 — 너무 일러서 실효 알림이 아니었다.
   ⑥ 낙인 근접 경보에 웹 푸시를 새로 추가했다 — 전엔 텔레그램에만 있었다.
+  ⑦ 관심상품 청약마감 D-1(가족 공용 텔레그램)도 껐다 — 계정별 웹 푸시는 유지.
 
 여기서 고정하는 것
   · 기본값(꺼짐)에서 telegram.send_message가 아예 호출되지 않는다
@@ -29,7 +30,7 @@ from core.management.commands.scrape_kofia import NEW_LIST_LIMIT
 from core.management.commands.update_prices import Command as UpdatePricesCommand
 from core.models import (
     Investment, KnockInAlert, KnockInStatus, NotifiedMatch, Preset, Product,
-    RedemptionAlert,
+    RedemptionAlert, WatchItem,
 )
 
 TODAY = date.today()
@@ -220,6 +221,41 @@ class 프리셋매칭알림(TestCase):
         text = tg.call_args.args[0]
         self.assertIn("[프리셋 매칭] 나의플랜 — 신규 1건", text)
         self.assertIn("미래에셋증권 7001", text)
+
+
+class 관심상품마감알림(TestCase):
+    """⑦ 관심상품 청약마감 D-1 — 텔레그램만 끄고 계정별 웹 푸시는 남긴다."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="admin", password="x")
+        self.product = _match_product("7100")
+        self.product.sub_end = TODAY + timedelta(days=1)   # 내일 마감
+        self.product.save()
+        WatchItem.objects.create(user=self.user, product=self.product)
+
+    def _run(self):
+        from core import notify
+        with mock.patch("core.telegram.send_message", return_value=True) as tg, \
+             mock.patch("core.push.send_to_user", return_value=1) as pu:
+            notify.notify_watchlist_deadline()
+        return tg, pu
+
+    def test_기본값이면_텔레그램이_나가지_않는다(self):
+        tg, _ = self._run()
+        self.assertEqual(tg.call_count, 0)
+
+    def test_기본값이어도_웹_푸시는_나간다(self):
+        _, pu = self._run()
+        self.assertEqual(pu.call_count, 1)
+        self.assertEqual(pu.call_args.args[0], self.user)
+        self.assertIn("[청약 마감 D-1]", pu.call_args.args[1])
+
+    @override_settings(TELEGRAM_WATCHLIST_DEADLINE_ALERT_ENABLED=True)
+    def test_설정을_켜면_예전처럼_나간다(self):
+        tg, pu = self._run()
+        self.assertEqual(tg.call_count, 1)
+        self.assertIn("[청약 마감 임박]", tg.call_args.args[0])
+        self.assertEqual(pu.call_count, 1)
 
 
 def _kofia_row(product_no, **kw):

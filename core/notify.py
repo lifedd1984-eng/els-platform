@@ -115,7 +115,8 @@ def notify_watchlist_deadline(stdout=None):
     """관심상품 중 내일 청약마감 상품 알림.
 
     ① 웹 푸시 — 계정별 (본인 관심상품 기준, 본인이 이미 보유중인 상품 제외)
-    ② 텔레그램 — 가족 공용 (전 계정 합집합, 누군가 보유중인 상품 제외 · 기존 동작)
+    ② 텔레그램 — 가족 공용 (전 계정 합집합, 누군가 보유중인 상품 제외)
+       2026-08-11 조 팀장 지시로 비활성화. ①은 그대로 나간다.
     숙려대상자(65세+)는 마감 2영업일 전까지 청약해야 하므로 D-1에 안내.
     """
     tomorrow = date.today() + timedelta(days=1)
@@ -149,7 +150,12 @@ def notify_watchlist_deadline(stdout=None):
         if n_push and stdout:
             stdout.write(f"[마감푸시] {user.username}: {len(prods)}건 → 기기 {n_push}대")
 
-    # ── ② 가족 공용 텔레그램 (기존 동작 유지) ──
+    # ── ② 가족 공용 텔레그램 ──
+    # 2026-08-11 조 팀장 지시로 비활성화(설정 기본값 꺼짐). 위 ① 웹 푸시는
+    # 계정별 채널이라 그대로 나간다. 여기서 바로 빠지는 이유는 아래 집계가
+    # 텔레그램 메시지를 만들기 위한 것뿐이라 계산할 필요조차 없어서다.
+    if not settings.TELEGRAM_WATCHLIST_DEADLINE_ALERT_ENABLED:
+        return
     held = set(
         Investment.objects.filter(status="보유중").values_list("product_id", flat=True)
     )
