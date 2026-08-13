@@ -83,7 +83,9 @@
 .vx-years td { color:#C8CDD5; padding:7px 6px; text-align:right;
   border-bottom:1px solid rgba(255,255,255,.06); white-space:nowrap; }
 .vx-years td.b { color:#fff; font-weight:700; }
-.vx-years tr.hl td { background:rgba(78,134,255,.12); }
+/* 2021년 강조는 '눈여겨볼 해'라는 뜻이지 성과 자랑이 아니다 — v8에서 이 해는
+   레이더가 시장에 진 유일한 해라, 브랜드 파랑을 쓰면 반대로 읽힌다. */
+.vx-years tr.hl td { background:rgba(255,255,255,.07); }
 .vx-note { font-size:11.5px; color:#8B95A1; line-height:1.6; margin-bottom:16px; }
 
 /* 대형 스탯 카드 (base .num 충돌 방지 전용 클래스) */
@@ -379,8 +381,9 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
                 border-radius:8px;padding:9px 12px;font-size:11.5px;color:#B9C0CC;line-height:1.6;margin-top:14px">
       <span style="color:#8B95A1;flex:0 0 auto">ⓘ</span>
       <span>정상 상환율 = 결말이 확정된 상품(조기상환 완료 또는 만기 판정) 중 원금손실 없이 끝난 비율.
-        수익률은 상품이 제시한 연 수익 조건의 평균입니다. 손실 24건은 종목형 13건과 지수형 11건으로 나뉘며,
-        지수형 손실 11건은 모두 2021년 발행분입니다. 그래서 TOP5를 지수형/종목형으로 나눠 보여드립니다.
+        수익률은 상품이 제시한 연 수익 조건의 평균입니다. 손실 24건은 종목형 13건·지수형 11건이고,
+        지수형 손실은 모두 2021년 발행분입니다. 정상 상환율로 보면 지수형 99.77%, 종목형 98.46%로
+        차이가 남아 있어 TOP5를 두 유형으로 나눠 보여드립니다.
         {% if accuracy %}지금도 매주 검증을 이어가고 있습니다 — 최근 청약분 {{ accuracy.total_n }}개에서
         ELS 레이더 선택 상품의 첫 조기상환 성공률은 <b style="color:#fff">{{ accuracy.badge_pct }}%</b>(나머지
         {{ accuracy.ctrl_pct }}%)였습니다.{% endif %}
