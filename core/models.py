@@ -1371,7 +1371,7 @@ class RedemptionAlert(models.Model):
     """상환 평가일 알림 발송 이력 — 같은 회차 중복 발송 방지."""
     investment = models.ForeignKey(Investment, on_delete=models.CASCADE)
     round_no = models.IntegerField("회차")
-    alert_type = models.CharField(max_length=5)  # D-7 / D-1
+    alert_type = models.CharField(max_length=5)  # D-1 (D-7은 2026-08-11 폐지)
     sent_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

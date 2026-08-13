@@ -1922,7 +1922,7 @@ def push_test(request):
     from . import push
     n = push.send_to_user(
         request.user, "알림이 켜졌어요",
-        "조기상환 평가 D-7·D-1, 관심상품 청약마감 전날 아침에 알려드립니다.",
+        "조기상환 평가 전날, 낙인 근접, 관심상품 청약마감 전날 알려드립니다.",
         url="/portfolio/",
     )
     return JsonResponse({"ok": n > 0, "sent": n})

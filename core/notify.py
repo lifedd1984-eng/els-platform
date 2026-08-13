@@ -20,7 +20,7 @@ from core.models import (
 def _alert_scope_holdings():
     """텔레그램에 실을 보유 투자 — 지정 계정 것만(설정이 비면 전 계정).
 
-    개별 알림(조기상환 판정·평가일 D-7/D-1·낙인 근접)과 같은 기준을 주간 요약에도
+    개별 알림(조기상환 판정·평가일 D-1·낙인 근접)과 같은 기준을 주간 요약에도
     쓴다. 요약 안에 여러 계정 투자가 섞여 나열되던 것을 2026-08-10 조 팀장 지시로
     맞췄다. 배치 보고·헬스체크는 서비스 전체 상태라 이 제한을 걸지 않는다.
     """
@@ -67,20 +67,19 @@ def notify_preset_matches(stdout=None):
 
 
 def notify_redemptions(stdout=None):
-    """보유 투자 평가일 D-7/D-1 알림. RedemptionAlert로 중복 발송 방지."""
+    """보유 투자 평가일 D-1 알림. RedemptionAlert로 중복 발송 방지.
+
+    D-7은 2026-08-11 조 팀장 지시로 없앴다 — 너무 일러서 실효 알림이 아니었다.
+    """
     today = date.today()
     for inv in Investment.objects.filter(status="보유중").select_related("product", "user"):
         nxt = inv.next_evaluation
         if not nxt:
             continue
         days_left = (nxt["date"] - today).days
-        alert_type = None
-        if days_left == 7:
-            alert_type = "D-7"
-        elif days_left == 1:
-            alert_type = "D-1"
-        if not alert_type:
+        if days_left != 1:
             continue
+        alert_type = "D-1"
         _, created = RedemptionAlert.objects.get_or_create(
             investment=inv, round_no=nxt["n"], alert_type=alert_type
         )

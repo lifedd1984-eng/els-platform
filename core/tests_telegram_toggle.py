@@ -1,11 +1,13 @@
 """텔레그램 알림 3종 비활성화 + KOFIA 수집 알림 상품 목록.
 
 2026-08-11 조 팀장 지시
-  ① 평가일 D-7/D-1 임박   (core/notify.py notify_redemptions)
-  ② 낙인 근접 경보        (update_prices _maybe_alert)
-  ③ 신규 프리셋 매칭      (core/notify.py notify_preset_matches)
-  위 3종은 **텔레그램 발송만** 끈다. 코드를 지우지 않고 설정 토글로 막았다.
+  ① 평가일 D-1 임박       (core/notify.py notify_redemptions) — 텔레그램만 끔
+  ② 낙인 근접 경보        (update_prices _maybe_alert) — 텔레그램만 끔
+  ③ 신규 프리셋 매칭      (core/notify.py notify_preset_matches) — 텔레그램만 끔
+  ①②③은 코드를 지우지 않고 설정 토글로 막았다.
   ④ KOFIA 자동수집 완료 알림에 신규 상품 목록(발행사·상품번호)을 싣는다.
+  ⑤ 평가일 D-7은 통째로 없앴다 — 너무 일러서 실효 알림이 아니었다.
+  ⑥ 낙인 근접 경보에 웹 푸시를 새로 추가했다 — 전엔 텔레그램에만 있었다.
 
 여기서 고정하는 것
   · 기본값(꺼짐)에서 telegram.send_message가 아예 호출되지 않는다
@@ -32,7 +34,7 @@ from core.models import (
 
 TODAY = date.today()
 
-# 평가일이 확정된 상품 — 평가일 D-7 계산이 근사(기준일+N개월)에 흔들리지 않게 박는다.
+# 평가일이 확정된 상품 — 평가일 D-1 계산이 근사(기준일+N개월)에 흔들리지 않게 박는다.
 KIWOOM_1863 = dict(
     issuer="키움증권", product_no="1863", name="키움증권(ELS) 1863",
     product_type="ELS", yield_rate=26.28, ki=30, is_no_ki=False,
@@ -57,16 +59,20 @@ class _InvestmentBase(TestCase):
 
 
 class 평가일임박알림(_InvestmentBase):
-    """① 평가일 D-7/D-1 — 텔레그램만 끄고 RedemptionAlert·웹 푸시는 남긴다."""
+    """① 평가일 D-1 — 텔레그램만 끄고 RedemptionAlert·웹 푸시는 남긴다.
 
-    def _run(self):
-        """다음 평가일 7일 전으로 notify의 today를 고정하고 돌린다."""
+    D-7은 2026-08-11 조 팀장 지시로 아예 없앴다(설정 토글이 아니라 로직
+    자체를 뺐다) — 그건 별도로 test_D_7은_더이상_알림을_만들지_않는다가 본다.
+    """
+
+    def _run(self, days_before=1):
+        """평가일 N일 전으로 notify의 today를 고정하고 돌린다."""
         from core.notify import notify_redemptions
-        seven = self.inv.next_evaluation["date"] - timedelta(days=7)
+        target = self.inv.next_evaluation["date"] - timedelta(days=days_before)
         with mock.patch("core.notify.date") as d, \
              mock.patch("core.telegram.send_message", return_value=True) as tg, \
              mock.patch("core.push.send_to_user", return_value=1) as pu:
-            d.today.return_value = seven
+            d.today.return_value = target
             notify_redemptions()
         return tg, pu
 
@@ -77,7 +83,7 @@ class 평가일임박알림(_InvestmentBase):
     def test_꺼져_있어도_DB_기록은_남는다(self):
         self._run()
         alert = RedemptionAlert.objects.get(investment=self.inv)
-        self.assertEqual(alert.alert_type, "D-7")
+        self.assertEqual(alert.alert_type, "D-1")
 
     def test_꺼져_있어도_웹_푸시는_그대로_간다(self):
         _, pu = self._run()
@@ -87,11 +93,19 @@ class 평가일임박알림(_InvestmentBase):
     def test_설정을_켜면_예전처럼_나간다(self):
         tg, _ = self._run()
         self.assertEqual(tg.call_count, 1)
-        self.assertIn("[상환 평가 D-7] 키움증권 1863", tg.call_args.args[0])
+        self.assertIn("[상환 평가 D-1] 키움증권 1863", tg.call_args.args[0])
+
+    def test_D_7은_더이상_알림을_만들지_않는다(self):
+        self._run(days_before=7)
+        self.assertEqual(RedemptionAlert.objects.filter(investment=self.inv).count(), 0)
 
 
 class 낙인근접경보(_InvestmentBase):
-    """② 낙인 근접 — 텔레그램만 끄고 KnockInStatus·KnockInAlert는 남긴다."""
+    """② 낙인 근접 — 텔레그램만 끄고 KnockInStatus·KnockInAlert·웹 푸시는 남긴다.
+
+    웹 푸시는 2026-08-11 조 팀장 지시로 새로 추가했다 — 전엔 텔레그램에만
+    있어서, 오늘 텔레그램을 끄면 이 알림을 알려줄 채널이 하나도 안 남았다.
+    """
 
     def _status(self, level_pct=32.0):
         """KI 30 기준 버퍼 2%p = '위험' 구간."""
@@ -102,13 +116,25 @@ class 낙인근접경보(_InvestmentBase):
     def _alert(self):
         cmd = UpdatePricesCommand()
         cmd.stdout = mock.MagicMock()
-        with mock.patch("core.telegram.send_message", return_value=True) as tg:
+        with mock.patch("core.telegram.send_message", return_value=True) as tg, \
+             mock.patch("core.push.send_to_user", return_value=1) as pu:
             cmd._maybe_alert(self.inv)
-        return tg
+        return tg, pu
 
     def test_기본값이면_텔레그램이_나가지_않는다(self):
         self._status()
-        self.assertEqual(self._alert().call_count, 0)
+        tg, _ = self._alert()
+        self.assertEqual(tg.call_count, 0)
+
+    def test_기본값이어도_웹_푸시는_나간다(self):
+        self._status()
+        _, pu = self._alert()
+        self.assertEqual(pu.call_count, 1)
+        args = pu.call_args.args
+        self.assertEqual(args[0], self.user)
+        self.assertIn("[낙인 위험] 키움증권 1863", args[1])
+        self.assertIn("KI배리어까지", args[2])
+        self.assertEqual(pu.call_args.kwargs["url"], "/portfolio/")
 
     def test_꺼져_있어도_경보_이력은_남는다(self):
         """이력이 안 남으면 다시 켰을 때 밀린 경보가 한꺼번에 쏟아진다."""
@@ -117,25 +143,35 @@ class 낙인근접경보(_InvestmentBase):
         self.assertEqual(
             list(KnockInAlert.objects.values_list("level_band", flat=True)), ["위험"])
 
+    def test_경보가_한번_기록되면_웹_푸시도_한번만_나간다(self):
+        """KnockInAlert 중복 방지가 웹 푸시에도 그대로 적용된다."""
+        self._status()
+        self._alert()
+        _, pu = self._alert()
+        self.assertEqual(pu.call_count, 0)
+
     def test_배치가_낙인_거리를_그대로_갱신한다(self):
         """판정·DB 기록은 손대지 않았다 — 시세만 끊고 배치를 통째로 돌린다."""
         with mock.patch("core.market.resolve_ticker", return_value="^KS200"), \
              mock.patch("core.market.fetch_current_price", return_value=32.0), \
              mock.patch("core.market.fetch_price_on", return_value=100.0), \
-             mock.patch("core.telegram.send_message", return_value=True) as tg:
+             mock.patch("core.telegram.send_message", return_value=True) as tg, \
+             mock.patch("core.push.send_to_user", return_value=1) as pu:
             call_command("update_prices", stdout=mock.MagicMock())
         status = KnockInStatus.objects.get(investment=self.inv)
         self.assertEqual(status.level_pct, 32.0)
         self.assertEqual(self.inv.ki_buffer, 2.0)
         self.assertTrue(KnockInAlert.objects.filter(level_band="위험").exists())
         self.assertEqual(tg.call_count, 0)
+        self.assertEqual(pu.call_count, 1)
 
     @override_settings(TELEGRAM_KNOCKIN_ALERT_ENABLED=True)
-    def test_설정을_켜면_예전처럼_나간다(self):
+    def test_설정을_켜면_텔레그램도_같이_나간다(self):
         self._status()
-        tg = self._alert()
+        tg, pu = self._alert()
         self.assertEqual(tg.call_count, 1)
         self.assertIn("[낙인 위험] 키움증권 1863", tg.call_args.args[0])
+        self.assertEqual(pu.call_count, 1)
 
 
 def _match_product(product_no, yield_rate=30.0):

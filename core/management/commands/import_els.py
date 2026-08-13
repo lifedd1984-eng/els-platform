@@ -5,7 +5,7 @@ downloads 폴더의 청약중인상품_*.xlsx를 감지해 Product로 임포트.
 - 열은 헤더 이름으로 찾는다 (아래 COLUMNS 주석 참고)
 - ImportLog로 동일 파일 재처리 방지
 - 프리셋 매칭 신규 상품 텔레그램 알림 (NotifiedMatch로 중복 방지)
-- 보유 Investment 평가일 D-7/D-1 알림 (RedemptionAlert로 중복 방지)
+- 보유 Investment 평가일 D-1 알림 (RedemptionAlert로 중복 방지)
 - 월~수 새 파일 없으면 목요일에 리마인더
 """
 
@@ -130,7 +130,7 @@ class Command(BaseCommand):
         if should_notify and total_new_products:
             notify.notify_preset_matches(self.stdout)
 
-        # 상환 평가일 D-7/D-1 알림은 send_redemption_alert(아침 크론)로 분리
+        # 상환 평가일 D-1 알림은 send_redemption_alert(아침 크론)로 분리
 
         if new_files and should_notify:
             telegram.send_message(

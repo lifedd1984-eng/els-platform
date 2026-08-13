@@ -215,18 +215,19 @@ class 텔레그램스코프(_Base):
         self.assertEqual(tg.call_count, 0)
 
     @override_settings(TELEGRAM_REDEMPTION_ALERT_ENABLED=True)
-    def test_평가일_D_7_텔레그램은_admin_것만_나간다(self):
+    def test_평가일_D_1_텔레그램은_admin_것만_나간다(self):
         # 발송 자체는 2026-08-11부터 기본 꺼짐이다. 여기서 고정하려는 것은
         # '켜져 있을 때 지정 계정 것만 나간다'이므로 토글만 켜고 본다.
+        # D-7은 같은 날 지시로 없어져서(notify.notify_redemptions) D-1로 본다.
         from core.notify import notify_redemptions
         self._inv(self.other, 20_000_000)
         admin_inv = self._inv(self.admin, 5_000_000)
         # 다음 평가일은 오늘 기준으로 정해지므로 날짜를 박지 않는다
-        seven = admin_inv.next_evaluation["date"] - timedelta(days=7)
+        one = admin_inv.next_evaluation["date"] - timedelta(days=1)
         with mock.patch("core.notify.date") as d, \
              mock.patch("core.telegram.send_message", return_value=True) as tg, \
              mock.patch("core.push.send_to_user", return_value=1) as pu:
-            d.today.return_value = seven
+            d.today.return_value = one
             notify_redemptions()
         self.assertEqual(tg.call_count, 1)
         self.assertIn("5,000,000원", tg.call_args_list[0].args[0])

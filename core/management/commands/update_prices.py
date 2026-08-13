@@ -17,7 +17,7 @@
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from core import market, telegram
+from core import market, push, telegram
 from core.models import Investment, KnockInStatus, KnockInAlert
 
 
@@ -94,14 +94,28 @@ class Command(BaseCommand):
         _, created = KnockInAlert.objects.get_or_create(investment=inv, level_band=band)
         if not created:
             return
+        worst = inv.worst_ki_status
+        account = f" · {inv.broker_account}" if inv.broker_account else ""
+
+        # 웹 푸시 — 계정별 채널이라 텔레그램 스코프·토글과 무관하게 항상 보낸다.
+        # 2026-08-11 조 팀장 지시로 신설 — 전엔 이 알림이 텔레그램에만 있어서,
+        # 같은 날 텔레그램을 끄면 이 경보를 알려줄 채널이 하나도 안 남았다.
+        n_push = push.send_to_user(
+            inv.user,
+            f"[낙인 {band}] {inv.product.issuer} {inv.product.product_no}",
+            f"기초자산 '{worst.asset_name}' 현재 레벨 {worst.level_pct}% "
+            f"· KI배리어까지 {buffer}%p 남음",
+            url="/portfolio/",
+            tag=f"ki-{inv.id}-{band}",
+            stdout=self.stdout,
+        )
+        self.stdout.write(f"  → 낙인 경보 웹 푸시: {band} ({n_push}건)")
+
         # 텔레그램 발송은 2026-08-11 조 팀장 지시로 비활성화(설정 기본값 꺼짐).
-        # KnockInStatus 갱신(handle)과 위 KnockInAlert 기록은 그대로 남는다.
         if not settings.TELEGRAM_KNOCKIN_ALERT_ENABLED:
             return
         if not telegram.is_alert_target(inv.user):
             return
-        worst = inv.worst_ki_status
-        account = f" · {inv.broker_account}" if inv.broker_account else ""
         telegram.send_message(
             f"[낙인 {band}] {inv.product.issuer} {inv.product.product_no}\n"
             f"투자금액 {inv.amount:,}원{account}\n"
@@ -109,4 +123,4 @@ class Command(BaseCommand):
             f"KI배리어 {inv.product.ki}% 까지 {buffer}%p 남음\n"
             f"대시보드: {settings.SITE_URL}/portfolio/"
         )
-        self.stdout.write(f"  → 낙인 경보 발송: {band}")
+        self.stdout.write(f"  → 낙인 경보 텔레그램 발송: {band}")
