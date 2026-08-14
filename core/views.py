@@ -13,12 +13,13 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from . import ask_tools, portfolio_facts
+from . import ask_tools, portfolio_facts, telegram
 from .models import (
-    ImportLog, Investment, Preset, Product, RedemptionVerdict, WatchItem,
-    attach_peak_ratios, peak_ratios,
+    Feedback, FeedbackBannerDismissal, ImportLog, Investment, Preset, Product,
+    RedemptionVerdict, WatchItem, attach_peak_ratios, peak_ratios,
 )
 
 logger = logging.getLogger(__name__)
@@ -504,6 +505,7 @@ def weekly(request):
             "issuers": f_issuers,
         },
         "has_saved_filters": bool(request.session.get("weekly_filters")),
+        "show_feedback_banner": should_show_feedback_banner(request.user),
         "active_nav": "weekly",
     })
 
@@ -2423,6 +2425,117 @@ def legal_disclaimer(request):
         "meta_desc": ("ELS 레이더가 제공하는 손실확률·신호 등급의 산출 근거와 한계, "
                       "그리고 ELS 투자 전 반드시 알아야 할 원금손실 위험을 정리했습니다."),
     })
+
+
+# ── 베타 피드백 ───────────────────────────────────
+def should_show_feedback_banner(user) -> bool:
+    """이 사용자에게 베타 피드백 배너를 띄울지.
+
+    안 띄우는 경우
+      ① 비로그인 — 배너의 목적이 '쓰고 있는 사람의 불편'을 받는 것이라
+         가입도 안 한 사람에게 물을 게 없다.
+      ② 이미 의견을 보냈다 — 목적을 달성했다.
+      ③ 직접 닫았다 — 아래 재노출 정책 참고.
+
+    ▣ 재노출 정책: 닫으면 영구 숨김 (2026-08-13 결정)
+      사용자가 극소수인 지금은 '한 번 더 띄워 얻는 의견 1건'보다 '또 뜨는 배너에
+      질려 떠나는 사람 1명'의 손실이 크다. 닫은 뒤에도 푸터의 '의견 보내기'가
+      상시 남으므로 경로 자체가 사라지지는 않는다.
+      30일 재노출로 바꾸려면 ③ 조건만 dismissed_at 기준 비교로 고치면 된다
+      (FeedbackBannerDismissal이 시각을 이미 저장하고 있다).
+    """
+    if not user.is_authenticated:
+        return False
+    if Feedback.objects.filter(user=user).exists():
+        return False
+    return not FeedbackBannerDismissal.objects.filter(user=user).exists()
+
+
+def _feedback_notify(fb):
+    """피드백 접수를 텔레그램으로 알린다. 실패해도 저장은 유지된다.
+
+    ⚠ 연락처 원문을 싣지 않는다. 텔레그램은 chat_id 하나짜리 공용 채널이라
+      운영자 외의 사람도 읽는다 — 사용자 전화번호·카톡 아이디가 그 방에
+      영구히 남는 건 받은 목적(기프티콘 발송)에 비해 과하다. 남겼는지 여부만
+      알리고 실제 값은 관리자 화면에서 본다.
+    """
+    if not settings.TELEGRAM_FEEDBACK_ALERT_ENABLED:
+        return False
+    lines = [
+        f"[베타 피드백] {fb.user.username}",
+        f"인터뷰(30분 통화): {'가능' if fb.interview_ok else '응답 없음'}",
+        f"연락처: {'남김 — 관리자 화면에서 확인' if fb.contact else '없음(가입 이메일로 회신)'}",
+        "",
+        fb.body,
+        "",
+        f"{settings.SITE_URL.rstrip('/')}/admin/core/feedback/{fb.id}/change/",
+    ]
+    return telegram.send_message("\n".join(lines))
+
+
+@login_required
+def feedback(request):
+    """의견 보내기 — 자유 텍스트 1칸 + 연락처(선택) + 인터뷰 의향.
+
+    항목을 더 늘리지 않는다. 베타에서 필요한 건 '무엇이 불편했나' 한 문장이고,
+    칸이 늘수록 제출률이 떨어진다. 별점·분류 같은 건 표본이 쌓인 뒤에 붙인다.
+    """
+    from django.urls import reverse
+
+    if request.method == "POST":
+        body = (request.POST.get("body") or "").strip()
+        contact = (request.POST.get("contact") or "").strip()[:120]
+        interview_ok = bool(request.POST.get("interview_ok"))
+        if not body:
+            return render(request, "core/feedback.html", {
+                "error": "의견을 한 줄이라도 적어주세요.",
+                "body": body, "contact": contact, "interview_ok": interview_ok,
+                "body_max": Feedback.BODY_MAX, "active_nav": "feedback",
+            })
+        fb = Feedback.objects.create(
+            user=request.user, body=body[:Feedback.BODY_MAX],
+            contact=contact, interview_ok=interview_ok,
+        )
+        try:
+            _feedback_notify(fb)
+        except Exception as e:
+            # 알림 실패로 사용자 제출을 되돌리지 않는다 — 기록은 이미 남았고
+            # 관리자 화면에서 볼 수 있다.
+            logger.error("피드백 텔레그램 알림 실패: %s", e)
+        # 완료 화면으로 리다이렉트(PRG). 토스트 한 줄로 끝내지 않는 이유는,
+        # 인터뷰를 신청한 사람에게 '언제 어디로 연락이 오는지'를 말해줘야 하기
+        # 때문이다 — 지금 이 폼이 유일한 인터뷰 모집 경로다.
+        # 리다이렉트로 갈라두면 새로고침해도 같은 의견이 두 번 저장되지 않는다.
+        return redirect(f"{reverse('feedback')}?sent=1")
+
+    # ?sent=1은 주소만 알면 누구나 붙일 수 있으므로, 실제로 보낸 기록이
+    # 있을 때만 완료 화면을 보여준다. 없으면 그냥 폼이다.
+    sent = None
+    if request.GET.get("sent"):
+        sent = Feedback.objects.filter(user=request.user).order_by("-created_at").first()
+    return render(request, "core/feedback.html",
+                  {"sent": sent, "body_max": Feedback.BODY_MAX, "active_nav": "feedback"})
+
+
+@login_required
+@require_POST
+def feedback_dismiss(request):
+    """배너 닫기 — 계정에 기록해 다시 뜨지 않게 한다.
+
+    fetch로 오면 JSON만 주고 배너를 그 자리에서 지운다(화면 새로고침 없음).
+    JS가 없거나 실패하면 평범한 폼 제출로 들어와 원래 보던 화면으로 돌아간다
+    — 별표 토글(base.html)과 같은 방식이다.
+    """
+    FeedbackBannerDismissal.objects.get_or_create(user=request.user)
+    if _pf_is_fetch(request):
+        return JsonResponse({"dismissed": True})
+    # next는 사용자가 보내는 값이라 그대로 믿지 않는다 — 같은 사이트 주소일
+    # 때만 돌아간다(외부로 튕기는 열린 리다이렉트 방지).
+    nxt = request.POST.get("next") or ""
+    if nxt and url_has_allowed_host_and_scheme(
+            nxt, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return redirect(nxt)
+    return redirect("weekly")
 
 
 # ── 회원 탈퇴 ────────────────────────────────────

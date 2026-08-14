@@ -468,6 +468,8 @@ document.addEventListener('click', function(e) {
       <a href="{% url 'terms' %}" style="color:var(--text-2);font-weight:600;font-size:13px">이용약관</a>
       <a href="{% url 'privacy' %}" style="color:var(--text-2);font-weight:700;font-size:13px">개인정보처리방침</a>
       <a href="mailto:lifedd1984@gmail.com" style="color:var(--text-2);font-weight:600;font-size:13px">문의하기</a>
+      {# 배너를 닫은 뒤에도 남는 상시 경로. 배너 재노출을 안 하는 대신 여기를 항상 열어둔다 #}
+      {% if user.is_authenticated %}<a href="{% url 'feedback' %}" style="color:var(--text-2);font-weight:600;font-size:13px">의견 보내기</a>{% endif %}
     </div>
     <div style="border-top:1px solid var(--border);padding-top:12px;font-size:12.5px;color:var(--text-3);line-height:1.6">
       ELS 레이더는 공개된 금융투자협회 전자공시 자료를 가공해 <b>정보를 제공하는 서비스</b>이며,

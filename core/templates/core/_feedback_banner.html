@@ -1,0 +1,58 @@
+{# 베타 피드백 배너. 노출 조건은 core/views.py should_show_feedback_banner (한 번 닫으면 영구 숨김) #}
+<style>
+  .fb-banner { display: flex; align-items: center; gap: 11px; flex-wrap: wrap;
+    background: var(--blue-bg); border-radius: var(--radius);
+    padding: 13px 16px; margin-bottom: 16px; }
+  .fb-banner > i { color: var(--blue); font-size: 15px; flex: none; }
+  .fb-text { flex: 1; min-width: 180px; font-size: 13px; color: var(--text-2); line-height: 1.55; }
+  .fb-text b { color: var(--text); font-weight: 700; }
+  .fb-act { display: flex; align-items: center; gap: 4px; margin-left: auto; }
+  .fb-act .btn-icon { color: var(--text-3); }
+  .fb-act .btn-icon:hover { background: rgba(255,255,255,.7); }
+  @media (max-width: 480px) {
+    .fb-banner { padding: 12px 13px; gap: 9px; }
+    .fb-act { width: 100%; }
+    .fb-act .btn-primary { flex: 1; justify-content: center; }
+    /* 손가락으로 누르는 크기 확보 — 아이콘 그대로 두고 여백만 키운다 (실측 26x25 → 40x34) */
+    .fb-act .btn-icon { min-width: 40px; min-height: 34px; justify-content: center; }
+  }
+</style>
+<div class="fb-banner" id="fbBanner">
+  <i class="fa-solid fa-comment-dots"></i>
+  <div class="fb-text">
+    <b>베타 기간입니다.</b> 쓰면서 불편했던 점을 알려주시면 커피 기프티콘을 보내드립니다.
+  </div>
+  <div class="fb-act">
+    <a href="{% url 'feedback' %}" class="btn btn-primary btn-sm">의견 보내기</a>
+    <form method="post" action="{% url 'feedback_dismiss' %}" id="fbDismiss">{% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <button type="submit" class="btn btn-icon" title="닫기" aria-label="배너 닫기">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </form>
+  </div>
+</div>
+<script>
+// 닫기는 fetch로 그 자리에서 처리한다 — 무거운 목록 화면을 다시 그리지 않기 위해서다.
+// fetch가 안 되는 환경이거나 실패하면 평범한 폼 제출로 폴백한다. 여기서 폴백을
+// 두는 이유는 별표 토글과 다르다: 닫기가 조용히 실패하면 사용자 눈에는
+// '닫기가 안 먹는 배너'로 남는다 — 배너 자체보다 나쁜 경험이다.
+(function () {
+  var f = document.getElementById('fbDismiss');
+  if (!f) return;
+  f.addEventListener('submit', function (e) {
+    e.preventDefault();
+    fetch(f.getAttribute('action'), {
+      method: 'POST', body: new FormData(f),
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var box = document.getElementById('fbBanner');
+      if (box) box.remove();
+    }).catch(function (err) {
+      console.warn('배너 닫기 실패 — 폼 제출로 재시도:', err);
+      f.submit();
+    });
+  });
+})();
+</script>

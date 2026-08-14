@@ -17,6 +17,9 @@
 <h1 class="page-title">주간 청약</h1>
 <p class="page-sub">이번 주 청약 마감 상품 {{ total }}건</p>
 
+{# 로그인 직후 도착하는 화면이라 배너를 여기 하나만 둔다 (LOGIN_REDIRECT_URL=/weekly/) #}
+{% if show_feedback_banner %}{% include "core/_feedback_banner.html" %}{% endif %}
+
 <div class="week-nav">
   <a href="?{% qs_replace w=offset|add:'-1' %}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>
   <span class="week-label">{{ monday|date:"n.j" }} ~ {{ sunday|date:"n.j" }}</span>
