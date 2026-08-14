@@ -1833,3 +1833,73 @@ class AskLog(models.Model):
 
     def __str__(self):
         return f"{self.user_id} {self.asked_on} {self.question[:30]}"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 베타 피드백 (배너 → /feedback/ 폼)
+# ══════════════════════════════════════════════════════════════════
+# 지금은 실사용자가 거의 없고 콘텐츠·커뮤니티로 소수가 들어오는 단계다.
+# 들어온 사람이 무엇을 불편해했는지 한 명분도 놓치지 않는 게 목적이라
+# 항목을 최소로 뒀다 — 본문 하나가 필수, 나머지는 선택이다.
+#
+# 본문 길이 상한(BODY_MAX)을 두는 이유
+#   TextField라 DB는 무한정 받지만, 텔레그램 알림에 그대로 실리고 관리자
+#   목록에도 나온다. 상한 없이 두면 붙여넣기 사고 한 번에 알림이 잘린다.
+
+class Feedback(models.Model):
+    """베타 사용자가 보낸 의견 한 건.
+
+    수집 항목을 이 셋으로 제한한 이유
+      · body      — 실제로 알고 싶은 것. 유일한 필수값.
+      · contact   — 커피 기프티콘 보낼 곳. **선택**이다. 비우면 가입 이메일로
+                    보내면 되므로(가입 시 이메일 필수) 굳이 새로 받을 이유가 없다.
+      · interview_ok — 인터뷰 모집 경로. 체크박스 하나로 끝낸다.
+    연락처를 선택으로 둔 만큼, 텔레그램 알림에도 원문을 싣지 않는다
+    (공용 채널이라 다른 사람에게도 보인다 — core/views.py _feedback_notify 주석).
+
+    on_delete=CASCADE
+      탈퇴하면 의견도 함께 지운다. 계정 데이터 완전 삭제 약속(account_delete)과
+      어긋나지 않게 하려면 익명 보존이 아니라 삭제가 맞다.
+    """
+
+    BODY_MAX = 2000
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                             related_name="feedbacks")
+    body = models.TextField("의견")
+    contact = models.CharField("연락받을 곳(선택)", max_length=120, blank=True)
+    interview_ok = models.BooleanField("30분 통화 가능", default=False)
+    created_at = models.DateTimeField("작성 시각", auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "베타 피드백"
+        verbose_name_plural = "베타 피드백"
+
+    def __str__(self):
+        return f"{self.user_id} {self.body[:30]}"
+
+
+class FeedbackBannerDismissal(models.Model):
+    """피드백 배너를 닫은 기록 — 계정당 1행.
+
+    세션·쿠키가 아니라 DB에 두는 이유
+      닫았는데 로그아웃하거나 폰에서 다시 열었을 때 또 뜨면, 사용자 입장에선
+      '닫기가 안 먹는 배너'다. 계정에 붙여야 기기와 무관하게 한 번 닫으면 끝난다.
+
+    boolean이 아니라 시각을 저장하는 이유
+      지금 정책은 '닫으면 영구 숨김'이라 존재 여부만 봐도 되지만, 나중에
+      '30일 뒤 재노출'로 바꾸려면 닫은 시점이 필요하다. 그때 가서 컬럼을
+      추가하면 이미 닫은 사람들의 시각을 알 수 없다. 지금 남겨두면 정책 변경이
+      core/views.py should_show_feedback_banner 한 곳 수정으로 끝난다.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                related_name="feedback_banner_dismissal")
+    dismissed_at = models.DateTimeField("닫은 시각", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "피드백 배너 닫음"
+        verbose_name_plural = "피드백 배너 닫음"
+
+    def __str__(self):
+        return f"{self.user_id} {self.dismissed_at:%Y-%m-%d}"

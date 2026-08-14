@@ -236,6 +236,17 @@ TELEGRAM_PRESET_MATCH_ALERT_ENABLED = os.environ.get(
 TELEGRAM_WATCHLIST_DEADLINE_ALERT_ENABLED = os.environ.get(
     "TELEGRAM_WATCHLIST_DEADLINE_ALERT_ENABLED", "0") == "1"
 
+# 베타 피드백 접수 — core/views.py _feedback_notify
+# ⚠ 위 4종과 달리 **기본값 켜짐**이다. 위 넷은 매일 반복되는 투자 알림이라
+#   꺼도 화면에서 다시 볼 수 있지만, 피드백은 사용자가 한 번 쓰고 마는 것이라
+#   알림을 놓치면 회신 타이밍(커피 기프티콘 발송)을 통째로 놓친다.
+#   기록은 DB(Feedback)에 남으므로 꺼도 유실되지는 않는다 — 관리자 화면에서 본다.
+# ⚠ TELEGRAM_ALERT_USERNAMES(개인 투자 알림 대상 제한)를 적용하지 않는다.
+#   그건 '누구의 투자를 공용 채널에 올릴까'의 문제고, 피드백은 어느 계정이
+#   보냈든 운영자가 받아야 하는 접수 알림이다.
+TELEGRAM_FEEDBACK_ALERT_ENABLED = os.environ.get(
+    "TELEGRAM_FEEDBACK_ALERT_ENABLED", "1") == "1"
+
 # 웹 푸시 (VAPID — .env에 키 보관, 로컬/EC2 동일 키. 미설정 시 푸시 발송·버튼 비활성)
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")

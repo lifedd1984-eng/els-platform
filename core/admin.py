@@ -1,6 +1,8 @@
 from django.contrib import admin
 
-from .models import ImportLog, Investment, Preset, Product, ThreadsReply, WatchItem
+from .models import (
+    Feedback, ImportLog, Investment, Preset, Product, ThreadsReply, WatchItem,
+)
 
 
 @admin.register(Product)
@@ -28,6 +30,22 @@ class ThreadsReplyAdmin(admin.ModelAdmin):
                     "status", "replied_text")
     list_filter = ("bucket", "status")
     search_fields = ("username", "text", "bucket_reason")
+
+
+@admin.register(Feedback)
+class FeedbackAdmin(admin.ModelAdmin):
+    """베타 피드백 열람 — 텔레그램 알림에 연락처 원문을 안 싣는 대신 여기서 본다.
+
+    인터뷰 의향으로 걸러 보는 게 실제 용도라 필터를 그 기준으로만 뒀다.
+    """
+    list_display = ("created_at", "user", "preview", "interview_ok", "contact")
+    list_filter = ("interview_ok",)
+    search_fields = ("body", "contact", "user__username")
+    readonly_fields = ("created_at",)
+
+    @admin.display(description="의견")
+    def preview(self, obj):
+        return obj.body[:60] + ("…" if len(obj.body) > 60 else "")
 
 
 admin.site.register(WatchItem)
