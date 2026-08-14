@@ -484,6 +484,8 @@ def weekly(request):
         ki_top5 = None
 
     return render(request, "core/weekly.html", {
+        "meta_desc": ("이번 주 청약하는 ELS를 한 곳에 모아 낙인 배리어·연 수익률·"
+                      "만기손실확률·조기상환 조건까지 한 표로 비교합니다. 매주 월요일 갱신."),
         "regime": regime,
         "products": products,
         "top5_tracks": top5_tracks,
@@ -507,6 +509,29 @@ def weekly(request):
 
 
 # ── 상품 상세 ─────────────────────────────────────
+def _product_meta_desc(product):
+    """상품 상세의 검색 결과 스니펫.
+
+    상품마다 값이 달라야 의미가 있다 — 같은 문장이 3천 개 붙으면 검색엔진이
+    전부 같은 페이지로 본다. 그래서 실제로 채워진 값만 골라 붙인다.
+    """
+    head = " ".join(x for x in (product.issuer, product.product_no) if x)
+    facts = []
+    if product.assets_raw:
+        facts.append(f"기초자산 {product.assets_raw}")
+    if product.yield_rate is not None:
+        facts.append(f"연 수익률 {product.yield_rate:g}%")
+    if product.is_no_ki:
+        facts.append("노낙인")
+    elif product.ki is not None:
+        facts.append(f"낙인 {product.ki}%")
+    if product.loss_prob is not None:
+        facts.append(f"만기손실확률 {product.loss_prob:g}%")
+    body = ", ".join(facts)
+    tail = "조기상환 배리어와 평가일, 낙인까지 남은 거리를 한눈에 확인하세요."
+    return f"{head} — {body}. {tail}" if body else f"{head} 상품 조건 상세. {tail}"
+
+
 def product_detail(request, pk):
     product = get_object_or_404(Product, pk=pk)
     is_watched = _scope(WatchItem.objects.filter(product=product), request.user).exists()
@@ -653,6 +678,7 @@ def product_detail(request, pk):
                  "peak": peak}
 
     return render(request, "core/product_detail.html", {
+        "meta_desc": _product_meta_desc(product),
         "product": product, "is_watched": is_watched, "svg": svg,
         "sim": sim, "sim_updated": product.sim_updated,
         "ki_statuses": ki_statuses, "ki_worst_buffer": ki_worst_buffer,
@@ -1587,6 +1613,8 @@ def market_trend(request):
         }
 
     return render(request, "core/trend.html", {
+        "meta_desc": ("최근 20주간 청약된 ELS의 평균 연 수익률과 낙인 배리어가 어떻게 움직였는지, "
+                      "레이더 신호의 실제 조기상환 성적과 함께 봅니다."),
         "rows": rows,
         "yield_pts": yield_pts, "yield_poly": _polyline(yield_pts),
         "ki_pts": ki_pts, "ki_poly": _polyline(ki_pts),
@@ -1847,6 +1875,51 @@ def service_worker(request):
     resp = FileResponse(open(path, "rb"), content_type="application/javascript")
     resp["Cache-Control"] = "no-cache"  # 워커 수정이 다음 방문에 바로 반영되도록
     return resp
+
+
+def robots_txt(request):
+    """검색엔진 크롤링 규칙 + 사이트맵 위치.
+
+    ⚠ 이 응답이 실제로 나가는지는 배포 후 확인해야 한다. 현재 elsrader.site는
+    Cloudflare가 관리형 robots.txt를 내주고 있고(그 응답에는 Sitemap 지시어가
+    없다), Cloudflare가 우리 응답을 덮으면 이 뷰는 도달하지 않는다.
+    확인: curl -s https://elsrader.site/robots.txt 에 아래 Sitemap 줄이 보이는지.
+    안 보이면 Cloudflare 대시보드에서 관리형 robots.txt를 끄거나, Search Console에
+    사이트맵 주소를 직접 제출해야 한다.
+
+    로그인·개인 데이터 화면은 크롤러가 들어가 봐야 로그인 페이지만 보므로 막는다.
+    막아도 색인에서 사라지는 것은 아니지만(그건 noindex의 일), 크롤링 예산이
+    유입을 만드는 페이지로 몰린다.
+    """
+    from django.http import HttpResponse
+    from django.urls import reverse
+
+    sitemap_url = request.build_absolute_uri(reverse("django.contrib.sitemaps.views.sitemap"))
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        "",
+        "# 로그인이 필요하거나 개인 데이터가 있는 화면",
+        "Disallow: /accounts/",
+        "Disallow: /portfolio/",
+        "Disallow: /watchlist/",
+        "Disallow: /calendar/",
+        "Disallow: /presets/",
+        "Disallow: /ask/",
+        "Disallow: /admin/",
+        "",
+        "# 운영 전용",
+        "Disallow: /manage/",
+        "Disallow: /upload/",
+        "Disallow: /stats/",
+        "",
+        "# 내부 검색 결과 — 색인 가치가 없고 무한히 늘어난다",
+        "Disallow: /search/",
+        "",
+        f"Sitemap: {sitemap_url}",
+        "",
+    ]
+    return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
 
 def _push_login_required(view):
@@ -2300,23 +2373,56 @@ def about(request):
             "top5": top5,
         }
         _ABOUT_CACHE.update(day=today, ctx=ctx)
-    return render(request, "core/about.html", {"active_nav": "about", **ctx})
+    # /about/ 는 home 과 완전히 같은 HTML을 낸다(home 이 이 함수를 그대로 호출).
+    # 둘을 각각 색인시키면 같은 페이지가 둘로 갈라져 어느 쪽도 순위를 못 받는다.
+    # 대표 주소를 / 하나로 모으고, 사이트맵에도 / 만 넣는다(core/sitemaps.py).
+    return render(request, "core/about.html", {
+        "active_nav": "about",
+        "canonical_url": request.build_absolute_uri("/"),
+        **ctx,
+    })
+
+
+# ── 리포트 (공개) ─────────────────────────────────
+def report_els_10year(request):
+    """ELS 10년 성적표 — 69,903건 전수 판정 (콘텐츠 1편).
+
+    본문은 템플릿에 원고 그대로 박아 둔다. DB 집계로 다시 뽑지 않는다 —
+    원고의 수치는 2026-08-13 기준으로 검증·컨펌을 마친 확정값이고, 매 요청마다
+    재계산하면 검증받지 않은 숫자가 조용히 화면에 올라간다. 갱신할 때는
+    원고와 core/sitemaps.py 의 REPORT_10YEAR_UPDATED 를 함께 고친다.
+    """
+    from .sitemaps import REPORT_10YEAR_UPDATED
+
+    return render(request, "core/report_els_10year.html", {
+        "updated": REPORT_10YEAR_UPDATED,
+        "meta_desc": ("2016~2025년 공모 ELS 69,903건을 전수 판정했더니 원금손실은 3,220건, "
+                      "정상상환율 95.4%였습니다. 연도별 손실률과 판정 기준·한계까지 공개합니다."),
+    })
 
 
 # ── 법적 페이지 (공개) ────────────────────────────
 def legal_terms(request):
     """이용약관."""
-    return render(request, "core/legal_terms.html", {})
+    return render(request, "core/legal_terms.html", {
+        "meta_desc": "ELS 레이더 서비스의 이용 조건과 운영자·이용자의 권리·의무를 규정한 이용약관입니다.",
+    })
 
 
 def legal_privacy(request):
     """개인정보처리방침."""
-    return render(request, "core/legal_privacy.html", {})
+    return render(request, "core/legal_privacy.html", {
+        "meta_desc": ("ELS 레이더가 수집하는 개인정보 항목과 이용 목적, 보관 기간, "
+                      "이용자의 권리를 안내합니다."),
+    })
 
 
 def legal_disclaimer(request):
     """투자 유의사항(면책)."""
-    return render(request, "core/legal_disclaimer.html", {})
+    return render(request, "core/legal_disclaimer.html", {
+        "meta_desc": ("ELS 레이더가 제공하는 손실확률·신호 등급의 산출 근거와 한계, "
+                      "그리고 ELS 투자 전 반드시 알아야 할 원금손실 위험을 정리했습니다."),
+    })
 
 
 # ── 회원 탈퇴 ────────────────────────────────────

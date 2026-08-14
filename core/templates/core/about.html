@@ -1,7 +1,8 @@
 {% extends "core/base.html" %}
 {% load els_extras humanize %}
-{% block title %}ELS 레이더 — 이번주 ELS TOP5{% endblock %}
-{% block og_desc %}매주 월요일 아침, AI가 300여 개 ELS를 분석해 최적의 상품만 선별합니다. 10년 검증 기준 · 무료.{% endblock %}
+{% block title %}이번주 ELS TOP5 · 낙인과 손실확률로 선별 — ELS 레이더{% endblock %}
+{% block og_title %}이번주 ELS TOP5 · 낙인과 손실확률로 선별 — ELS 레이더{% endblock %}
+{% block twitter_title %}이번주 ELS TOP5 · 낙인과 손실확률로 선별 — ELS 레이더{% endblock %}
 
 {% block content %}
 <style>
@@ -390,6 +391,12 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
         과거 실적으로 <b style="color:#fff">미래 수익을 보장하지 않으며</b>, 조건에 부합하는 상품을
         시스템으로 분류한 결과일 뿐 투자 권유가 아닙니다.</span>
     </div>
+
+    {# 69,903이라는 숫자를 방금 본 사람이 가장 궁금해하는 것은 '어떻게 셌나'다 — 그 자리에 원문을 둔다 #}
+    <div style="text-align:center;margin-top:22px">
+      <a href="{% url 'report_els_10year' %}"
+         style="color:#6CA8FF;font-size:13.5px;font-weight:700">69,903건을 어떻게 셌는지 — 10년 성적표 전문 보기 →</a>
+    </div>
   </div>
 </section>
 
@@ -610,7 +617,8 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
       <summary><span class="q">Q</span>원금을 잃을 수도 있나요?<span class="chev">▾</span></summary>
       <div class="a">있습니다. ELS는 예금이 아니고 예금자보호 대상도 아닙니다.
         다만 10년 공모 ELS 69,903개를 검증한 결과, 지수형 타겟 신호 4,695개 중 원금손실은 11개(99.77%)였습니다.
-        과거 결과일 뿐 수익을 보장하지는 않습니다.</div>
+        과거 결과일 뿐 수익을 보장하지는 않습니다.
+        <a href="{% url 'report_els_10year' %}" style="color:var(--blue-dark);font-weight:700">연도별 손실률 전체 표 보기 →</a></div>
     </details>
     <details>
       <summary><span class="q">Q</span>여기서 바로 가입하고 청약하는 건가요?<span class="chev">▾</span></summary>

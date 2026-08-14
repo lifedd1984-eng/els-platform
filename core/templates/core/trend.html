@@ -1,5 +1,7 @@
 {% extends "core/base.html" %}
-{% block title %}시장 트렌드 — ELS 레이더{% endblock %}
+{% block title %}ELS 시장 트렌드 · 20주 수익률·낙인 추이 — ELS 레이더{% endblock %}
+{% block og_title %}ELS 시장 트렌드 · 20주 수익률·낙인 추이 — ELS 레이더{% endblock %}
+{% block twitter_title %}ELS 시장 트렌드 · 20주 수익률·낙인 추이 — ELS 레이더{% endblock %}
 
 {% block content %}
 <h1 class="page-title">시장 트렌드</h1>
@@ -85,7 +87,8 @@
 </div>
 
 <!-- ═══════════ 레이더 신호 성과 검증 ═══════════ -->
-<h1 class="page-title" style="margin-top:36px">레이더 신호 성과</h1>
+{# h1은 페이지당 하나 — 여기는 같은 화면의 두 번째 절이라 h2가 맞다 #}
+<h2 class="page-title" style="margin-top:36px">레이더 신호 성과</h2>
 <p class="page-sub">과거 주차 배지 상품의 실제 1차 조기상환 결과를 시세로 판정한 적중률입니다</p>
 
 {% if radar %}

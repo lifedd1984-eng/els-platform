@@ -1,12 +1,14 @@
 {% extends "core/base.html" %}
 {% load humanize %}
 {% load els_extras %}
-{% block title %}{{ product.issuer }} {{ product.product_no }} — ELS 레이더{% endblock %}
+{% block title %}{{ product.issuer }} {{ product.product_no }} · 낙인·수익률·손실확률 — ELS 레이더{% endblock %}
+{% block og_title %}{{ product.issuer }} {{ product.product_no }} · 낙인·수익률·손실확률 — ELS 레이더{% endblock %}
+{% block twitter_title %}{{ product.issuer }} {{ product.product_no }} · 낙인·수익률·손실확률 — ELS 레이더{% endblock %}
 
 {% block content %}
 <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
   <a href="{% url 'weekly' %}" class="btn btn-icon"><i class="fa-solid fa-arrow-left"></i></a>
-  <div class="page-title" style="margin:0">{{ product.issuer }} {{ product.product_no }}</div>
+  <h1 class="page-title" style="margin:0">{{ product.issuer }} {{ product.product_no }}</h1>
   {% comment %}원금지급형은 낙인 배지보다 앞에 둔다 — ELB·DLB에서 '노낙인'은 낙인 배리어가
      없다는 사실 표시일 뿐이고, 상품 성격을 가르는 건 원금지급형 여부라서다.
      '노낙인'은 목록·낙인 칸과 표기를 맞추기 위해 그대로 둔다.{% endcomment %}

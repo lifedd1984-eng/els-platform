@@ -1,0 +1,496 @@
+{% extends "core/base.html" %}
+{% block title %}ELS 손실률 10년 통계 · 공모 69,903건 전수 판정 — ELS 레이더{% endblock %}
+{% block og_title %}ELS 손실률 10년 통계 · 공모 69,903건 전수 판정 — ELS 레이더{% endblock %}
+{% block twitter_title %}ELS 손실률 10년 통계 · 공모 69,903건 전수 판정 — ELS 레이더{% endblock %}
+{% block og_type %}article{% endblock %}
+
+{% block content %}
+<style>
+/* ══ 리포트 문서 — 읽는 글이므로 한 칼럼, 표는 가로 스크롤 ══ */
+.rp { max-width: 780px; margin: 0 auto; word-break: keep-all; overflow-wrap: break-word; }
+.rp-kicker { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:800;
+  color:var(--blue-dark); background:var(--blue-bg); padding:6px 13px; border-radius:999px; }
+.rp-h1 { font-size:34px; font-weight:800; letter-spacing:-1.2px; line-height:1.28;
+  margin:16px 0 14px; text-wrap:balance; }
+.rp-lead { font-size:16px; color:var(--text-2); line-height:1.75; }
+.rp-meta { display:flex; gap:8px 18px; flex-wrap:wrap; font-size:12.5px; color:var(--text-3);
+  margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+.rp-meta b { color:var(--text-2); font-weight:700; }
+
+.rp h2 { font-size:23px; font-weight:800; letter-spacing:-0.7px; line-height:1.35;
+  margin:52px 0 14px; scroll-margin-top:70px; }
+.rp h3 { font-size:16px; font-weight:800; letter-spacing:-0.3px; margin:28px 0 10px; }
+.rp p { font-size:15.5px; color:var(--text-2); line-height:1.8; margin-bottom:16px; }
+.rp p b, .rp li b { color:var(--text); font-weight:700; }
+.rp ul, .rp ol { margin:0 0 16px; padding-left:20px; }
+.rp li { font-size:15.5px; color:var(--text-2); line-height:1.8; margin-bottom:8px; }
+
+/* 표 — 모바일에서 잘리지 않게 감싼 채로 가로 스크롤 */
+.rp-table { overflow-x:auto; -webkit-overflow-scrolling:touch;
+  border:1px solid var(--border); border-radius:10px; background:var(--card); margin-bottom:18px; }
+.rp-table table { width:100%; border-collapse:collapse; font-size:13.5px;
+  font-variant-numeric:tabular-nums; min-width:max-content; }
+.rp-table th { text-align:right; white-space:nowrap; padding:11px 14px; font-size:12px;
+  color:var(--text-3); font-weight:700; border-bottom:1px solid var(--border); background:var(--bg); }
+.rp-table th:first-child, .rp-table td:first-child { text-align:left; }
+.rp-table td { text-align:right; white-space:nowrap; padding:10px 14px; color:var(--text-2);
+  border-bottom:1px solid #F2F4F6; }
+.rp-table tbody tr:last-child td { border-bottom:none; }
+.rp-table tr.sum td { background:var(--bg); color:var(--text); font-weight:700; }
+.rp-table tr.hl td { background:var(--blue-bg); }
+.rp-table td.k { color:var(--text); font-weight:700; }
+.rp-table .sub td:first-child { padding-left:26px; color:var(--text-3); }
+
+/* 인용 강조 — 오독을 막는 경고성 문단 */
+.rp-warn { display:flex; gap:11px; background:var(--orange-bg); border-radius:10px;
+  padding:15px 17px; margin-bottom:18px; font-size:14.5px; line-height:1.75; color:var(--text-2); }
+.rp-warn i { color:var(--orange); flex:0 0 auto; margin-top:4px; }
+.rp-note { display:flex; gap:11px; background:var(--bg); border-radius:10px;
+  padding:15px 17px; margin-bottom:18px; font-size:13.5px; line-height:1.75; color:var(--text-2); }
+.rp-note i { color:var(--text-3); flex:0 0 auto; margin-top:3px; }
+
+/* 목차 */
+.rp-toc { background:var(--card); border:1px solid var(--border); border-radius:12px;
+  padding:18px 22px; margin:32px 0 8px; }
+.rp-toc-t { font-size:13px; font-weight:800; color:var(--text-3); margin-bottom:10px; }
+.rp-toc ol { margin:0; padding-left:18px; }
+.rp-toc li { font-size:14px; margin-bottom:6px; color:var(--blue-dark); font-weight:600; }
+
+/* 맺음 고지 */
+.rp-legal { border-top:1px solid var(--border); margin-top:44px; padding-top:20px;
+  font-size:12.5px; color:var(--text-3); line-height:1.75; }
+.rp-cta { background:var(--blue-bg); border-radius:14px; padding:26px 24px; margin-top:36px;
+  text-align:center; }
+.rp-cta h2 { font-size:19px; margin:0 0 8px; letter-spacing:-0.4px; }
+.rp-cta p { font-size:14px; margin-bottom:16px; }
+
+@media (max-width: 800px) {
+  .rp-h1 { font-size:25px; letter-spacing:-0.7px; }
+  .rp h2 { font-size:19.5px; margin-top:40px; }
+  .rp p, .rp li { font-size:15px; }
+  .rp-table th, .rp-table td { padding:9px 11px; font-size:12.5px; }
+}
+</style>
+
+<article class="rp">
+
+  <span class="rp-kicker"><i class="fa-solid fa-chart-column"></i> 데이터 리포트 1편</span>
+  <h1 class="rp-h1">ELS 10년 성적표 — 69,903건 전수 판정</h1>
+  <p class="rp-lead">2016년부터 2025년까지 공모로 발행된 ELS 가운데 조건이 공시로 확인되는
+    69,903건을 전수 판정했습니다. 집계 기준일은 2026년 8월 13일입니다.</p>
+
+  <div class="rp-meta">
+    <span>표본 <b>공모 ELS 69,903건</b></span>
+    <span>기간 <b>2016~2025년 발행분</b></span>
+    <span>출처 <b>SEIBro · Yahoo Finance</b></span>
+    <span>집계 기준일 <b>{{ updated|date:"Y년 n월 j일" }}</b></span>
+  </div>
+
+  <div class="rp-toc">
+    <div class="rp-toc-t">목차</div>
+    <ol>
+      <li><a href="#s1">한 장 요약</a></li>
+      <li><a href="#s2">10년 전체 성적</a></li>
+      <li><a href="#s3">연도별 손실률 (2016~2025)</a></li>
+      <li><a href="#s4">2021년에 무슨 일이 있었나</a></li>
+      <li><a href="#s5">종목형과 지수형</a></li>
+      <li><a href="#s6">방법론</a></li>
+      <li><a href="#s7">한계</a></li>
+      <li><a href="#s8">참고 — 지금의 선별 기준을 10년에 그대로 적용하면</a></li>
+    </ol>
+  </div>
+
+  <h2 id="why">이 리포트를 만든 이유</h2>
+  <p>ELS의 연도별 원금손실률을 같은 기준으로 이어서 보여주는 공개 통계를 찾지 못했습니다.</p>
+  <p>발행 규모나 특정 사태의 피해 규모는 그때그때 보도로 나옵니다. 그러나 "몇 년에 발행된 상품 가운데
+    몇 %가 원금손실로 끝났는가"를 10년 내내 같은 판정 기준으로 센 표는 찾을 수 없었습니다.
+    ELS의 위험을 가늠하려면 이 표가 먼저 있어야 합니다.</p>
+  <p>그래서 공개된 발행·상환 공시를 모아 직접 셌습니다. 표본 범위와 판정 기준, 세지 못한 부분까지
+    아래에 그대로 적었습니다. 방법론은 6장, 한계는 7장에 있습니다.</p>
+
+  <h2 id="s1">1. 한 장 요약</h2>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>항목</th><th>값</th></tr></thead>
+      <tbody>
+        <tr><td>판정 표본</td><td class="k">69,903건 (2016~2025년 공모 발행 ELS)</td></tr>
+        <tr><td>상환이 끝난 건수</td><td class="k">69,858건</td></tr>
+        <tr><td>원금손실</td><td class="k">3,220건</td></tr>
+        <tr><td>정상상환율</td><td class="k">95.4%</td></tr>
+        <tr><td>손실이 가장 많았던 발행연도</td><td class="k">2021년 — 2,410건, 전체 손실의 74.8%</td></tr>
+        <tr><td>2021년을 뺀 나머지 9년 손실률</td><td class="k">0.08% ~ 3.32%</td></tr>
+        <tr><td>손실 상품에 홍콩H지수가 들어 있던 비율</td><td class="k">69.7% (3,220건 중 2,245건)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="s2">2. 10년 전체 성적</h2>
+  <p>10년간 상환이 끝난 69,858건 가운데 원금손실로 끝난 것은 3,220건이었습니다.
+    <b>정상상환율 95.4%</b>입니다.</p>
+  <p>상환이 끝난 방식은 둘로 나뉩니다.</p>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>구분</th><th>건수</th></tr></thead>
+      <tbody>
+        <tr><td>조기상환</td><td class="k">65,366건</td></tr>
+        <tr><td>만기도래</td><td class="k">4,492건</td></tr>
+        <tr class="sum"><td>합계(상환완료)</td><td>69,858건</td></tr>
+        <tr><td>아직 상환 전(2024~2025년 발행분)</td><td class="k">45건</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p><b>만기까지 갔다는 것 자체가 조기상환에 계속 실패했다는 뜻입니다.</b> 그래서 만기도래분만 따로 보면
+    결과가 크게 달라집니다. 만기까지 간 4,492건 중 원금손실은 3,220건, 71.7%였습니다.</p>
+  <p>원금손실 3,220건은 모두 이 4,492건 안에서 나왔습니다. 조기상환된 상품은 정의상 손실 판정 대상이
+    아니기 때문입니다(6장 판정 기준 참조).</p>
+
+  <div class="rp-warn">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span>이 71.7%는 손실이 몰려 있는 표본을 따로 떼어낸 값이므로, 이것을 "ELS의 손실률"로 옮겨 적으면
+      안 됩니다. ELS 전체의 손실률은 분모를 상환완료 69,858건으로 놓은 4.61%이고, 뒤집어 말한 것이
+      정상상환율 95.4%입니다.</span>
+  </div>
+
+  <p>그 밖의 전체 수치는 다음과 같습니다.</p>
+  <ul>
+    <li><b>1년 성공률 86.6%</b> — 발행 후 1년 안에 조기상환 조건을 한 번이라도 충족한 비율.
+      분모는 판정 표본 69,903건.</li>
+    <li><b>평균 제시수익률 연 6.4%</b> — 상품이 제시한 연 수익 조건의 단순평균.
+      실제 실현수익률이 아닙니다.</li>
+    <li><b>관측 주차 518주</b> — 2016년 1월 4일부터 2025년 12월 29일까지.</li>
+  </ul>
+
+  <h2 id="s3">3. 연도별 손실률 (2016~2025)</h2>
+  <p>이 리포트의 몸통입니다.</p>
+  <p><b>연도는 상환연도가 아니라 발행연도 기준입니다.</b> 2021년 26.33%는 "2021년에 손실이 났다"가 아니라
+    "2021년에 발행된 상품이 나중에 손실로 끝났다"는 뜻입니다. 손실률의 분모는 그해 발행분 중 상환이
+    끝난 건수입니다.</p>
+  <div class="rp-table">
+    <table>
+      <thead>
+        <tr><th>발행연도</th><th>판정 건수</th><th>상환완료</th><th>조기상환</th><th>만기도래</th>
+          <th>원금손실</th><th>손실률</th><th>1년 성공률</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2016</td><td>4,269</td><td>4,269</td><td>4,261</td><td>8</td><td>6</td><td class="k">0.14%</td><td>99.8%</td></tr>
+        <tr><td>2017</td><td>6,570</td><td>6,570</td><td>6,471</td><td>99</td><td>84</td><td class="k">1.28%</td><td>96.2%</td></tr>
+        <tr><td>2018</td><td>8,575</td><td>8,575</td><td>8,153</td><td>422</td><td>285</td><td class="k">3.32%</td><td>82.2%</td></tr>
+        <tr><td>2019</td><td>9,518</td><td>9,518</td><td>9,488</td><td>30</td><td>18</td><td class="k">0.19%</td><td>90.0%</td></tr>
+        <tr><td>2020</td><td>6,381</td><td>6,381</td><td>6,367</td><td>14</td><td>5</td><td class="k">0.08%</td><td>99.3%</td></tr>
+        <tr class="hl"><td>2021</td><td>9,153</td><td>9,153</td><td>5,807</td><td>3,346</td><td>2,410</td><td class="k">26.33%</td><td>48.1%</td></tr>
+        <tr><td>2022</td><td>8,186</td><td>8,186</td><td>7,921</td><td>265</td><td>139</td><td class="k">1.70%</td><td>89.4%</td></tr>
+        <tr><td>2023</td><td>8,265</td><td>8,263</td><td>8,050</td><td>213</td><td>199</td><td class="k">2.41%</td><td>94.4%</td></tr>
+        <tr><td>2024</td><td>5,337</td><td>5,303</td><td>5,234</td><td>69</td><td>56</td><td class="k">1.06%</td><td>91.3%</td></tr>
+        <tr><td>2025</td><td>3,649</td><td>3,640</td><td>3,614</td><td>26</td><td>18</td><td class="k">0.49%</td><td>98.8%</td></tr>
+        <tr class="sum"><td>합계</td><td>69,903</td><td>69,858</td><td>65,366</td><td>4,492</td><td>3,220</td><td>4.61%</td><td>86.6%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>읽는 법 세 줄</h3>
+  <ol>
+    <li>손실은 10년에 고르게 퍼져 있지 않습니다. 3,220건 중 2,410건, 곧 74.8%가 2021년 발행분
+      하나에서 나왔습니다.</li>
+    <li>2021년을 빼면 나머지 아홉 해의 손실률은 0.08%에서 3.32% 사이입니다. 가장 높았던 해가
+      2018년 3.32%, 가장 낮았던 해가 2020년 0.08%입니다.</li>
+    <li>그러므로 "ELS의 손실률은 몇 %"라는 한 문장은 성립하기 어렵습니다. 10년 평균 4.61%는
+      2021년 한 해가 끌어올린 값이고, 나머지 아홉 해는 모두 3.32% 이하였습니다.</li>
+  </ol>
+  <p>10년 평균 하나만 보면 2021년이 과대 반영되고, 2021년을 빼고 보면 이런 해가 실제로 온다는 사실이
+    지워집니다. 두 값을 함께 놓아야 합니다.</p>
+
+  <h2 id="s4">4. 2021년에 무슨 일이 있었나</h2>
+  <p>2021년 발행분은 9,153건 전량이 상환완료 상태입니다. 아직 결과가 안 나온 건이 없어 분모를 두고
+    다툴 여지가 없습니다.</p>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>항목</th><th>값</th></tr></thead>
+      <tbody>
+        <tr><td>2021년 판정 건수</td><td class="k">9,153건 (전량 상환완료)</td></tr>
+        <tr><td>조기상환</td><td class="k">5,807건</td></tr>
+        <tr><td>만기도래</td><td class="k">3,346건</td></tr>
+        <tr><td>원금손실</td><td class="k">2,410건</td></tr>
+        <tr><td>손실률</td><td class="k">26.33%</td></tr>
+        <tr><td>1년 성공률</td><td class="k">48.1%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>10년간 만기까지 간 상품은 모두 4,492건인데, 그중 3,346건이 2021년 발행분입니다. 그해에 발행된
+    상품은 절반 이상이 1년 안에 조기상환 조건을 채우지 못했고(1년 성공률 48.1%), 조기상환에 계속
+    실패한 채 만기로 밀려갔습니다.</p>
+
+  <h3>2021년의 다른 이름은 홍콩H지수입니다.</h3>
+  <ul>
+    <li>2021년 발행분 가운데 홍콩H지수를 담은 상품은 3,596건이었고, 그중 2,068건이 원금손실로
+      끝났습니다. 손실률 57.5%입니다.</li>
+    <li>2021년 발행분의 손실 2,410건 가운데 2,068건이 홍콩H지수를 담은 상품이었습니다.</li>
+    <li>10년 전체로 넓혀도 마찬가지입니다. 손실 3,220건 중 2,245건, 69.7%에 홍콩H지수가 들어
+      있었습니다.</li>
+    <li>지수형만 따로 보면 집중도가 더 높습니다. 지수형 손실 2,170건 중 2,134건, 98.3%가
+      홍콩H지수를 담고 있었습니다.</li>
+  </ul>
+  <p>한 상품에 기초자산이 여럿 들어가므로 위 건수는 중복 집계입니다. "홍콩H지수만 담은 상품"이 아니라
+    "홍콩H지수가 포함된 상품"의 수입니다.</p>
+  <p>정리하면, 10년 손실의 대부분은 상품 유형이나 발행 규모가 아니라 <b>하나의 기초자산이 특정 시기에
+    집중적으로 팔린 결과</b>로 나타났습니다.</p>
+
+  <h2 id="s5">5. 종목형과 지수형</h2>
+  <p>기초자산에 개별 종목이 들어가면 종목형, 지수만으로 구성되면 지수형으로 나눴습니다.</p>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>구분</th><th>상환완료</th><th>원금손실</th><th>손실률</th></tr></thead>
+      <tbody>
+        <tr><td>종목형</td><td>9,994건</td><td>1,050건</td><td class="k">10.51%</td></tr>
+        <tr><td>지수형</td><td>59,864건</td><td>2,170건</td><td class="k">3.62%</td></tr>
+        <tr><td>종목형(2021년 제외)</td><td>8,585건</td><td>641건</td><td class="k">7.47%</td></tr>
+        <tr><td>지수형(2021년 제외)</td><td>52,120건</td><td>169건</td><td class="k">0.32%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="rp-warn">
+    <i class="fa-solid fa-triangle-exclamation"></i>
+    <span><b>비율과 건수가 반대 방향을 가리킵니다. 둘을 섞으면 안 됩니다.</b></span>
+  </div>
+  <ul>
+    <li>손실이 난 <b>비율</b>은 종목형 10.51%, 지수형 3.62%로 종목형이 약 3배입니다.</li>
+    <li>그러나 손실 <b>건수</b>는 지수형 2,170건(67%)이 종목형 1,050건(33%)보다 많습니다.
+      지수형 발행량이 훨씬 많기 때문입니다.</li>
+  </ul>
+  <p>따라서 "원금을 잃은 ELS는 대부분 종목형"이라는 말은 건수로는 사실과 반대입니다. 정확히는
+    "손실이 난 비율이 종목형에서 더 높았다"입니다.</p>
+  <p>2021년을 빼면 격차가 오히려 벌어집니다. 종목형 7.47% 대 지수형 0.32%입니다. 지수형의 10년
+    손실률 3.62%는 거의 전부가 2021년 한 해에서 나온 값입니다.</p>
+
+  <h3>만기까지 간 상품만 따로 보면</h3>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>구분</th><th>만기도래</th><th>원금손실</th><th>손실률</th></tr></thead>
+      <tbody>
+        <tr><td>종목형</td><td>1,201건</td><td>1,050건</td><td class="k">87.43%</td></tr>
+        <tr><td>지수형</td><td>3,291건</td><td>2,170건</td><td class="k">65.94%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>역시 만기까지 갔다는 것 자체가 조기상환에 계속 실패했다는 뜻이므로, 이 두 수치는 손실이 몰린
+    표본의 값입니다. 전체 손실률과 나란히 놓지 마시기 바랍니다.</p>
+
+  <h3>연도별 유형 표</h3>
+  <div class="rp-table">
+    <table>
+      <thead>
+        <tr><th>발행연도</th><th>종목형 상환완료</th><th>종목형 손실</th><th>종목형 손실률</th>
+          <th>지수형 상환완료</th><th>지수형 손실</th><th>지수형 손실률</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>2016</td><td>133</td><td>6</td><td class="k">4.51%</td><td>4,136</td><td>0</td><td class="k">0.00%</td></tr>
+        <tr><td>2017</td><td>352</td><td>77</td><td class="k">21.88%</td><td>6,218</td><td>7</td><td class="k">0.11%</td></tr>
+        <tr><td>2018</td><td>472</td><td>136</td><td class="k">28.81%</td><td>8,103</td><td>149</td><td class="k">1.84%</td></tr>
+        <tr><td>2019</td><td>705</td><td>11</td><td class="k">1.56%</td><td>8,813</td><td>7</td><td class="k">0.08%</td></tr>
+        <tr><td>2020</td><td>1,067</td><td>3</td><td class="k">0.28%</td><td>5,314</td><td>2</td><td class="k">0.04%</td></tr>
+        <tr class="hl"><td>2021</td><td>1,409</td><td>409</td><td class="k">29.03%</td><td>7,744</td><td>2,001</td><td class="k">25.84%</td></tr>
+        <tr><td>2022</td><td>1,010</td><td>136</td><td class="k">13.47%</td><td>7,176</td><td>3</td><td class="k">0.04%</td></tr>
+        <tr><td>2023</td><td>1,601</td><td>199</td><td class="k">12.43%</td><td>6,662</td><td>0</td><td class="k">0.00%</td></tr>
+        <tr><td>2024</td><td>1,817</td><td>55</td><td class="k">3.03%</td><td>3,486</td><td>1</td><td class="k">0.03%</td></tr>
+        <tr><td>2025</td><td>1,428</td><td>18</td><td class="k">1.26%</td><td>2,212</td><td>0</td><td class="k">0.00%</td></tr>
+        <tr class="sum"><td>합계</td><td>9,994</td><td>1,050</td><td>10.51%</td><td>59,864</td><td>2,170</td><td>3.62%</td></tr>
+        <tr class="sum"><td>2021 제외</td><td>8,585</td><td>641</td><td>7.47%</td><td>52,120</td><td>169</td><td>0.32%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>손실 상품에 담겨 있던 기초자산 (종목형 1,050건 기준, 빈도순)</h3>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>기초자산</th><th>포함된 손실 건수</th></tr></thead>
+      <tbody>
+        <tr><td>삼성전자</td><td class="k">435</td></tr>
+        <tr><td>LG화학</td><td class="k">214</td></tr>
+        <tr><td>S&amp;P500</td><td class="k">165</td></tr>
+        <tr><td>네이버</td><td class="k">127</td></tr>
+        <tr><td>테슬라</td><td class="k">119</td></tr>
+        <tr><td>홍콩H지수</td><td class="k">111</td></tr>
+        <tr><td>코스피200</td><td class="k">104</td></tr>
+        <tr><td>SK하이닉스</td><td class="k">99</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>한 상품에 자산이 여럿이라 중복 집계이고, 종목형에는 개별 종목과 지수가 함께 들어가는 경우가 많아
+    지수 이름도 함께 나옵니다. <b>자산별 발행 건수(분모)를 함께 세지 않았으므로 이 표는 자산별
+    손실률 비교가 아닙니다.</b> 많이 발행된 자산일수록 손실 건수도 많아집니다.</p>
+
+  <h2 id="s6">6. 방법론</h2>
+  <h3>표본</h3>
+  <p>2016년부터 2025년까지 <b>공모로 발행된 ELS 중 낙인과 조기상환 조건이 공시로 확인되고 기초자산
+    시세로 결과를 판정할 수 있는 69,903건 전수</b>입니다.</p>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>구분</th><th>건수</th></tr></thead>
+      <tbody>
+        <tr><td>같은 기간 공시 발행 전체</td><td class="k">160,351건</td></tr>
+        <tr class="sub"><td>공모 ELS</td><td>85,768건</td></tr>
+        <tr class="sub"><td>공모 ELB</td><td>21,753건</td></tr>
+        <tr class="sub"><td>사모 ELS</td><td>49,217건</td></tr>
+        <tr class="sub"><td>사모 ELB</td><td>3,613건</td></tr>
+        <tr class="sum"><td>판정 대상 모집단(공모 ELS)</td><td>85,768건</td></tr>
+        <tr class="sum"><td>판정 표본</td><td>69,903건 (판정률 81.5%)</td></tr>
+        <tr><td>미판정</td><td class="k">15,865건</td></tr>
+        <tr class="sub"><td>낙인값이 공시에 없음</td><td>870건</td></tr>
+        <tr class="sub"><td>조건 파싱 또는 시세 확보 실패</td><td>14,995건</td></tr>
+        <tr><td>처음부터 대상 밖</td><td class="k">74,583건 (사모 ELS 49,217 + ELB 25,366)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>ELB는 원금보장형이라 원금손실 판정 대상이 아니고, 사모 발행분은 조건이 공시로 확인되지 않아
+    처음부터 제외했습니다.</p>
+  <p><b>69,903건은 10년 발행 전량이 아닙니다.</b> 같은 기간 공시된 발행은 160,351건이고,
+    69,903건은 그중 공모 ELS 85,768건의 81.5%입니다.</p>
+
+  <h3>판정 기준</h3>
+  <ul>
+    <li><b>조기상환</b> — 조기상환 평가일에 조건을 충족한 경우. 조기상환된 상품은 원금손실 판정
+      대상이 아닙니다.</li>
+    <li><b>원금손실</b> — 만기 시점에 기초자산 중 가장 나쁜 것이 마지막 배리어 아래에 있고, 만기
+      전에 낙인을 한 번이라도 터치한 경우.</li>
+    <li><b>정상상환율</b> — 분모는 발행 건수(69,903)가 아니라 상환이 끝난 건수(69,858)입니다.
+      두 분모의 반올림 결과는 같지만 정의는 상환완료 기준입니다.</li>
+    <li><b>연도</b> — 상환연도가 아니라 발행연도 기준입니다.</li>
+    <li><b>1년 성공</b> — 발행 후 1년 안에 조기상환 조건을 한 번이라도 충족한 비율. 실제 상환
+      기록이 아니라 기초자산 시세로 판정한 값입니다.</li>
+    <li><b>종목형·지수형</b> — 기초자산에 개별 종목이 하나라도 들어가면 종목형, 지수만으로 구성되면
+      지수형입니다.</li>
+    <li><b>기초자산 집계</b> — 한 상품에 자산이 여럿이면 각 자산에 중복해서 셉니다.</li>
+  </ul>
+
+  <h3>데이터 출처</h3>
+  <p>한국예탁결제원 SEIBro(증권정보포탈)의 공개 발행·상환 공시를 집계했습니다. 상품 조건은 공시
+    원문에서 추출했고, 결과 판정에는 Yahoo Finance의 공개 기초자산 시세를 사용했습니다.</p>
+
+  <h3>집계 시점</h3>
+  <p>2026년 8월 13일 기준 재계산 결과입니다. 공시 데이터가 갱신되면 수치가 소폭 움직일 수 있어,
+    이후 갱신분은 정정 이력과 함께 이 페이지에 반영합니다.</p>
+
+  <h2 id="s7">7. 한계</h2>
+  <p>숨기지 않고 적습니다. 아래를 감안해서 읽어 주시기 바랍니다.</p>
+  <ol>
+    <li><b>시세 기반 판정입니다.</b> 상환 결과를 증권사별 실제 상환 기록으로 대조한 것이 아니라,
+      공시된 조건과 기초자산 시세로 판정했습니다. 개별 상품의 실제 정산 결과와 어긋나는 건이
+      있을 수 있습니다.</li>
+    <li><b>공모 ELS의 81.5%만 판정했습니다.</b> 조건이 확인되지 않은 15,865건은 표본에서 뺐습니다.
+      이 15,865건의 성적이 판정된 69,903건과 다를 가능성은 배제하지 못합니다.</li>
+    <li><b>사모 발행분과 ELB는 대상 밖입니다.</b> 사모 ELS 49,217건은 조건이 공시로 확인되지 않고,
+      ELB 25,366건은 원금보장형이라 손실 판정 대상이 아닙니다.</li>
+    <li><b>모두 건수 기준입니다.</b> 발행 금액이나 손실 금액은 이번 집계에 넣지 않았습니다. 큰 금액이
+      몰린 상품과 소액 상품이 각각 1건으로 동일하게 세어졌습니다.</li>
+    <li><b>기초자산은 중복 집계입니다.</b> 한 상품에 자산이 여럿이라 자산별 건수를 모두 더하면
+      상품 수보다 커집니다.</li>
+    <li><b>만기도래분 손실률은 편향된 표본입니다.</b> 만기까지 갔다는 것 자체가 조기상환에 반복해서
+      실패했다는 뜻이므로, 이 값을 ELS 전체 손실률로 옮기면 안 됩니다.</li>
+    <li><b>45건은 아직 결과가 없습니다.</b> 2024~2025년 발행분 중 진행 중인 건으로, 상환완료
+      분모에서 빠져 있습니다. 이 건들의 결과가 확정되면 2024·2025년 손실률이 움직입니다.</li>
+    <li><b>판정 로직을 보완해 왔습니다.</b> 집계를 시작한 뒤 판정 기준을 몇 차례 손봤고, 이 리포트의
+      수치는 모두 현재 기준으로 다시 계산한 값입니다. 이전 기준으로 계산된 수치는 쓰지 않았습니다.</li>
+  </ol>
+
+  <h2 id="s8">8. 참고 — 지금의 선별 기준을 10년에 그대로 적용하면</h2>
+  <p>이 리포트의 주제는 시장 전체 데이터입니다. 아래는 참고 항목으로만 짧게 적습니다.</p>
+  <p>ELS 레이더는 매주 발행되는 상품에 같은 기준을 적용해 조건을 통과한 상품을 표시합니다(사이트
+    표기 "타겟 신호"). 그 기준을 2016~2025년 발행분에 그대로 적용하면 다음과 같습니다.</p>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>항목</th><th>값</th></tr></thead>
+      <tbody>
+        <tr><td>선별된 상품</td><td class="k">5,544건</td></tr>
+        <tr><td>정상상환율</td><td class="k">99.57%</td></tr>
+        <tr><td>원금손실</td><td class="k">24건</td></tr>
+        <tr><td>주당 평균 / 중앙값</td><td class="k">10.70개 / 11개</td></tr>
+        <tr><td>한 개도 선별되지 않은 주</td><td class="k">518주 중 101주 (19.5%)</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>같은 기간 시장 전체는 95.4%였습니다.</p>
+  <p>다만 이 결과는 균일하지 않습니다. 짚어 둘 것이 둘 있습니다.</p>
+  <p><b>첫째, 매주 일정한 개수가 나오는 것이 아닙니다.</b> 10년 평균은 주당 10.70개이지만, 518주 중
+    101주는 조건을 통과한 상품이 한 개도 없었습니다. 다섯 주에 한 번꼴입니다.</p>
+  <p><b>둘째, 2021년에는 선별 기준이 시장보다 나빴습니다.</b></p>
+  <div class="rp-table">
+    <table>
+      <thead><tr><th>2021년 발행분</th><th>건수</th><th>정상상환율</th></tr></thead>
+      <tbody>
+        <tr><td>선별 통과분</td><td>39건</td><td class="k">71.8%</td></tr>
+        <tr><td>시장 전체</td><td>9,153건</td><td class="k">73.7%</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>2021년에는 조건을 통과한 상품이 39건뿐이었고, 그중 정상상환은 28건이었습니다. 시장 전체
+    73.7%보다 낮습니다. <b>이 해만큼은 선별 기준으로도 피하지 못했습니다.</b> 조건이 좋은 상품을
+    골라도, 기초자산 자체가 무너진 국면에서는 결과가 함께 나빠졌다는 뜻입니다.</p>
+  <p>10년 합계가 좋게 보인다고 해서 모든 국면에서 통하는 기준이라는 뜻은 아닙니다. 이 수치는 과거
+    데이터에 기준을 적용해 본 결과일 뿐입니다.</p>
+
+  <h2 id="source">출처와 고지</h2>
+  <ul>
+    <li><b>발행·상환 데이터</b> — 한국예탁결제원 SEIBro(증권정보포탈) 공개 공시</li>
+    <li><b>기초자산 시세</b> — Yahoo Finance 공개 시세</li>
+    <li><b>표본</b> — 2016~2025년 공모로 발행된 ELS 중 조건이 공시로 확인되는 69,903건 전수</li>
+    <li><b>집계 기준일</b> — 2026년 8월 13일</li>
+    <li><b>판정 기준·한계</b> — 6장, 7장 참조</li>
+  </ul>
+
+  <div class="rp-note">
+    <i class="fa-solid fa-circle-info"></i>
+    <span>※ 공개된 발행·상환 공시를 집계한 통계이며 투자 권유가 아닙니다. 과거 실적은 미래 수익을
+      보장하지 않으며, ELS는 원금손실이 가능한 상품입니다.</span>
+  </div>
+
+  <p>이 리포트의 수치에 오류를 발견하시면 알려 주시기 바랍니다. 확인되는 대로 정정하고 정정 이력을
+    함께 남깁니다.</p>
+
+  <div class="rp-cta">
+    <h2 style="margin-top:0">이번 주 청약 상품은 어떤가요</h2>
+    <p>같은 판정 기준을 이번 주 발행분에 적용한 결과를 주간 청약 화면에서 볼 수 있습니다.</p>
+    <a href="{% url 'weekly' %}" class="btn btn-primary">이번주 ELS 보기</a>
+  </div>
+
+  <p class="rp-legal">
+    ELS 레이더는 공개된 발행·상환 공시를 가공해 정보를 제공하는 서비스이며, 특정 금융상품의 매수·매도를
+    권유하지 않습니다. 이 리포트의 수치는 과거 데이터를 집계한 통계적 결과로 미래 수익을 보장하지
+    않습니다. ELS는 예금자보호 대상이 아니며 원금손실이 발생할 수 있습니다. 투자 판단과 그 결과에
+    대한 책임은 투자자 본인에게 있습니다.
+  </p>
+
+</article>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "ELS 10년 성적표 — 69,903건 전수 판정",
+  "description": "2016~2025년 공모 ELS 69,903건을 전수 판정했더니 원금손실은 3,220건, 정상상환율 95.4%였습니다. 연도별 손실률과 판정 기준·한계까지 공개합니다.",
+  "inLanguage": "ko-KR",
+  "datePublished": "{{ updated|date:'Y-m-d' }}",
+  "dateModified": "{{ updated|date:'Y-m-d' }}",
+  "isAccessibleForFree": true,
+  "image": "https://elsrader.site/og.png",
+  "mainEntityOfPage": {"@type": "WebPage", "@id": "{{ canonical_url }}"},
+  "author": {"@type": "Organization", "name": "ELS 레이더", "url": "https://elsrader.site/"},
+  "publisher": {"@type": "Organization", "name": "ELS 레이더",
+    "logo": {"@type": "ImageObject", "url": "https://elsrader.site/icons/icon-512.png"}},
+  "about": [
+    {"@type": "Thing", "name": "ELS 손실률"},
+    {"@type": "Thing", "name": "ELS 원금손실"},
+    {"@type": "Thing", "name": "주가연계증권"}
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "ELS 레이더", "item": "https://elsrader.site/"},
+    {"@type": "ListItem", "position": 2, "name": "ELS 10년 성적표", "item": "{{ canonical_url }}"}
+  ]
+}
+</script>
+{% endblock %}

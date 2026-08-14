@@ -1,5 +1,7 @@
 {% extends "core/base.html" %}
-{% block title %}주간 청약 — ELS 레이더{% endblock %}
+{% block title %}이번주 ELS 청약 목록 · 낙인·수익률 비교 — ELS 레이더{% endblock %}
+{% block og_title %}이번주 ELS 청약 목록 · 낙인·수익률 비교 — ELS 레이더{% endblock %}
+{% block twitter_title %}이번주 ELS 청약 목록 · 낙인·수익률 비교 — ELS 레이더{% endblock %}
 
 {% block nav_right %}
 {% if freshness_days is not None %}
@@ -12,8 +14,8 @@
 
 {% block content %}
 {% load els_extras %}
-<div class="page-title">주간 청약</div>
-<div class="page-sub">이번 주 청약 마감 상품 {{ total }}건</div>
+<h1 class="page-title">주간 청약</h1>
+<p class="page-sub">이번 주 청약 마감 상품 {{ total }}건</p>
 
 <div class="week-nav">
   <a href="?{% qs_replace w=offset|add:'-1' %}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>

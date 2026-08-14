@@ -7,16 +7,26 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%234E86FF%22/%3E%3Cstop offset=%221%22 stop-color=%22%232D5BFF%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22gt%22 gradientUnits=%22userSpaceOnUse%22 x1=%228.64%22 y1=%2211.75%22 x2=%2223.36%22 y2=%2220.25%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%23fff%22 stop-opacity=%221%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%229%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%228.5%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%222.2%22 opacity=%22.18%22/%3E%3Cpath d=%22M8.64 11.75 A8.5 8.5 0 0 1 23.36 20.25%22 fill=%22none%22 stroke=%22url%28%23gt%29%22 stroke-width=%223.2%22 stroke-linecap=%22round%22/%3E%3Ccircle cx=%2223.36%22 cy=%2220.25%22 r=%224.3%22 fill=%22%23fff%22 opacity=%22.28%22/%3E%3Ccircle cx=%2223.36%22 cy=%2220.25%22 r=%222.5%22 fill=%22%23fff%22/%3E%3C/svg%3E">
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#3182F6">
+{# 검색 결과 스니펫에 그대로 나가는 문장. 뷰가 meta_desc를 주면 그것으로 덮인다 #}
+{% with seo_desc=meta_desc|default:"매주 쏟아지는 ELS 300여 개를 낙인·손실확률·조기상환 조건으로 걸러, 이번 주 볼 만한 5개만 추려 드립니다. 10년 69,903건으로 검증한 기준, 베타 무료." %}
+<meta name="description" content="{{ seo_desc }}">
+{# 대표 주소 — 쿼리스트링을 뗀 경로. core/context_processors.py seo() 참조 #}
+<link rel="canonical" href="{{ canonical_url }}">
 {# 링크 공유 미리보기 (카카오톡·SNS) — og:image는 절대 URL 필수 #}
-<meta property="og:type" content="website">
+<meta property="og:type" content="{% block og_type %}website{% endblock %}">
 <meta property="og:site_name" content="ELS 레이더">
+<meta property="og:locale" content="ko_KR">
 <meta property="og:title" content="{% block og_title %}ELS 레이더{% endblock %}">
-<meta property="og:description" content="{% block og_desc %}매주 쏟아지는 ELS 상품, ELS 레이더가 대신 찾아드립니다. 낙인·손실확률·조기상환 확률 무료 공개.{% endblock %}">
+<meta property="og:description" content="{{ seo_desc }}">
 <meta property="og:image" content="https://elsrader.site/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:url" content="{{ request.build_absolute_uri }}">
+<meta property="og:url" content="{{ canonical_url }}">
 <meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{% block twitter_title %}ELS 레이더{% endblock %}">
+<meta name="twitter:description" content="{{ seo_desc }}">
+<meta name="twitter:image" content="https://elsrader.site/og.png">
+{% endwith %}
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">

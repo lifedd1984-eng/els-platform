@@ -81,6 +81,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
+    # /sitemap.xml 렌더용. django.contrib.sites는 쓰지 않는다 — 사이트맵 뷰가
+    # RequestSite(요청 Host)로 폴백하므로 로컬·EC2가 각자 제 도메인을 낸다.
+    'django.contrib.sitemaps',
     'core',
 ]
 
@@ -107,6 +110,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'core.context_processors.seo',
             ],
         },
     },

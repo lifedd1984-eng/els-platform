@@ -1,8 +1,10 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
+from django.contrib.sitemaps.views import sitemap
 from django.urls import path
 
 from core import views
+from core.sitemaps import SITEMAPS
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -41,6 +43,7 @@ urlpatterns = [
     path('search/', views.product_search, name='search'),
     path('ask/', views.ask, name='ask'),
     path('about/', views.about, name='about'),
+    path('report/els-10year/', views.report_els_10year, name='report_els_10year'),
     path('terms/', views.legal_terms, name='terms'),
     path('privacy/', views.legal_privacy, name='privacy'),
     path('disclaimer/', views.legal_disclaimer, name='disclaimer'),
@@ -50,6 +53,8 @@ urlpatterns = [
     path('og.png', views.og_image, name='og_image'),
     path('threads-card/<int:day>.png', views.threads_card, name='threads_card'),
     path('sw.js', views.service_worker, name='service_worker'),
+    path('sitemap.xml', sitemap, {'sitemaps': SITEMAPS}, name='django.contrib.sitemaps.views.sitemap'),
+    path('robots.txt', views.robots_txt, name='robots_txt'),
     path('push/subscribe/', views.push_subscribe, name='push_subscribe'),
     path('push/unsubscribe/', views.push_unsubscribe, name='push_unsubscribe'),
     path('push/test/', views.push_test, name='push_test'),
