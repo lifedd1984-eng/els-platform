@@ -228,3 +228,43 @@ class PayloadTest(TestCase):
         """\\uXXXX로 나가면 Apps Script는 읽지만 사람이 로그를 못 읽는다."""
         body = self.client.get(URL, headers={"x-sync-token": TOKEN}).content.decode()
         self.assertIn("키움증권", body)
+
+
+class 시트주기열(TestCase):
+    """'주기' 열은 회차 간격이 아니라 1차까지 개월수다.
+
+    2026-08-18 실사고: NH투자증권 320(1차 3개월 뒤, 이후 매월)에서 회차 간격 1을
+    내보내 시트의 예상수익이 101만원 -> 33만원으로 깨질 뻔했다.
+    """
+
+    def _product(self, **kw):
+        base = dict(
+            issuer="NH투자증권", product_no="320", name="NH ELS 320",
+            product_type="ELS", yield_rate=43.71, ki=40, is_no_ki=False,
+            barriers_raw=[90, 90, 90, 90, 85, 85, 85, 80, 80, 70],
+            barrier_first=90, barrier_last=70,
+            assets_raw="삼성전자/SK하이닉스", asset_type="종목형", currency="KRW",
+            issue_date=date(2026, 6, 18), expiry_date=date(2027, 6, 18),
+            sub_end=date(2026, 6, 17),
+        )
+        base.update(kw)
+        return Product.objects.create(**base)
+
+    def test_비균등_상품은_1차까지_개월수를_쓴다(self):
+        from core.portfolio_export import sheet_period_months
+        p = self._product(period_months=1, first_eval_months=3)
+        self.assertEqual(sheet_period_months(p), 3)
+
+    def test_균등_상품은_회차_간격_그대로다(self):
+        from core.portfolio_export import sheet_period_months
+        p = self._product(product_no="321", period_months=4, first_eval_months=None)
+        self.assertEqual(sheet_period_months(p), 4)
+
+    def test_시트_예상수익_계산이_1회차_수익과_맞는다(self):
+        """이 테스트가 사고를 막는다 — 주기를 회차 간격으로 되돌리면 깨진다."""
+        from core.portfolio_export import sheet_period_months
+        p = self._product(period_months=1, first_eval_months=3)
+        period = sheet_period_months(p)
+        # 시트 계산식: 투자금액(만원) x 금리 x 주기 / 12
+        sheet_profit = 920 * (p.yield_rate / 100) * period / 12
+        self.assertAlmostEqual(sheet_profit, 100.5, places=1)   # 약 101만원

@@ -14,6 +14,8 @@
 예상수익 = 투자금액(만원) × 금리 × 주기 ÷ 12, 반올림.
 같은 행의 보이는 값들만으로 재현되도록 일부러 '주기'를 쓴다(1차까지 개월수가
 따로인 비균등 상품도 시트 안에서 계산이 맞아떨어져야 하므로).
+그래서 '주기' 열에는 회차 간격이 아니라 **1차까지 개월수**가 들어간다 —
+sheet_period_months() 참조. 2026-08-18까지는 회차 간격을 내보내고 있었다.
 """
 
 import math
@@ -70,6 +72,27 @@ def period_months(product):
         return None
     total = _round_half_up((end - start).days / _MONTH_DAYS)
     return _round_half_up(total / len(barriers)) or None
+
+
+def sheet_period_months(product):
+    """시트 '주기' 열에 넣을 개월수 — **1차 조기상환까지의 개월수**다.
+
+    회차 간격(period_months)이 아니다. 시트의 예상수익이
+        예상수익 = 투자금액 × 금리 × 주기 ÷ 12
+    로 계산되는데, 이 값이 뜻하는 것은 '1차에 상환되면 받는 수익'이기 때문이다.
+
+    대부분의 상품은 1차까지 개월수와 회차 간격이 같아 둘을 구분할 필요가 없었다.
+    비균등 상품에서만 갈린다 — 실제 사고 사례(2026-08-18):
+        NH투자증권 320 : 1차 3개월 뒤(2026-09-16), 이후 매월. 배리어 10회차.
+        period_months=1을 넣으면  920만 × 43.71% × 1/12 =  33만원
+        first_eval_months=3이면   920만 × 43.71% × 3/12 = 101만원
+        확정 평가일 기준 1회차 예상상환금은 10,205,330원(수익 100만원)이라
+        3이 맞다. 1을 넣으면 시트의 예상수익이 3분의 1로 깨진다.
+
+    first_eval_ym()이 첫 평가 시점을 구할 때 쓰는 식과 같은 우선순위를 쓴다 —
+    같은 '1차'를 가리키는 두 칸이 서로 다른 근거로 계산되면 안 된다.
+    """
+    return product.first_eval_months or period_months(product)
 
 
 def _shift_ym(base, months):
@@ -146,7 +169,7 @@ def _sort_key(investment):
 def build_row(investment):
     """투자 1건 → 17열 한 행."""
     p = investment.product
-    period = period_months(p)
+    period = sheet_period_months(p)
     issued = p.issued_on
 
     amount = investment.amount / AMOUNT_UNIT
