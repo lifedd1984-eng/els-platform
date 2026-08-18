@@ -153,6 +153,13 @@ REGIME_INDEXES = [("KOSPI200", "KOSPI200 Index"), ("S&P500", "S&P500 Index"),
 def _market_regime(monday, sunday):
     """시장 국면 — 이번 주 조건 통과율 + 대표 지수 위치.
 
+    ▣ 통과율(rate)은 그 주 상품이 있어야 성립하지만 지수 위치(indexes)는 아니다.
+      상품이 0건이면 rate=None으로 두고 지수 위치만 채워 돌려준다. 예전엔 여기서
+      통째로 return None이라, 청약 0건인 주(2026-08-17 주부터 실제로 발생)에는
+      시장 국면 카드가 화면에서 사라졌다 — 지수 위치는 그 주에 상품이 없어도
+      유효한 정보라 남겨야 한다. 종목형 기초자산 표(stocks)는 그 주 상품에서
+      뽑는 것이라 상품이 없으면 비는 게 맞다. (2026-08-18)
+
     통과율은 시세가 필요 없는 두 조건(직전 연도 낙인 컷 · 1차 배리어)으로만 센다.
     10년 분기 검증에서 통과율 ↔ 이후 1년 주식수익률 상관 +0.52 — 즉 조건이
     나쁜 시기는 시장도 과열된 시기였다. '갈아타라'가 아니라 '지금이 어디인가'를
@@ -172,8 +179,6 @@ def _market_regime(monday, sunday):
     # 모수(n_all)만 키우고 있었다. 그래서 통과율이 실제보다 낮게 찍혔다.
     # (2026-08-06 실측: 이번 주 109/266=41.0% → 109/219=49.8%)
     group = list(Product.objects.listed().filter(sub_end__gte=monday, sub_end__lte=sunday))
-    if not group:
-        return None
     n_all = n_pass = 0
     for p in group:
         if p.asset_type not in RADAR_V7_B0_MAX:
@@ -191,9 +196,9 @@ def _market_regime(monday, sunday):
                 and p.barrier_first is not None
                 and p.barrier_first <= RADAR_V7_B0_MAX[p.asset_type]):
             n_pass += 1
-    if not n_all:
-        return None
-    rate = n_pass / n_all * 100
+    # 모수가 0이면 통과율을 낼 수 없다 — 0%가 아니라 '없음'이다. 화면도 이때는
+    # 통과율 칸을 통째로 감춘다(weekly.html).
+    rate = round(n_pass / n_all * 100, 1) if n_all else None
 
     def _gauge(label, name):
         # 화면 표기가 "52주 고점 대비 / 직전 1년 대비"이므로 창도 캘린더 52주로 자른다.
@@ -240,8 +245,80 @@ def _market_regime(monday, sunday):
         f"{t} 낙인 {v7_ki_cut(t)} 이하 · 1차 조기상환 {RADAR_V7_B0_MAX[t]} 이하"
         for t in ("지수형", "종목형")
     ]
-    return {"n_all": n_all, "n_pass": n_pass, "rate": round(rate, 1),
+    # 보여줄 게 하나도 없을 때만 카드를 통째로 접는다 — 통과율도 못 내고
+    # 지수 시세도 전부 못 읽은 경우다.
+    if rate is None and not idx:
+        return None
+    return {"n_all": n_all, "n_pass": n_pass, "rate": rate,
             "cond": cond, "indexes": idx, "stocks": stocks}
+
+
+# 이 일수를 넘겨 수집 기록이 없으면 '수집이 멈췄다'로 본다(배지 경고색).
+FRESHNESS_STALE_DAYS = 7
+
+
+def _freshness(last_import):
+    """수집 신선도 배지 — '수집이 멈춘 것'과 '수집할 청약이 없는 것'을 나눈다.
+
+    ▣ 왜 나눠야 하나 (2026-08-18)
+      배지는 마지막 ImportLog 시각만 보고 "N일 전 데이터"라고 썼다. 그런데
+      scrape_kofia는 **수집된 게 0건이면 ImportLog를 아예 안 남기고** 돌아갔다.
+      그래서 청약이 한 건도 안 나오는 기간에는 배치가 매일 정상 실행되는데도
+      배지가 마지막으로 상품이 있던 날에 멈춰, 방문자에게는 '서비스가 죽었다'로
+      읽혔다. 배치 쪽에서 0건 실행도 기록으로 남기게 고쳤고(row_count=0),
+      여기서는 그 기록을 'quiet'로 구분해 문구를 달리 쓴다.
+
+    상태
+      fresh  마지막 수집에서 청약 상품을 받아왔다 — 평소 상태
+      quiet  배치는 돌았는데 그 시점에 청약 중인 상품이 0건이었다
+      stale  수집 기록 자체가 FRESHNESS_STALE_DAYS일 넘게 없다 — 진짜 경고
+
+    ⚠ 순서가 중요하다. 0건 실행이 일주일 넘게 이어지면 그건 수집이 멈춘 것과
+      구분이 안 되므로 stale이 이긴다.
+    """
+    if not last_import:
+        return None
+    days = (date.today() - last_import.imported_at.date()).days
+    if days > FRESHNESS_STALE_DAYS:
+        state = "stale"
+    elif last_import.row_count == 0:
+        state = "quiet"
+    else:
+        state = "fresh"
+    return {"days": days, "state": state, "rows": last_import.row_count}
+
+
+def _empty_week_guide(monday, offset):
+    """청약 마감 상품이 한 건도 없는 주에 대신 보여줄 곳을 찾는다.
+
+    ⚠ **왜 없는지는 계산하지 않는다.** KOFIA는 '청약 중 0건'만 알려줄 뿐 사유를
+      싣지 않으므로 우리가 아는 사실이 아니다. 화면 문구도 사유를 단정하지
+      않는다(weekly.html의 빈 주 안내 참고).
+
+    돌려주는 것은 '가장 가까운, 상품이 있는 주' 하나뿐이다. 과거 쪽을 먼저 보고
+    (직전 주가 방문자에게 제일 쓸모 있다), 없으면 미래 쪽을 본다 — 서비스 데이터
+    시작보다 앞선 주(?w=-500 같은 링크)로 들어오면 과거 쪽이 비기 때문이다.
+    """
+    qs = Product.objects.listed()
+    sunday = monday + timedelta(days=6)
+    ref = (qs.filter(sub_end__lt=monday).order_by("-sub_end")
+           .values_list("sub_end", flat=True).first())
+    if ref is None:
+        ref = (qs.filter(sub_end__gt=sunday).order_by("sub_end")
+               .values_list("sub_end", flat=True).first())
+    if ref is None:
+        return {"near": None}
+    near_monday = ref - timedelta(days=ref.weekday())
+    delta = (near_monday - monday).days // 7
+    return {"near": {
+        "monday": near_monday,
+        "sunday": near_monday + timedelta(days=6),
+        "offset": offset + delta,
+        "weeks": abs(delta),
+        "past": delta < 0,
+        "count": qs.filter(sub_end__gte=near_monday,
+                           sub_end__lte=near_monday + timedelta(days=6)).count(),
+    }}
 
 
 def weekly(request):
@@ -384,10 +461,7 @@ def weekly(request):
     if request.user.is_authenticated:
         invested_ids = set(Investment.objects.filter(
             user=request.user, status="보유중").values_list("product_id", flat=True))
-    last_import = ImportLog.objects.first()
-    freshness_days = None
-    if last_import:
-        freshness_days = (date.today() - last_import.imported_at.date()).days
+    freshness = _freshness(ImportLog.objects.first())
 
     regime = _market_regime(monday, sunday)
 
@@ -398,6 +472,17 @@ def weekly(request):
         Product.objects.listed().filter(sub_end__gte=monday, sub_end__lte=sunday)
         .values_list("issuer", flat=True)
     ))
+
+    # ── 청약이 한 건도 없는 주 ────────────────────
+    # '필터를 좁혀서 0건'과 '그 주에 아예 상품이 없어서 0건'은 다른 상황인데
+    # 예전엔 둘 다 "이번 주 청약 마감 상품이 없습니다" 한 줄로 끝났다.
+    # 세는 쿼리는 목록이 비었을 때만 돈다(평소 주에는 추가 비용 없음).
+    empty_week = None
+    if not products:
+        week_total = Product.objects.listed().filter(
+            sub_end__gte=monday, sub_end__lte=sunday).count()
+        if not week_total:
+            empty_week = _empty_week_guide(monday, offset)
 
     # ── 이번주 TOP5 (현재 주만) ──
     # 아주 강한 신호 상품 중 손실확률 0% & 1년내 조기상환 ≥90% → 수익률 상위 5.
@@ -498,7 +583,8 @@ def weekly(request):
         "issuers": issuers,
         "watched_ids": watched_ids,
         "invested_ids": invested_ids,
-        "freshness_days": freshness_days,
+        "freshness": freshness,
+        "empty_week": empty_week,
         "filters": {
             "asset": f_asset, "ki_max": f_ki_max, "yield_min": f_yield_min,
             "currency": f_currency, "no_ki": f_no_ki, "preset": preset_id,

@@ -12,7 +12,12 @@ KOFIA 전자공시(dis.kofia.or.kr) — 청약중인 파생결합증권(ELS/DLS/
 
 ⚠ 이 엔드포인트는 공식 문서화된 API가 아니라 KOFIA 웹페이지가 내부적으로
   쓰는 요청을 그대로 재현한 것. 페이지 개편 시 val 번호가 바뀔 수 있음 —
-  fetch_subscribing()이 예외 없이 빈 리스트를 반환하면 val 매핑 재확인 필요.
+  한 건도 못 읽었는데 dbio_total_count_가 0이 아니면 val 매핑 재확인 필요
+  (fetch_subscribing이 그 경우를 KofiaFetchError로 올린다. 2026-08-18).
+
+빈 목록은 정상이다 — 증권사 공시 기간 등으로 청약 중인 상품이 한 건도 없으면
+KOFIA도 total_count=0으로 정상 응답한다. 그때 fetch_subscribing()은 빈 리스트를
+돌려주고, scrape_kofia가 '0건 실행' 기록을 남긴다.
 """
 
 import re
@@ -175,7 +180,22 @@ def fetch_subscribing(timeout=25) -> list[dict]:
             "sub_end": _to_date(_v(el, 17)),
         })
 
-    if total_count and str(len(rows)) != str(total_count).strip():
+    total = (total_count or "").strip()
+
+    # 한 건도 못 읽었을 때 '진짜 0건'과 '매핑이 깨진 것'을 가른다.
+    #   2026-08-18 10:46 KST 실측 — 청약 중인 상품이 실제로 없는 기간의 응답:
+    #     HTTP 200 / <DISDlsDTO> 0개 / <dbio_total_count_>0</dbio_total_count_>
+    # 즉 KOFIA는 빈 목록도 total_count=0으로 정상 응답한다. 그 경우만 빈 리스트로
+    # 돌려주고, total_count가 0이 아닌데 한 건도 못 읽었으면 val 매핑이 바뀐
+    # 쪽이므로 실패로 올린다. 이 구분이 없으면 배치가 고장 난 날에도
+    # "수집 정상(0건)"으로 기록돼 화면 신선도 배지가 고장을 가린다.
+    if not rows and total != "0":
+        raise KofiaFetchError(
+            f"청약 중인 상품을 한 건도 읽지 못했습니다 "
+            f"(dbio_total_count_={total or '없음'}) — val 매핑 재확인 필요"
+        )
+
+    if total and str(len(rows)) != total:
         # 개수 불일치 — val 매핑이 깨졌을 가능성. 상위 호출자가 로그로 남기도록 예외화하지 않고 반환.
         pass
 

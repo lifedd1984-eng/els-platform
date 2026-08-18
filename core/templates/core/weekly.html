@@ -4,10 +4,16 @@
 {% block twitter_title %}이번주 ELS 청약 목록 · 낙인·수익률 비교 — ELS 레이더{% endblock %}
 
 {% block nav_right %}
-{% if freshness_days is not None %}
-<span class="freshness {% if freshness_days > 7 %}warn{% endif %}">
+{# 배지는 '수집이 멈춘 것(stale)'과 '수집할 청약이 없는 것(quiet)'을 구분한다 — 판정은 views._freshness #}
+{% if freshness %}
+<span class="freshness {% if freshness.state == 'stale' %}warn{% endif %}"
+      title="{% if freshness.state == 'quiet' %}자동 수집은 실행됐지만 그 시점에 청약 중인 상품이 한 건도 없었습니다{% else %}청약 정보를 마지막으로 수집한 시점입니다{% endif %}">
   <i class="fa-solid fa-database"></i>
-  {% if freshness_days == 0 %}오늘 업데이트{% else %}{{ freshness_days }}일 전 데이터{% endif %}
+  {% if freshness.state == 'quiet' %}
+    {% if freshness.days == 0 %}오늘 확인 · 청약중 0건{% else %}{{ freshness.days }}일 전 확인 · 청약중 0건{% endif %}
+  {% else %}
+    {% if freshness.days == 0 %}오늘 업데이트{% else %}{{ freshness.days }}일 전 수집{% endif %}
+  {% endif %}
 </span>
 {% endif %}
 {% endblock %}
@@ -95,6 +101,85 @@
 </div>
 
 {% comment %}
+청약이 한 건도 없는 주 안내 — 필터 때문에 0건인 경우가 아니라 그 주에 상품 자체가 없을 때만 뜬다.
+검색으로 처음 들어온 방문자가 빈 화면만 보고 '서비스가 죽었다'로 읽고 나가던 자리다(2026-08-18).
+⚠ 사유를 단정하지 않는다 — KOFIA는 '청약 중 0건'만 알려줄 뿐 왜인지는 안 싣는다.
+{% endcomment %}
+{% if empty_week %}
+<style>
+  .ew-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:18px}
+  .ew-link{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--border);border-radius:10px;
+           padding:12px 14px;color:inherit;text-decoration:none;background:var(--card)}
+  .ew-link:hover{border-color:var(--blue);background:var(--blue-bg)}
+  .ew-link i{color:var(--blue);font-size:14px;margin-top:2px;flex:none}
+  .ew-link b{display:block;font-size:13px;font-weight:700;letter-spacing:-0.2px}
+  .ew-link span{display:block;font-size:11.5px;color:var(--text-3);line-height:1.55;margin-top:2px}
+</style>
+<div class="card" style="padding:22px 20px;margin-bottom:14px">
+  <div style="display:flex;align-items:flex-start;gap:12px">
+    <i class="fa-regular fa-calendar-xmark" style="font-size:19px;color:var(--text-3);margin-top:3px;flex:none"></i>
+    <div style="min-width:0">
+      <div style="font-size:15.5px;font-weight:800;letter-spacing:-0.3px">이 주에 청약이 마감되는 상품이 없습니다</div>
+      <p style="font-size:13px;color:var(--text-2);line-height:1.75;margin:7px 0 0">
+        신규 ELS 청약이 한 주 내내 올라오지 않는 주가 있습니다.
+        증권사 정기 공시 일정이나 연휴 등이 겹치면 한동안 새 청약이 나오지 않기도 합니다.
+        다만 이 주에 없는 사유까지 확인한 것은 아닙니다.
+      </p>
+      {% if freshness.state == 'fresh' or freshness.state == 'quiet' %}
+      <p style="font-size:12px;color:var(--text-3);line-height:1.7;margin:8px 0 0">
+        <i class="fa-solid fa-database" style="font-size:10.5px"></i>
+        자동 수집은 매일 실행됩니다 — 마지막 확인 {% if freshness.days == 0 %}오늘{% else %}{{ freshness.days }}일 전{% endif %}.
+        새 청약이 등록되면 이 화면에 바로 올라옵니다.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+  <div class="ew-links">
+    {% if empty_week.near %}
+    <a class="ew-link" href="?{% qs_replace w=empty_week.near.offset %}">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+      <span style="min-width:0">
+        <b>{{ empty_week.near.weeks }}주 {% if empty_week.near.past %}전{% else %}뒤{% endif %} 청약 보기</b>
+        <span>{{ empty_week.near.monday|date:"n.j" }} ~ {{ empty_week.near.sunday|date:"n.j" }} · {{ empty_week.near.count }}건</span>
+      </span>
+    </a>
+    {% endif %}
+    <a class="ew-link" href="{% url 'report_els_10year' %}">
+      <i class="fa-solid fa-chart-column"></i>
+      <span style="min-width:0">
+        <b>ELS 10년 성적표</b>
+        <span>2016~2025년 공모 ELS 69,903건 전수 판정 결과</span>
+      </span>
+    </a>
+    {% if user.is_authenticated %}
+    <a class="ew-link" href="{% url 'calendar' %}">
+      <i class="fa-regular fa-calendar-check"></i>
+      <span style="min-width:0">
+        <b>상환 캘린더</b>
+        <span>보유 상품의 조기상환 평가일을 달력으로</span>
+      </span>
+    </a>
+    <a class="ew-link" href="{% url 'watchlist' %}">
+      <i class="fa-regular fa-star"></i>
+      <span style="min-width:0">
+        <b>관심목록</b>
+        <span>담아 둔 상품의 조건을 다시 확인</span>
+      </span>
+    </a>
+    {% else %}
+    <a class="ew-link" href="{% url 'trend' %}">
+      <i class="fa-solid fa-chart-line"></i>
+      <span style="min-width:0">
+        <b>시장 트렌드</b>
+        <span>최근 20주 청약 상품의 평균 수익률·낙인 추이</span>
+      </span>
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% comment %}
 접이식 카드 공통 스타일 — 시장 국면·낙인대별·TOP5가 모두 .fold-card를 쓴다.
 예전엔 이 규칙이 ki_top5 블록 안에 있어서, 낙인 버킷에 걸리는 상품이 하나도
 없는 주간(운영: ?w=-11, ?w=-27)이면 통째로 빠졌다. 그러면 남은 카드들이
@@ -109,14 +194,16 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
 </style>
 
 {% if regime %}
-<details class="card fold-card" data-fold="regimeFold" style="padding:14px 16px;margin-bottom:14px">
+{# 통과율은 그 주 상품이 있어야 성립한다 — 상품 0건이면 rate=None으로 오고 지수 위치만 남는다 #}
+<details class="card fold-card" data-fold="regimeFold" style="padding:14px 16px;margin-bottom:14px" {% if empty_week %}open{% endif %}>
   <summary>
     <i class="fa-solid fa-gauge" style="color:var(--blue)"></i> 시장 국면
     <span style="font-weight:400;font-size:12px;color:var(--text-3)">
-      이번 주 조건 통과율 {{ regime.rate }}% ({{ regime.n_pass }}/{{ regime.n_all }}건)</span>
+      {% if regime.rate is not None %}이번 주 조건 통과율 {{ regime.rate }}% ({{ regime.n_pass }}/{{ regime.n_all }}건){% else %}주요 지수의 현재 위치{% endif %}</span>
     <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
   </summary>
-  <div style="margin-top:12px;display:grid;grid-template-columns:minmax(200px,1fr) 2fr;gap:16px" class="rg-grid">
+  <div style="margin-top:12px;display:grid;grid-template-columns:{% if regime.rate is not None %}minmax(200px,1fr) 2fr{% else %}1fr{% endif %};gap:16px" class="rg-grid">
+    {% if regime.rate is not None %}
     <div style="background:var(--bg);border-radius:10px;padding:14px 16px">
       <div style="font-size:12px;color:var(--text-3);font-weight:700">조건 통과율</div>
       <div style="font-size:30px;font-weight:800;letter-spacing:-1px;color:var(--blue-dark);line-height:1.2">
@@ -130,6 +217,7 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
         <b style="color:var(--text-2)">통과 조건</b><br>
         {% for line in regime.cond %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div>
     </div>
+    {% endif %}
     <div>
       {% comment %}
       4개 지수가 전부 시세 조회에 실패하면 indexes가 빈 리스트가 된다.
@@ -175,11 +263,19 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
       {% endif %}
     </div>
   </div>
+  {% if regime.rate is not None %}
   <p style="font-size:11.5px;color:var(--text-3);margin:12px 0 0;line-height:1.65">
     10년 분기별 검증에서 조건 통과율과 이후 1년 주식 수익률은 같은 방향으로 움직였습니다(상관 +0.52).
     <b>ELS 조건이 나쁜 시기는 주식도 부진했다</b>는 뜻이라, 한쪽이 어려울 때 다른 쪽이 대안이 되지는 않았습니다.
     투자 권유가 아니라 현재 위치를 읽는 참고 지표입니다.
   </p>
+  {% else %}
+  {# 통과율 설명(상관 +0.52)은 통과율이 있을 때만 쓴다 — 화면에 없는 수치를 해설할 수는 없다 #}
+  <p style="font-size:11.5px;color:var(--text-3);margin:12px 0 0;line-height:1.65">
+    이 주에는 청약 상품이 없어 조건 통과율을 낼 수 없습니다. 위 지수 위치는 청약 여부와 무관하게 계산됩니다.
+    투자 권유가 아니라 현재 위치를 읽는 참고 지표입니다.
+  </p>
+  {% endif %}
 </details>
 <style>@media (max-width:760px){ .rg-grid{ grid-template-columns:1fr !important } }</style>
 {% endif %}
@@ -420,10 +516,11 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
       </tbody>
     </table>
   </div>
-{% else %}
+{% elif not empty_week %}
+{# 그 주에 상품은 있는데 필터가 다 걸러낸 경우 — 상품 자체가 없는 주는 위 빈 주 안내가 맡는다 #}
 <div class="card empty">
   <i class="fa-regular fa-folder-open"></i>
-  이번 주 청약 마감 상품이 없습니다
+  고른 조건에 맞는 상품이 없습니다 — 필터를 넓혀 보세요
 </div>
 {% endif %}
 

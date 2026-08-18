@@ -68,11 +68,23 @@ class Command(BaseCommand):
             return
 
         if not rows:
-            self.stdout.write("수집된 데이터 없음 (KOFIA 응답 구조 변경 가능성 — 확인 필요)")
+            # 청약 중인 상품이 실제로 0건인 기간이다 — 응답 구조가 깨진 경우는
+            # fetch_subscribing이 KofiaFetchError로 올리므로 여기까지 오지 않는다.
+            #
+            # ▣ 0건이어도 ImportLog를 남긴다 (2026-08-18)
+            #   예전엔 그냥 return이라 실행 기록이 안 남았다. 그래서 청약이 없는
+            #   기간에는 배치가 매일 정상 실행되는데도 화면 신선도 배지가 마지막으로
+            #   상품이 있던 날에 멈춰 "N일 전 데이터"로 굳었고, 방문자에게는
+            #   수집이 멈춘 것과 구분되지 않았다. row_count=0이 그 구분자다
+            #   (views._freshness의 'quiet' 상태).
+            ImportLog.objects.create(
+                filename=f"kofia_auto_{timezone_today()}", row_count=0, new_count=0
+            )
+            self.stdout.write("[자동수집] 청약 중인 상품 0건 (KOFIA 정상 응답)")
             if should_notify:
                 telegram.send_message(
-                    "[ELS 레이더] KOFIA 자동수집: 0건 수집됨\n"
-                    "사이트 구조가 바뀌었을 수 있습니다. 확인이 필요합니다."
+                    "[ELS 레이더] KOFIA 자동수집: 청약 중인 상품 0건\n"
+                    "응답은 정상이며 청약 목록이 비어 있습니다. 수집 기록은 남겼습니다."
                 )
             return
 
