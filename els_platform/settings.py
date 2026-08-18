@@ -259,6 +259,22 @@ VAPID_SUB = os.environ.get("VAPID_SUB", "mailto:lifedd1984@gmail.com")
 # AI 리서치 (Claude Haiku — 자연어 → 검색 필터 변환 전용)
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
+# ── 구글 시트 동기화 (/portfolio/sync.json) ──────────────────
+# 조 팀장 'ELS투자 리스트' 시트가 하루 한 번 읽어 가는 피드. 서버가 시트에
+# 쓰는 게 아니라 시트가 우리를 읽는다 — 구글 자격증명을 서버에 두지 않기 위함.
+#
+# 토큰이 이 엔드포인트의 유일한 자물쇠다(로그인 세션을 못 쓴다. Apps Script는
+# 쿠키를 들고 다니지 못한다). 그래서 기본값이 빈 값이고, 빈 값이면 엔드포인트
+# 자체가 404다 — 설정을 빠뜨린 채 배포해도 포트폴리오가 열리지 않는다.
+# 값은 .env 에만 둔다. 코드·문서·저장소에 실제 토큰을 적지 않는다.
+#   생성 예: python -c "import secrets; print(secrets.token_urlsafe(32))"
+SHEET_SYNC_TOKEN = os.environ.get("SHEET_SYNC_TOKEN", "").strip()
+
+# 시트로 내보낼 포트폴리오의 주인 계정 하나. 운영 DB는 admin이 보유분을 갖고
+# 있다. 상수로 박지 않는 이유는 로컬 개발 DB의 소유 계정 이름이 다르기
+# 때문이다(로컬은 taehoon) — 계정이 바뀌어도 .env만 고치면 되게 둔다.
+SHEET_SYNC_USERNAME = os.environ.get("SHEET_SYNC_USERNAME", "admin").strip()
+
 # ── AI 분석 질문 (/ask/) ────────────────────────────
 # 2턴 구조: 해석(질문 → 도구 호출)은 Haiku, 설명(도구 결과 → 문장)은 Sonnet.
 # 해석은 스키마 채우기라 값싼 모델로 충분하고, 설명은 사용자가 읽는 문장이라

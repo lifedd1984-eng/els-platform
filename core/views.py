@@ -1,4 +1,5 @@
 import calendar as pycalendar
+import hmac
 import logging
 import math
 from datetime import date, timedelta
@@ -9,7 +10,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -1442,6 +1443,52 @@ def portfolio_export(request):
         f"attachment; filename=\"portfolio.xlsx\"; "
         f"filename*=UTF-8''{quote(fname)}"
     )
+    return resp
+
+
+def portfolio_sync(request):
+    """구글 시트가 하루 한 번 읽어 가는 동기화 피드 — 토큰 인증, 로그인 불필요.
+
+    왜 로그인이 아니라 토큰인가
+        Google Apps Script는 우리 세션 쿠키를 들고 다니지 못한다. 서버가 시트에
+        쓰는 반대 방향을 택하면 구글 서비스 계정 키를 EC2에 두어야 하는데, 그
+        키는 시트 하나가 아니라 계정이 닿는 문서 전부의 열쇠라 위험이 훨씬 크다.
+        그래서 '읽기 전용 피드 + 토큰' 쪽으로 갔다.
+
+    토큰을 못 맞히면 전부 404다(403이 아니라). 403은 '주소는 맞다'는 확인을
+    공짜로 주는 셈이라, 무작위 탐색에 힌트를 남기지 않으려고 없는 주소처럼
+    군다. 대신 서버 로그에 이유를 남긴다 — 조 팀장이 진단할 곳은 로그다.
+
+    토큰은 헤더(X-Sync-Token)로 받는 것이 정석이다. 쿼리스트링(?token=)도
+    받지만 이쪽은 nginx 접근 로그에 토큰이 그대로 남으므로 브라우저로 한 번
+    확인해 볼 때만 쓰고, 스크립트는 헤더를 쓴다.
+    """
+    from core import portfolio_sync as pfs
+
+    expected = (getattr(settings, "SHEET_SYNC_TOKEN", "") or "").strip()
+    if not expected:
+        logger.warning("시트 동기화 요청을 받았으나 SHEET_SYNC_TOKEN이 비어 있다 — 404로 응답")
+        raise Http404
+
+    given = (request.headers.get("X-Sync-Token")
+             or request.GET.get("token") or "").strip()
+    # compare_digest: 문자열 비교 시간으로 토큰을 한 글자씩 알아내는 걸 막는다
+    if not given or not hmac.compare_digest(given, expected):
+        logger.warning("시트 동기화 토큰 불일치 — 404로 응답 (제시된 길이 %d)", len(given))
+        raise Http404
+
+    username = (getattr(settings, "SHEET_SYNC_USERNAME", "") or "admin").strip()
+    mine = (Investment.objects.filter(user__username=username)
+            .select_related("product"))
+    # 보유중·상환완료를 모두 낸다. 시트에 '완료' 행이 그대로 남아 있어서,
+    # 보유중만 보내면 상환된 행의 상태가 영영 갱신되지 않는다.
+    payload = pfs.build_payload(mine, username=username)
+    if not payload["count"]:
+        logger.warning("시트 동기화 피드가 비어 있다 — SHEET_SYNC_USERNAME=%r 확인 필요", username)
+
+    resp = JsonResponse(payload, json_dumps_params={"ensure_ascii": False})
+    resp["Cache-Control"] = "no-store"
+    resp["X-Robots-Tag"] = "noindex, nofollow"
     return resp
 
 

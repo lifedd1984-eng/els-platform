@@ -35,6 +35,8 @@ urlpatterns = [
     path('portfolio/', views.portfolio, name='portfolio'),
     path('portfolio/template/', views.portfolio_template, name='portfolio_template'),
     path('portfolio/export/', views.portfolio_export, name='portfolio_export'),
+    # 구글 시트가 읽어 가는 동기화 피드 — 토큰 없으면 404 (로그인 아님)
+    path('portfolio/sync.json', views.portfolio_sync, name='portfolio_sync'),
     path('portfolio/upload/', views.portfolio_upload, name='portfolio_upload'),
     path('calendar/', views.redemption_calendar, name='calendar'),
     path('trend/', views.market_trend, name='trend'),
