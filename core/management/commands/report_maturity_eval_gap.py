@@ -30,7 +30,11 @@ from django.core.management.base import BaseCommand
 
 from core.models import Product
 
-from .parse_prospectus_dates import extract_early_dates, extract_maturity_date
+from .parse_prospectus_dates import (
+    SAMSUNG_FORMATS,
+    extract_early_dates,
+    extract_maturity_date,
+)
 
 
 class Command(BaseCommand):
@@ -78,7 +82,9 @@ class Command(BaseCommand):
                 time.sleep(opts["delay"])
                 continue
             early, fmt = extract_early_dates(text, tables)
-            maturity = extract_maturity_date(text, samsung=(fmt == "중간기준가격"))
+            # 삼성증권은 만기평가일을 '최종기준가격'으로 적는다. 월수익형도 같은 표기라
+            # 포맷 하나만 보면(예전 코드) 월수익형이 통째로 '확인 못 함'으로 빠졌다.
+            maturity = extract_maturity_date(text, samsung=(fmt in SAMSUNG_FORMATS))
             if maturity is None:
                 unknown += 1
                 time.sleep(opts["delay"])
