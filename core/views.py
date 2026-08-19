@@ -1825,45 +1825,67 @@ def redemption_calendar(request):
             })
         weeks.append(row)
 
-    # ── 이 달 예상 결과 요약 ──
+    # ── 이 달 결과 요약 ──
     # 한 투자가 같은 달에 두 번 평가받으면 첫 회차에서 상환되고 끝나므로
-    # 가장 이른 평가 1건만 대표로 집계한다(투자금액·예상상환금 중복 방지).
-    # 상환이 끝난 건은 뺀다 — 이 요약은 '앞으로 일어날 일'의 예측이라
-    # 이미 결과가 나온 건을 넣으면 투자금액·예상상환금이 부풀려진다.
+    # 대표 1건만 집계한다(투자금액·상환금 중복 방지). 대표는 가장 이른 회차 —
+    # 다만 상환이 일어난 회차가 같은 달에 있으면 그 회차를 대표로 올린다.
+    # 실제 결과가 나온 자리가 거기이기 때문이다.
     first_ev = {}
     for day in sorted(events):
         for ev in events[day]:
-            if ev["done"]:
-                continue
-            first_ev.setdefault(ev["inv"].id, (day, ev))
+            prev = first_ev.get(ev["inv"].id)
+            if prev is None or (ev["done_label"] and not prev[1]["done_label"]):
+                first_ev[ev["inv"].id] = (day, ev)
     summary = None
     if first_ev:
         rows = [ev for _, ev in first_ev.values()]
         invested = sum(ev["inv"].amount for ev in rows)
-        expected = sum(ev["expected"] for ev in rows if ev["expected"])
-        exp_n = sum(1 for ev in rows if ev["expected"])
         by_type = {"종목형": {"amount": 0, "count": 0}, "지수형": {"amount": 0, "count": 0}}
-        loss_w = loss_base = 0
+        # 상환이 끝난 건도 집계에 넣는다(2026-08-19 조 팀장 지시). 하루 전까지는
+        # '앞으로의 예측'이라며 뺐지만, 끝난 건은 결과를 이미 알고 있으므로
+        # 추정치가 아니라 실제 상환금(redeemed_amount)을 쓴다.
+        # 숫자를 지어내지 않는다 — 다음 둘은 건수·투자금액에만 남기고
+        # 금액 집계(상환금·수익·수익률)에서는 뺀다:
+        #   · 상환은 끝났는데 실제 상환금이 등록되지 않은 건
+        #   · 상환 없이 지나간 회차 (뒤 회차에서 상환된 건의 앞 회차)
+        real_sum = est_sum = 0
+        real_n = est_n = 0
+        base = 0  # 상환금을 산출한 건들의 투자금액 — 세전수익·수익률의 분모
         for ev in rows:
-            p = ev["inv"].product
-            b = by_type.get(p.asset_type)
+            inv = ev["inv"]
+            b = by_type.get(inv.product.asset_type)
             if b:
-                b["amount"] += ev["inv"].amount
+                b["amount"] += inv.amount
                 b["count"] += 1
-            if p.loss_prob is not None:
-                loss_w += ev["inv"].amount * p.loss_prob
-                loss_base += ev["inv"].amount
+            if ev["done_label"]:
+                if inv.redeemed_amount is not None:
+                    real_sum += inv.redeemed_amount
+                    real_n += 1
+                    base += inv.amount
+            elif not ev["done"] and ev["expected"]:
+                est_sum += ev["expected"]
+                est_n += 1
+                base += inv.amount
+        profit = real_sum + est_sum - base
         summary = {
             "count": len(rows),
-            "upcoming": sum(1 for _, (d, _e) in first_ev.items() if not _e["is_past"]),
-            "past": sum(1 for _, (d, _e) in first_ev.items() if _e["is_past"]),
+            # 세 갈래는 서로 겹치지 않는다: 상환 완료 / 지난 평가 / 예정
+            "done_n": sum(1 for ev in rows if ev["done_label"]),
+            "past": sum(1 for ev in rows if ev["is_past"] and not ev["done_label"]),
+            "upcoming": sum(1 for ev in rows if not ev["is_past"] and not ev["done_label"]),
             "invested": invested,
-            "expected": expected,
-            "expected_n": exp_n,
-            "profit": expected - sum(ev["inv"].amount for ev in rows if ev["expected"]),
+            "redeem_total": real_sum + est_sum,
+            "real_n": real_n, "real_sum": real_sum,
+            "est_n": est_n, "est_sum": est_sum,
+            "amount_n": real_n + est_n,
+            # 상환금을 알 수 없어 금액 집계에서 뺀 건수 (건수·투자금액에는 남아 있다)
+            "no_amount_n": len(rows) - (real_n + est_n),
+            "profit": profit,
             "by_type": by_type,
-            "loss_rate": round(loss_w / loss_base, 2) if loss_base else None,
-            "loss_coverage": round(loss_base / invested * 100) if invested else 0,
+            # 수익률 = 세전수익 ÷ 그 수익을 낸 투자금액 × 100.
+            # 금액을 못 낸 건은 분자·분모에서 함께 빠져 비율이 흔들리지 않는다.
+            # 전 건이 산출되면 분모는 '대상 투자금액'과 같다.
+            "return_rate": round(profit / base * 100, 2) if base else None,
         }
 
     return render(request, "core/calendar.html", {

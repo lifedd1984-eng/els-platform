@@ -10,8 +10,8 @@
   ① 상환이 끝난 건도 달력에 남는다 — 상태(조기상환 등)를 그대로 달고
   ② **상환된 회차까지만** 남는다. 그 이후 회차는 실제로 오지 않으므로
      그리면 거짓 정보다 (4회차 상품이 1회차에서 상환되면 2~4차는 없다)
-  ③ 끝난 건은 '이 달 예상 결과' 집계에서 빠진다 — 앞으로의 예측이라
-     이미 결과가 나온 건을 넣으면 투자금액·예상상환금이 부풀려진다
+  ③ 끝난 건도 '이 달 결과' 요약에 들어간다 (2026-08-19 조 팀장 지시로 뒤집힘 —
+     아래 ③절 주석 참고). 집계 규칙은 core/tests_calendar_summary.py에서 본다
   ④ 보유중 건은 예전 그대로다 (전 회차 표시 + 요약 집계 포함)
 
 상환 회차 판정 근거는 Investment.redeemed_round 한 곳이다.
@@ -51,7 +51,7 @@ class CalendarRedeemedTest(TestCase):
         self.client.force_login(self.user)
         self._seq = 0
 
-    def _inv(self, status="보유중", redeemed_at=None, **kw):
+    def _inv(self, status="보유중", redeemed_at=None, redeemed_amount=None, **kw):
         self._seq += 1
         fields = dict(
             issuer="테스트증권", product_no=str(1000 + self._seq),
@@ -64,7 +64,8 @@ class CalendarRedeemedTest(TestCase):
         return Investment.objects.create(
             user=self.user, product=p, amount=10_000_000,
             invested_at=R1 - timedelta(days=90),
-            status=status, redeemed_at=redeemed_at)
+            status=status, redeemed_at=redeemed_at,
+            redeemed_amount=redeemed_amount)
 
     def _get(self, d):
         return self.client.get(reverse("calendar"), {"y": d.year, "m": d.month})
@@ -130,34 +131,49 @@ class CalendarRedeemedTest(TestCase):
                 self.assertEqual([e["n"] for e in _events(self._get(d))], [n])
         self.assertEqual(_events(self._get(R4))[0]["done_label"], "만기상환")
 
-    # ── ③ 월간 요약에서 뺀다 ───────────────────────────
-    def test_상환_완료_건은_요약_집계에_들어가지_않는다(self):
-        self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2))
+    # ── ③ 월간 요약에 넣는다 ───────────────────────────
+    # 2026-08-18 이 자리는 '완료 건은 요약에서 뺀다'를 못박고 있었다.
+    # 하루 뒤(08-19) 조 팀장 지시로 뒤집혔다 — 끝난 건도 넣되, 결과를 이미
+    # 알고 있으니 추정치가 아니라 실제 상환금(redeemed_amount)을 쓴다.
+    # 뺐을 때 '완료 건만 있는 달'은 요약 카드가 통째로 사라져 그 달에 무슨
+    # 일이 있었는지 볼 데가 없었다. 여기서는 '들어간다'까지만 확인하고
+    # 실제/추정 갈라 쓰는 규칙은 core/tests_calendar_summary.py에서 본다.
+    def test_상환_완료_건도_요약_집계에_들어간다(self):
+        inv = self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2),
+                        redeemed_amount=10_600_000)
         r = self._get(R1)
-        self.assertEqual(len(_events(r)), 1)     # 달력 칸에는 보인다
-        self.assertIsNone(r.context["summary"])  # 요약에는 없다
+        self.assertEqual(len(_events(r)), 1)
+        s = r.context["summary"]
+        self.assertIsNotNone(s)                       # 예전엔 None이었다
+        self.assertEqual(s["count"], 1)
+        self.assertEqual(s["invested"], inv.amount)
+        self.assertEqual(s["redeem_total"], 10_600_000)  # 실제 상환금 그대로
 
-    def test_보유중_건만_요약에_잡힌다(self):
+    def test_완료_건과_보유중_건이_함께_요약에_잡힌다(self):
         held = self._inv()
-        self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2))
+        done = self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2),
+                         redeemed_amount=10_600_000)
         r = self._get(R1)
         s = r.context["summary"]
-        self.assertEqual(s["count"], 1)
-        self.assertEqual(s["invested"], held.amount)  # 완료 건 1천만원이 안 더해진다
-        self.assertEqual(s["by_type"]["지수형"]["count"], 1)
+        self.assertEqual(s["count"], 2)
+        self.assertEqual(s["invested"], held.amount + done.amount)
+        self.assertEqual(s["by_type"]["지수형"]["count"], 2)
 
-    def test_요약이_없어도_상세_표는_그대로_나온다(self):
+    def test_완료_건만_있어도_요약과_상세_표가_나온다(self):
         # 완료 건만 있는 달 — 예전엔 여기서 '평가 예정이 없습니다'가 떴다
-        self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2))
+        self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2),
+                  redeemed_amount=10_600_000)
         r = self._get(R1)
         html = r.content.decode()
         self.assertEqual(r.context["event_count"], 1)
+        self.assertIsNotNone(r.context["summary"])
         self.assertIn("이 달 평가 상세", html)
         self.assertNotIn("이 달에는 평가 예정이 없습니다", html)
 
     def test_완료와_보유중이_같은_달에_섞여도_각자_표시된다(self):
         held = self._inv()
-        done = self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2))
+        done = self._inv(status="조기상환", redeemed_at=R1 + timedelta(days=2),
+                         redeemed_amount=10_600_000)
         r = self._get(R1)
         by_id = {e["inv"].id: e for e in _events(r)}
         self.assertEqual(set(by_id), {held.id, done.id})
@@ -165,7 +181,7 @@ class CalendarRedeemedTest(TestCase):
         self.assertEqual(by_id[held.id]["done_label"], "")
         self.assertEqual(r.context["done_count"], 1)
         self.assertEqual(r.context["event_count"], 2)
-        self.assertEqual(r.context["summary"]["count"], 1)
+        self.assertEqual(r.context["summary"]["count"], 2)
 
     # ── ④ 상환 회차 판정 근거 ──────────────────────────
     def test_보유중이면_상환_회차가_없다(self):
