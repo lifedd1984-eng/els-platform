@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="page-title">상환 캘린더</div>
-<div class="page-sub">이 달 조기상환 평가 {{ event_count }}건</div>
+<div class="page-sub">이 달 조기상환 평가 {{ event_count }}건{% if done_count %} · 상환 완료 {{ done_count }}건{% endif %}</div>
 
 <div class="week-nav">
   <a href="?y={{ prev_y }}&m={{ prev_m }}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>
@@ -30,8 +30,8 @@
           {% if cell.day %}
           <div class="cal-day {% if cell.is_today %}today{% endif %}" {% if cell.is_past %}style="color:var(--text-3)"{% endif %}>{{ cell.day }}</div>
           {% for ev in cell.events %}
-          <div class="cal-event" {% if ev.is_past %}style="opacity:.55"{% endif %} title="{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} {{ ev.n }}회차 / 배리어 {{ ev.barrier|default:'-' }}% / 예상 {{ ev.expected|intcomma|default:'-' }}원{% if ev.is_past %} (지난 평가){% endif %}">
-            {% if ev.is_past %}<span style="color:var(--text-3);font-weight:700">지난 </span>{% endif %}{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} · {{ ev.n }}차
+          <div class="cal-event{% if ev.done_label %} done{% endif %}" {% if ev.is_past and not ev.done_label %}style="opacity:.55"{% endif %} title="{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} {{ ev.n }}회차 / 배리어 {{ ev.barrier|default:'-' }}% / 예상 {{ ev.expected|intcomma|default:'-' }}원{% if ev.done_label %} ({{ ev.done_label }} 완료){% elif ev.is_past %} (지난 평가){% endif %}">
+            {% if ev.done_label %}<span style="color:var(--text-2);font-weight:700">{{ ev.done_label }} </span>{% elif ev.is_past %}<span style="color:var(--text-3);font-weight:700">지난 </span>{% endif %}{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} · {{ ev.n }}차
             {% if ev.barrier %}({{ ev.barrier }}%){% endif %}
             {% if ev.badge %}<span style="color:var(--orange);font-weight:700">[{{ ev.badge }}]</span>{% endif %}
           </div>
@@ -88,7 +88,7 @@
     </div>
   </div>
   <div style="font-size:11.5px;color:var(--text-3);line-height:1.6;margin-top:10px">
-    이 달에 평가일이 있는 보유 상품 기준입니다.
+    이 달에 평가일이 있는 보유 상품 기준입니다.{% if done_count %} 상환이 끝난 {{ done_count }}건은 결과가 이미 나왔으므로 이 집계에서 뺐습니다.{% endif %}
     예상 상환금·세전수익은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치이며 실제 결과는 평가일 종가로 결정됩니다.
     {% if summary.loss_coverage < 100 %}<span style="color:var(--orange)">손실확률 산출 상품이 투자금의 {{ summary.loss_coverage }}%.</span>{% endif %}
   </div>
@@ -110,7 +110,7 @@
     </thead>
     <tbody>
       {% for week in weeks %}{% for cell in week %}{% for ev in cell.events %}
-      <tr {% if ev.is_past %}style="opacity:.6"{% endif %}>
+      <tr {% if ev.is_past or ev.done_label %}style="opacity:.6"{% endif %}>
         <td style="font-weight:700;white-space:nowrap">{{ month }}.{{ cell.day }}
           <span class="badge badge-blue">{{ ev.n }}회차</span>
           {% if ev.badge %}<span class="badge" style="background:var(--orange);color:#fff">{{ ev.badge }}</span>{% endif %}
@@ -132,7 +132,7 @@
             <span style="font-weight:700;color:{% if ev.inv.product.loss_prob > 5 %}var(--red){% elif ev.inv.product.loss_prob > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ ev.inv.product.loss_prob }}%</span>
           {% else %}<span style="color:var(--text-3)">-</span>{% endif %}
         </td>
-        <td>{% if ev.is_past %}<span class="badge" style="background:var(--border);color:var(--text-2)">지난 평가</span>{% else %}<span class="badge badge-blue">예정</span>{% endif %}</td>
+        <td>{% if ev.done_label %}<span class="badge badge-gray"><i class="fa-solid fa-check"></i> {{ ev.done_label }}</span>{% elif ev.is_past %}<span class="badge" style="background:var(--border);color:var(--text-2)">지난 평가</span>{% else %}<span class="badge badge-blue">예정</span>{% endif %}</td>
       </tr>
       {% endfor %}{% endfor %}{% endfor %}
     </tbody>

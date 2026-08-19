@@ -1787,10 +1787,17 @@ def redemption_calendar(request):
     next_y, next_m = (year + 1, 1) if month == 12 else (year, month + 1)
 
     # 이 달의 평가 이벤트 수집
+    # 보유중만 가져오던 자리다 — 상환을 확정하는 순간 status가 바뀌어 달력에서
+    # 통째로 사라졌다(2026-08-18 실측: 확정한 4건이 그날로 증발). 끝난 건도 남기되
+    # 상환된 회차까지만 그린다. 그 이후 회차는 실제로 오지 않기 때문이다.
     events = {}  # day -> [event]
-    invs = Investment.objects.filter(user=request.user, status="보유중").select_related("product")
+    invs = (Investment.objects.filter(user=request.user)
+            .select_related("product").prefetch_related("verdicts"))
     for inv in invs:
+        last_n = inv.redeemed_round  # 보유중이면 None = 전 회차 그대로
         for row in inv.schedule:
+            if last_n is not None and row["n"] > last_n:
+                continue  # 상환 뒤 회차 — 오지 않을 평가일이라 그리지 않는다
             d = row["date"]
             if d.year == year and d.month == month:
                 events.setdefault(d.day, []).append({
@@ -1798,6 +1805,11 @@ def redemption_calendar(request):
                     "barrier": row["barrier"], "expected": row["expected"],
                     "badge": inv.schedule_badge,
                     "is_past": d < today,
+                    # 상환이 끝난 투자의 이벤트 — 요약 집계에서 뺀다
+                    "done": last_n is not None,
+                    # 상환이 일어난 그 회차에만 상태를 그대로 붙인다.
+                    # 앞 회차는 상환되지 않은 지난 평가라 '지난'이 맞다.
+                    "done_label": inv.status if row["n"] == last_n else "",
                 })
 
     cal = pycalendar.Calendar(firstweekday=0)  # 월요일 시작
@@ -1816,9 +1828,13 @@ def redemption_calendar(request):
     # ── 이 달 예상 결과 요약 ──
     # 한 투자가 같은 달에 두 번 평가받으면 첫 회차에서 상환되고 끝나므로
     # 가장 이른 평가 1건만 대표로 집계한다(투자금액·예상상환금 중복 방지).
+    # 상환이 끝난 건은 뺀다 — 이 요약은 '앞으로 일어날 일'의 예측이라
+    # 이미 결과가 나온 건을 넣으면 투자금액·예상상환금이 부풀려진다.
     first_ev = {}
     for day in sorted(events):
         for ev in events[day]:
+            if ev["done"]:
+                continue
             first_ev.setdefault(ev["inv"].id, (day, ev))
     summary = None
     if first_ev:
@@ -1854,6 +1870,8 @@ def redemption_calendar(request):
         "year": year, "month": month, "weeks": weeks,
         "prev_y": prev_y, "prev_m": prev_m, "next_y": next_y, "next_m": next_m,
         "event_count": sum(len(v) for v in events.values()),
+        # 이 달에 상환이 확정된 건수(상환 회차만 센다 — 한 투자는 한 번 상환된다)
+        "done_count": sum(1 for v in events.values() for e in v if e["done_label"]),
         "summary": summary,
         "active_nav": "calendar",
     })

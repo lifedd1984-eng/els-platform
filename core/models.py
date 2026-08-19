@@ -1241,6 +1241,38 @@ class Investment(models.Model):
         return round((self.redeemed_amount - self.amount) / self.amount * 100, 2)
 
     @property
+    def redeemed_round(self):
+        """상환이 일어난 회차 번호(1부터). 보유중이면 None.
+
+        상환된 뒤의 회차는 실제로 오지 않는다 — 4회차 상품이 1회차에서 상환되면
+        2~4회차 평가일은 발생하지 않는다. 상환 캘린더가 오지 않을 평가일을
+        그리지 않으려고 이 값을 본다.
+
+        근거가 둘인데 서로 어긋날 수 있어 **더 이른 쪽**을 택한다. 오지 않을
+        회차를 그리는 편이 지난 회차를 덜 그리는 편보다 나쁘기 때문이다.
+          · redeemed_at(상환일): 평가일 며칠 뒤 정산일이라 그 이전 마지막 회차.
+            사용자가 늦게 확정하면 기본값이 '오늘'이라 뒤 회차까지 넘어갈 수 있다.
+          · RedemptionVerdict(met=True): 배리어를 충족한 회차. 확정이 늦으면
+            check_redemptions가 다음 회차 판정도 쌓으므로 최신이 아니라 최소를 본다.
+        둘 다 못 쓰면 1차 — 근거가 없을 때 가장 적게 보여주는 값이다.
+        """
+        if self.status == "보유중":
+            return None
+        sched = self.schedule
+        if not sched:
+            return None
+        cands = []
+        if self.redeemed_at:
+            passed = [r["n"] for r in sched if r["date"] <= self.redeemed_at]
+            if passed:
+                cands.append(max(passed))
+        met = [v.round_no for v in self.verdicts.all() if v.met]
+        if met:
+            cands.append(min(met))
+        n = min(cands) if cands else 1
+        return max(1, min(n, len(sched)))
+
+    @property
     def first_eval_after_tax(self):
         """1차 평가 시 세후 실수령액 (조기상환 가정)."""
         sched = self.schedule
