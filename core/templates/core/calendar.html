@@ -51,7 +51,7 @@
     <i class="fa-solid fa-calculator" style="color:var(--blue-dark)"></i>
     {{ month }}월 {% if summary.real_n %}결과{% else %}예상 결과{% endif %}
     {% if summary.real_n %}<small style="font-weight:400;color:var(--text-3)">(실제 {{ summary.real_n }}건{% if summary.est_n %} + 추정 {{ summary.est_n }}건{% endif %})</small>
-    {% else %}<small style="font-weight:400;color:var(--text-3)">(조기상환 성공 가정)</small>{% endif %}
+    {% elif summary.est_n %}<small style="font-weight:400;color:var(--text-3)">(조기상환 성공 가정)</small>{% endif %}
   </div>
   <div class="stat-grid cols-5" style="margin-bottom:0">
     <div class="stat-card">
@@ -73,7 +73,7 @@
     </div>
     <div class="stat-card">
       <div class="stat-label">{% if summary.real_n %}상환금{% else %}예상 상환금{% endif %}</div>
-      <div class="stat-value" style="color:var(--green)">{{ summary.redeem_total|intcomma }}<small>원</small></div>
+      <div class="stat-value" style="color:{% if summary.amount_n %}var(--green){% else %}var(--text-3){% endif %}">{% if summary.amount_n %}{{ summary.redeem_total|intcomma }}<small>원</small>{% else %}<small>-</small>{% endif %}</div>
       {% if summary.real_n or summary.no_amount_n %}
       <div class="type-split">
         {% if summary.real_n %}<span><i class="dot" style="background:var(--green)"></i>실제 <b>{{ summary.real_n }}건</b> {{ summary.real_sum|intcomma }}원</span>{% endif %}
@@ -84,24 +84,23 @@
     </div>
     <div class="stat-card">
       <div class="stat-label">{% if summary.real_n %}세전수익{% else %}예상 세전수익{% endif %}</div>
-      <div class="stat-value" style="color:{% if summary.profit < 0 %}var(--red){% else %}var(--green){% endif %}">{% if summary.profit >= 0 %}+{% endif %}{{ summary.profit|intcomma }}<small>원</small></div>
+      <div class="stat-value" style="color:{% if not summary.amount_n %}var(--text-3){% elif summary.profit < 0 %}var(--red){% else %}var(--green){% endif %}">{% if summary.amount_n %}{% if summary.profit >= 0 %}+{% endif %}{{ summary.profit|intcomma }}<small>원</small>{% else %}<small>-</small>{% endif %}</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">{% if summary.real_n %}수익률{% else %}예상 수익률{% endif %} <small style="color:var(--text-3)">(투자금 대비)</small></div>
-      <div class="stat-value" style="color:{% if summary.return_rate < 0 %}var(--red){% elif summary.return_rate > 0 %}var(--green){% else %}var(--text-1){% endif %}">
+      <div class="stat-value" style="color:{% if summary.return_rate == None %}var(--text-3){% elif summary.return_rate < 0 %}var(--red){% elif summary.return_rate > 0 %}var(--green){% else %}var(--text-1){% endif %}">
         {% if summary.return_rate != None %}{% if summary.return_rate > 0 %}+{% endif %}{{ summary.return_rate }}<small>%</small>{% else %}<small>-</small>{% endif %}
       </div>
     </div>
   </div>
   <div style="font-size:11.5px;color:var(--text-3);line-height:1.6;margin-top:10px">
-    {% if summary.real_n %}이 달에 평가일이 있는 보유·상환 상품 기준입니다.
-      상환이 끝난 {{ summary.real_n }}건은 <b>실제 상환금</b>으로{% if summary.est_n %},
-      나머지 {{ summary.est_n }}건은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치로 집계했습니다.
-      추정분의 실제 결과는 평가일 종가로 결정됩니다.{% else %} 집계했습니다.{% endif %}
-    {% else %}이 달에 평가일이 있는 보유 상품 기준입니다.
-      예상 상환금·세전수익은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치이며 실제 결과는 평가일 종가로 결정됩니다.
+    이 달에 평가일이 있는 {% if summary.done_n %}보유·상환{% else %}보유{% endif %} 상품 기준입니다.
+    {% if summary.real_n %}상환이 끝나고 상환금이 등록된 {{ summary.real_n }}건은 <b>실제 상환금</b>으로{% if summary.est_n %},
+      아직 상환 전인 {{ summary.est_n }}건은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치로{% endif %} 집계했습니다.
+      {% if summary.est_n %}추정분의 실제 결과는 평가일 종가로 결정됩니다.{% endif %}
+    {% elif summary.est_n %}예상 상환금·세전수익은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치이며 실제 결과는 평가일 종가로 결정됩니다.
     {% endif %}
-    수익률은 세전수익을 {% if summary.no_amount_n %}산출 대상{% else %}대상{% endif %} 투자금액으로 나눈 값입니다(연환산 아님).
+    {% if summary.amount_n %}수익률은 세전수익을 {% if summary.no_amount_n %}산출 대상{% else %}대상{% endif %} 투자금액으로 나눈 값입니다(연환산 아님).{% endif %}
     {% if summary.no_amount_n %}<span style="color:var(--orange)">상환금을 알 수 없는 {{ summary.no_amount_n }}건(상환금 미등록 또는 상환 없이 지나간 회차)은 금액 집계에서 뺐습니다.</span>{% endif %}
   </div>
 </div>

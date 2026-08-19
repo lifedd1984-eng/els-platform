@@ -246,7 +246,8 @@ class CalendarSummaryTest(TestCase):
         self.assertIn("상환 완료 <b>1건</b>", html)
         self.assertIn("실제 <b>1건</b> 10,250,000원", html)
         self.assertIn("추정 <b>1건</b> 10,300,000원", html)
-        self.assertIn("상환이 끝난 1건은 <b>실제 상환금</b>", html)
+        self.assertIn("상환이 끝나고 상환금이 등록된 1건은 <b>실제 상환금</b>", html)
+        self.assertIn("아직 상환 전인 1건은", html)
         # 완료 건이 섞이면 '예상'을 뗀다 — 절반이 실제 값이기 때문이다
         self.assertNotIn("예상 상환금", html)
         self.assertNotIn("예상 세전수익", html)
@@ -260,6 +261,64 @@ class CalendarSummaryTest(TestCase):
         self.assertIn("예상 수익률", html)
         self.assertIn("(투자금 대비)", html)
         self.assertIn("+3.0", html)
+
+    # ── ⑧ 하단 설명의 건수가 카드 위 건수와 어긋나지 않는다 ──
+    # 2026-08-19 실제 렌더에서 잡았다. 하단이 real_n을 '상환이 끝난 N건',
+    # est_n을 '나머지 N건'으로 부르고 있었다. 상환금 미등록 건이 섞이면
+    # 둘 다 틀린다 — 같은 화면이 '상환 완료 2건'이라 해놓고 '상환이 끝난 1건'
+    # 이라 했고, 3건 중 1건을 뺀 '나머지'를 1건이라 했다.
+    def test_상환금_미등록이_섞여도_하단_건수가_카드와_맞는다(self):
+        self._inv(self._evals(), status="조기상환",          # 실제 1건
+                  redeemed_at=MA + timedelta(days=6), redeemed_amount=10_250_000)
+        self._inv(self._evals(), status="조기상환",          # 상환금 미등록
+                  redeemed_at=MA + timedelta(days=6), redeemed_amount=None,
+                  amount=15_000_000)
+        self._inv(self._evals())                             # 추정 1건
+        s = self._sum(MA)
+        self.assertEqual((s["done_n"], s["real_n"], s["est_n"], s["no_amount_n"]),
+                         (2, 1, 1, 1))
+        html = self._html(MA)
+        self.assertIn("상환 완료 <b>2건</b>", html)
+        # 하단이 real_n을 '상환이 끝난 N건'이라 부르면 위 2건과 어긋난다
+        self.assertNotIn("상환이 끝난 1건", html)
+        self.assertIn("상환이 끝나고 상환금이 등록된 1건은", html)
+        # '나머지 N건'도 어긋난다 — 3건 중 1건을 뺀 나머지는 2건이다
+        self.assertNotIn("나머지 1건", html)
+        self.assertIn("아직 상환 전인 1건은", html)
+        self.assertIn("상환금을 알 수 없는 1건", html)
+
+    # ── ⑨ 금액을 하나도 산출 못하면 0원을 지어내지 않는다 ──
+    # 2026-08-19 실제 렌더에서 잡았다. 산출 0건인데 '예상 상환금 0원',
+    # '예상 세전수익 +0원'을 초록색으로 보여줬다 — '상환금이 0원이었다'로
+    # 읽힌다. 실제로는 모르는 값이다. 수익률 칸은 이미 '-'였으므로
+    # 같은 원칙을 세 칸에 맞춘다.
+    def test_금액_산출이_0건이면_상환금도_세전수익도_대시로_둔다(self):
+        # 뒤 회차에서 상환된 건의 앞 회차만 있는 달 — 흔한 모양이다.
+        self._inv(self._evals(), status="조기상환",
+                  redeemed_at=MB + timedelta(days=6), redeemed_amount=EST_R2)
+        s = self._sum(MA)
+        self.assertEqual(s["amount_n"], 0)
+        self.assertEqual((s["redeem_total"], s["profit"]), (0, 0))
+        self.assertIsNone(s["return_rate"])
+        html = self._html(MA)
+        # 상환금·세전수익·수익률 세 칸이 모두 '-'
+        self.assertEqual(html.count("<small>-</small>"), 3)
+        self.assertNotIn(">0<small>원</small>", html)
+        self.assertNotIn("+0<small>원</small>", html)
+        # 건수·투자금액은 그대로 남는다
+        self.assertEqual((s["count"], s["invested"]), (1, 10_000_000))
+        self.assertIn("10,000,000", html)
+        # 추정이 0건이면 추정치 설명도, '조기상환 성공 가정' 부제도 띄우지 않는다
+        self.assertNotIn("조기상환에 성공했을 때", html)
+        self.assertNotIn("(조기상환 성공 가정)", html)
+
+    def test_상환금_미등록_완료_건만_있으면_보유_상환_기준으로_적는다(self):
+        # 상환이 끝난 건인데 '보유 상품 기준입니다'라고 적고 있었다.
+        self._inv(self._evals(), status="조기상환",
+                  redeemed_at=MA + timedelta(days=6), redeemed_amount=None)
+        html = self._html(MA)
+        self.assertIn("이 달에 평가일이 있는 보유·상환 상품 기준입니다.", html)
+        self.assertNotIn("이 달에 평가일이 있는 보유 상품 기준입니다.", html)
 
     def test_다른_사람의_완료_건은_요약에_안_잡힌다(self):
         other = get_user_model().objects.create_user("other2", password="x")
