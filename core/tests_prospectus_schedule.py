@@ -625,6 +625,129 @@ class SaveBehaviourTests(TestCase):
         self.assertIsNone(p.eval_dates)
 
 
+class MaturityEvalFixTests(TestCase):
+    """마지막 회차 교체 커맨드 — 만기 칸 하나만 바꾸고 조기상환 회차는 손대지 않는다.
+
+    SEIBro가 넣어 둔 조기상환 회차는 설명서 전수 대조에서 완벽히 일치한 값이다.
+    여기서 한 칸이라도 움직이면 조기상환 판정·알림이 통째로 어긋나므로,
+    '앞 회차 불변'을 모든 테스트에서 함께 못 박는다.
+    """
+
+    # KB증권 4486호 설명서 기준. SEIBro는 마지막 칸에 만기일(08-10)을 넣었고
+    # 설명서의 만기평가일은 08-06이다.
+    SEIBRO = ["2026-11-06", "2027-02-05", "2027-05-07", "2027-08-10"]
+    EARLY = ["2026-11-06", "2027-02-05", "2027-05-07"]
+    FIXED = ["2026-11-06", "2027-02-05", "2027-05-07", "2027-08-06"]
+
+    def _p(self, **kw):
+        kw.setdefault("prospectus_url", "http://x")
+        kw.setdefault("barriers_raw", [75, 70, 70, 65])
+        kw.setdefault("eval_dates", list(self.SEIBRO))
+        kw.setdefault("expiry_date", _d("2027-08-10"))
+        kw.setdefault("product_no", "4486")
+        return Product.objects.create(
+            issuer="KB증권", sub_end=_d("2026-08-07"),
+            base_eval_date=_d("2026-08-07"), **kw)
+
+    def _run(self, text=KB_4486, tables=None, **opts):
+        target = ("core.management.commands.parse_prospectus_dates"
+                  ".Command._fetch_text")
+        out = io.StringIO()
+        with patch(target, return_value=(text, tables or [])):
+            call_command("fix_maturity_eval_date", delay=0, stdout=out, **opts)
+        return out.getvalue()
+
+    def test_기본_실행은_아무것도_저장하지_않는다(self):
+        p = self._p()
+        text = self._run()
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.SEIBRO)
+        self.assertIn("교체 예정 1건", text)
+        self.assertIn("저장하지 않았다", text)
+
+    def test_apply하면_마지막_칸만_바뀐다(self):
+        p = self._p()
+        self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.FIXED)
+        # 조기상환 회차는 한 날도 움직이지 않아야 한다
+        self.assertEqual(p.eval_dates[:-1], self.EARLY)
+
+    def test_교체_뒤에도_확정_평가일로_읽힌다(self):
+        p = self._p()
+        self._run(apply=True)
+        p.refresh_from_db()
+        self.assertIsNotNone(p.fixed_eval_dates)
+        self.assertEqual(len(p.fixed_eval_dates), len(p.barriers_raw))
+        self.assertEqual(p.fixed_eval_dates[-1], _d("2027-08-06"))
+        # 마지막 회차가 직전 회차보다 뒤여야 스케줄이 성립한다
+        self.assertLess(p.fixed_eval_dates[-2], p.fixed_eval_dates[-1])
+
+    def test_설명서_URL이_없으면_대상이_아니다(self):
+        p = self._p(prospectus_url="")
+        text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.SEIBRO)
+        self.assertIn("대상: 0건", text)
+
+    def test_조기상환_회차가_다르면_손대지_않는다(self):
+        # 저장된 1회차가 설명서와 다르다 — 다른 차수의 설명서일 수 있어 근거가 없다
+        wrong = ["2026-11-05", "2027-02-05", "2027-05-07", "2027-08-10"]
+        p = self._p(eval_dates=list(wrong))
+        text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, wrong)
+        self.assertIn("상충 1건", text)
+
+    def test_설명서_회차수가_배리어와_다르면_저장하지_않는다(self):
+        # 배리어 5개인데 설명서는 조기상환 3 + 만기 1 = 4회차다
+        p = self._p(barriers_raw=[75, 70, 70, 70, 65],
+                    eval_dates=self.SEIBRO + ["2027-08-10"])
+        before = list(p.eval_dates)
+        text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, before)
+        self.assertIn("못 읽음 1건", text)
+
+    def test_회차수가_안_맞는_저장값은_애초에_대상이_아니다(self):
+        # eval_dates 4개 vs 배리어 3개 — fixed_eval_dates가 성립하지 않는다
+        p = self._p(barriers_raw=[75, 70, 65])
+        text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.SEIBRO)
+        self.assertIn("대상: 0건", text)
+
+    def test_이미_만기평가일이_들어_있으면_그대로_둔다(self):
+        # 마지막 칸이 만기일이 아니면 손댈 이유가 없다
+        p = self._p(eval_dates=list(self.FIXED))
+        text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.FIXED)
+        self.assertIn("대상: 0건", text)
+
+    def test_설명서를_못_읽으면_손대지_않는다(self):
+        p = self._p()
+        text = self._run(text="평가일이 하나도 적혀 있지 않은 문서", apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.SEIBRO)
+        self.assertIn("못 읽음 1건", text)
+
+    def test_삼성_월수익형도_최종기준가격을_읽는다(self):
+        # 삼성은 만기평가일을 '최종기준가격'으로 적는다. 포맷 판정이 어긋나면
+        # 월수익형이 통째로 '못 읽음'으로 빠진다.
+        seibro = ["2027-01-22", "2027-07-23", "2028-01-21", "2028-07-21",
+                  "2029-01-23", "2029-07-26"]
+        p = Product.objects.create(
+            issuer="삼성증권", product_no="31248", prospectus_url="http://x",
+            barriers_raw=[95, 90, 90, 85, 85, 40], sub_end=_d("2026-07-23"),
+            base_eval_date=_d("2026-07-23"), expiry_date=_d("2029-07-26"),
+            eval_dates=seibro)
+        self._run(text=SAMSUNG_31248_MONTHLY, apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, seibro[:-1] + ["2029-07-23"])
+        self.assertEqual(p.eval_dates[:-1], seibro[:-1])
+
+
 class MaturityGapReportTests(TestCase):
     """만기평가일 차이 보고 커맨드 — 읽기만 하고 아무것도 고치지 않는다."""
 
