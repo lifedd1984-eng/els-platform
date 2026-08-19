@@ -22,6 +22,12 @@
   저장된 앞 회차와 글자 그대로 같아야 한다.** 다르면 다른 차수의 설명서를 읽었거나
   둘 중 하나가 틀린 것이므로 손대지 않는다. 같은 상품번호가 차수마다 재사용되는
   발행사가 있어(메리츠 등) 이 대조가 유일하게 확실한 신원 확인이다.
+  대조에 앞서 회차 **수**부터 맞춰 본다. 개수가 다르면 앞 회차를 나란히 놓을 수조차
+  없어 '회차 하나가 밀렸다'가 '한 날이 다르다'로 둔갑한다.
+
+무엇을 안 했는지가 보여야 한다
+  손대지 않기로 한 건(상충·미저장·차이 0일)은 사유만 세지 않고 상품마다 한 줄씩
+  남긴다. 집계만 있으면 '못 읽음 12건'을 보고도 어느 12건인지 찾을 수가 없다.
 
 설명서가 없는 상품은 대상이 아니다
   2026-07-18 KOFIA 수집 이전 발행분 1,866건은 설명서 URL이 없어 실제 만기평가일을
@@ -111,7 +117,7 @@ class Command(BaseCommand):
 
         판정
           교체   — 설명서 조기상환 회차가 저장값과 같고 만기평가일도 정상
-          동일   — 이미 만기평가일이 들어 있다(고칠 게 없다)
+          동일   — 설명서 만기평가일이 저장값과 같다(차이 0일). 고칠 게 없다
           상충   — 설명서 조기상환 회차가 저장값과 다르다. 손대지 않는다
           미저장 — 설명서에서 읽지 못했다. 손대지 않는다
         """
@@ -119,14 +125,24 @@ class Command(BaseCommand):
         dates, why = extract_schedule(p, text, tables)
         if dates is None:
             return "미저장", None, why
+        # 회차 수부터 본다. 개수가 다르면 앞 회차를 나란히 맞대 볼 수조차 없고,
+        # 그 상태로 저장하면 len(eval_dates) != len(barriers_raw)가 되어
+        # fixed_eval_dates가 통째로 거짓이 된다.
+        # extract_schedule이 배리어 수와 맞을 때만 돌려주고 fixed_eval_dates도
+        # 같은 수를 요구하므로 실제로 걸릴 일은 없지만, 대조보다 먼저 못 박아
+        # '회차가 하나 밀렸다'가 '한 날이 다르다'로 둔갑하지 않게 한다.
+        if len(dates) != len(stored):
+            why = f"회차 수가 다름(저장 {len(stored)}개 vs 설명서 {len(dates)}개)"
+            return "미저장", None, why
         # 조기상환 회차가 한 날이라도 다르면 이 설명서가 이 상품의 것이라고
         # 단정할 수 없다. 마지막 칸만 바꾸는 작업이라도 근거가 없으면 안 한다.
-        if [d.isoformat() for d in dates[:-1]] != [d.isoformat() for d in stored[:-1]]:
-            diff = [i + 1 for i, (a, b) in enumerate(zip(stored, dates)) if a != b]
+        # 마지막 칸은 비교에서 뺀다 — 거기가 다른 것이 이 커맨드의 전제다.
+        diff = [i + 1 for i, (a, b) in enumerate(zip(stored[:-1], dates[:-1])) if a != b]
+        if diff:
             return "상충", None, f"조기상환 회차 불일치(회차 {diff})"
         new = stored[:-1] + [dates[-1]]
         if new == stored:
-            return "동일", None, why
+            return "동일", None, "설명서 만기평가일이 저장값과 같음(차이 0일)"
         # 회차 수는 구조적으로 안 바뀌지만, 바뀌면 fixed_eval_dates가 거짓이 되므로
         # 저장 직전에 한 번 더 못 박는다.
         if len(new) != len(stored) or len(new) != len(p.barriers_raw or []):
@@ -150,7 +166,7 @@ class Command(BaseCommand):
         fetcher = ParseCommand()
         gaps = Counter()                  # 차이 일수 → 건수
         by_issuer = defaultdict(Counter)  # 발행사 → {차이: 건수}
-        reasons = Counter()               # 미저장·상충 사유 → 건수
+        reasons = Counter()               # 손대지 않은 사유 → 건수
         changes = []                      # (product, 이전, 이후, 차이)
         same = conflict = skipped = failed = 0
 
@@ -165,8 +181,13 @@ class Command(BaseCommand):
                 continue
 
             verdict, new, why = self._verdict(p, text, tables)
+            # 손대지 않기로 한 건은 사유만 세지 말고 어느 상품인지 한 줄씩 남긴다.
+            # 집계만 있으면 '못 읽음 12건'을 보고도 어느 12건인지 못 찾아
+            # 사람이 확인할 수가 없다.
             if verdict == "동일":
                 same += 1
+                reasons[why] += 1
+                self.stdout.write(f"  [{p.id}] {p.issuer} {p.product_no} {why} — 고칠 것 없음")
             elif verdict == "상충":
                 conflict += 1
                 reasons[why] += 1
@@ -174,6 +195,7 @@ class Command(BaseCommand):
             elif verdict == "미저장":
                 skipped += 1
                 reasons[why] += 1
+                self.stdout.write(f"  [{p.id}] {p.issuer} {p.product_no} {why} — 손대지 않음")
             else:
                 old, now = p.fixed_eval_dates[-1], new[-1]
                 gap = (old - now).days
@@ -203,7 +225,7 @@ class Command(BaseCommand):
         verb = "교체함" if apply_ else "교체 예정"
         self.stdout.write("")
         self.stdout.write(self.style.SUCCESS(
-            f"[마지막 회차] {verb} {len(changes)}건 / 이미 만기평가일 {same}건 / "
+            f"[마지막 회차] {verb} {len(changes)}건 / 설명서와 차이 0일 {same}건 / "
             f"조기상환 회차 상충 {conflict}건 / 설명서에서 못 읽음 {skipped}건 / "
             f"다운로드 실패 {failed}건"))
 
@@ -227,10 +249,13 @@ class Command(BaseCommand):
 
         n = opts["show"]
         if changes:
-            self.stdout.write(f"\n샘플 {min(n, len(changes))}건 (마지막 회차 이전 → 이후)")
+            # 차이가 큰 순으로 보인다. 차이가 클수록 파싱이 엉뚱한 날을 집었을
+            # 가능성이 높아, 사람이 먼저 확인해야 할 건이 위로 온다.
+            self.stdout.write(f"\n샘플 {min(n, len(changes))}건 — 차이 큰 순 "
+                              f"(마지막 회차 이전 → 이후)")
             self.stdout.write(f"  {'발행사':<12} {'상품번호':>8} {'회차':>4} "
                               f"{'이전':>10} {'이후':>10} {'차이':>5}  만기일")
-            for p, old, now, gap in changes[:n]:
+            for p, old, now, gap in sorted(changes, key=lambda c: -c[3])[:n]:
                 self.stdout.write(
                     f"  {p.issuer:<12} {p.product_no:>8} {len(p.fixed_eval_dates):>4} "
                     f"{old!s:>10} {now!s:>10} {gap:+4d}일  {p.expiry_date}")

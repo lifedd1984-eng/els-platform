@@ -22,6 +22,7 @@ from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 
 from core.management.commands.parse_prospectus_dates import (
+    SAMSUNG_FORMATS,
     extract_early_dates,
     extract_maturity_date,
     extract_schedule,
@@ -748,6 +749,175 @@ class MaturityEvalFixTests(TestCase):
         self.assertEqual(p.eval_dates[:-1], seibro[:-1])
 
 
+class MaturityEvalFixGuardTests(TestCase):
+    """마지막 회차 교체 커맨드의 안전장치 — 근거가 흔들리면 저장하지 않는다.
+
+    확정 평가일 457건을 직접 고치는 커맨드다. 회차가 한 칸이라도 밀리면
+    조기상환 판정·알림·엑셀이 통째로 어긋나고, 회차 **수**가 바뀌면
+    fixed_eval_dates가 성립하지 않아 화면이 근사 스케줄로 되돌아간다.
+    그래서 '무엇을 안 하는가'를 실행 결과로 못 박는다.
+    """
+
+    FETCH = ("core.management.commands.parse_prospectus_dates"
+             ".Command._fetch_text")
+    SEIBRO = ["2026-11-06", "2027-02-05", "2027-05-07", "2027-08-10"]
+
+    def _kb(self, **kw):
+        kw.setdefault("eval_dates", list(self.SEIBRO))
+        kw.setdefault("barriers_raw", [75, 70, 70, 65])
+        return Product.objects.create(
+            issuer="KB증권", product_no="4486", prospectus_url="http://x",
+            sub_end=_d("2026-08-07"), base_eval_date=_d("2026-08-07"),
+            expiry_date=_d("2027-08-10"), **kw)
+
+    def _run(self, text=KB_4486, tables=None, **opts):
+        out = io.StringIO()
+        with patch(self.FETCH, return_value=(text, tables or [])):
+            call_command("fix_maturity_eval_date", delay=0, stdout=out, **opts)
+        return out.getvalue()
+
+    # ---------------------------------------------------------------- 회차 불일치
+    def test_불일치_사유는_앞_회차만_가리킨다(self):
+        # 마지막 칸이 다른 것은 이 커맨드의 전제다. 그 칸까지 '불일치 회차'로
+        # 세면 한 회차만 어긋난 건이 두 회차 어긋난 것처럼 보인다.
+        p = self._kb(eval_dates=["2026-11-05", "2027-02-05", "2027-05-07",
+                                 "2027-08-10"])
+        text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates,
+                         ["2026-11-05", "2027-02-05", "2027-05-07", "2027-08-10"])
+        self.assertIn("조기상환 회차 불일치(회차 [1])", text)
+        self.assertNotIn("회차 [1, 4]", text)
+
+    def test_불일치_회차가_여럿이면_전부_적는다(self):
+        p = self._kb(eval_dates=["2026-11-05", "2027-02-04", "2027-05-07",
+                                 "2027-08-10"])
+        text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates[0], "2026-11-05")
+        self.assertIn("조기상환 회차 불일치(회차 [1, 2])", text)
+
+    def test_상충_건은_상품번호가_로그에_남는다(self):
+        self._kb(eval_dates=["2026-11-05", "2027-02-05", "2027-05-07",
+                             "2027-08-10"])
+        text = self._run(apply=True)
+        self.assertIn("KB증권 4486", text)
+        self.assertIn("손대지 않음", text)
+
+    def test_못_읽은_건도_상품번호가_로그에_남는다(self):
+        # 사유만 집계하고 넘어가면 '못 읽음 12건'을 보고도 어느 12건인지
+        # 사람이 찾을 수가 없다.
+        self._kb()
+        text = self._run(text="평가일이 하나도 적혀 있지 않은 문서", apply=True)
+        self.assertIn("KB증권 4486", text)
+        self.assertIn("못 읽음 1건", text)
+
+    def test_차이가_0일이면_사유가_남고_저장하지_않는다(self):
+        # 설명서 만기평가일이 만기일과 같은 날인 경우. 2026-08-13 실측에서
+        # 457건 전부 어긋났으므로 0일은 그 자체로 눈여겨볼 값이다.
+        same_day = KB_4486.replace("만기평가일 : 2027년 08월 06일",
+                                   "만기평가일 : 2027년 08월 10일")
+        p = self._kb()
+        text = self._run(text=same_day, apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.SEIBRO)
+        self.assertIn("차이 0일", text)
+        self.assertIn("KB증권 4486", text)
+
+    # ---------------------------------------------------------------- 회차 수
+    def test_설명서_회차가_더_많으면_상충이_아니라_미저장이다(self):
+        # extract_schedule이 배리어 수를 검사하므로 실제로는 여기까지 오지
+        # 않지만, 오면 fixed_eval_dates가 깨지는 자리다. 앞 회차 대조보다
+        # 먼저 걸려야 '회차가 하나 밀렸다'가 '한 날이 다르다'로 둔갑하지 않는다.
+        p = self._kb()
+        longer = _dates("2026-11-06", "2027-02-05", "2027-05-07", "2027-08-06",
+                        "2027-11-05")
+        with patch("core.management.commands.fix_maturity_eval_date"
+                   ".extract_schedule", return_value=(longer, "차수표")):
+            text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.SEIBRO)
+        self.assertIn("회차 수가 다름(저장 4개 vs 설명서 5개)", text)
+        self.assertNotIn("상충 1건", text)
+
+    def test_설명서_회차가_더_적어도_미저장이다(self):
+        p = self._kb()
+        shorter = _dates("2026-11-06", "2027-02-05", "2027-08-06")
+        with patch("core.management.commands.fix_maturity_eval_date"
+                   ".extract_schedule", return_value=(shorter, "차수표")):
+            text = self._run(apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, self.SEIBRO)
+        self.assertIn("회차 수가 다름(저장 4개 vs 설명서 3개)", text)
+
+    def test_어떤_설명서를_읽어도_회차_수와_앞_회차는_그대로다(self):
+        """서로 다른 발행사의 설명서를 전부 물려 봐도 불변식이 깨지지 않는다.
+
+        _fetch_text를 한 값으로 고정하므로 모든 상품이 '남의 설명서'를 읽는
+        상황이 된다. 그래도 (1) eval_dates 개수 = 배리어 개수, (2) 앞 회차
+        전부 그대로, (3) 마지막 칸은 만기일보다 앞으로만 움직인다.
+        """
+        made = [
+            # (발행사, 상품번호, 배리어수, 조기상환 회차, 만기일)
+            ("KB증권", "4486", 4,
+             ["2026-11-06", "2027-02-05", "2027-05-07"], "2027-08-10"),
+            ("키움증권", "4126", 6,
+             ["2027-01-25", "2027-07-23", "2028-01-24", "2028-07-24",
+              "2029-01-23"], "2029-07-25"),
+            ("신한투자증권", "27859", 12,
+             ["2026-11-09", "2027-02-05", "2027-05-07", "2027-08-06",
+              "2027-11-05", "2028-02-07", "2028-04-28", "2028-08-07",
+              "2028-11-07", "2029-02-07", "2029-05-02"], "2029-08-10"),
+            ("삼성증권", "31248", 6,
+             ["2027-01-22", "2027-07-23", "2028-01-21", "2028-07-21",
+              "2029-01-23"], "2029-07-26"),
+        ]
+        early_by_id = {}
+        for issuer, no, n_bar, early, expiry in made:
+            p = Product.objects.create(
+                issuer=issuer, product_no=no, prospectus_url="http://x",
+                barriers_raw=[70] * n_bar, sub_end=_d("2026-07-22"),
+                base_eval_date=_d("2026-07-23"), expiry_date=_d(expiry),
+                eval_dates=early + [expiry])
+            early_by_id[p.id] = early
+
+        # 남의 설명서부터 물린다. 그때는 아직 마지막 칸이 만기일이라 네 건 모두
+        # 대상으로 잡혀 가드를 실제로 통과해야 한다. 제 설명서는 맨 뒤에 둔다.
+        for text in ("평가일이 없는 문서", NH_369, KYOBO_21, MERITZ_525,
+                     KB_4496, SAMSUNG_31243,
+                     KB_4486, KIWOOM_4126, SHINHAN_27859,
+                     SAMSUNG_31248_MONTHLY):
+            self._run(text=text, apply=True)
+            for p in Product.objects.all():
+                early = early_by_id[p.id]
+                self.assertEqual(len(p.eval_dates), len(p.barriers_raw))
+                self.assertIsNotNone(p.fixed_eval_dates)
+                self.assertEqual(p.eval_dates[:-1], early)
+                self.assertLessEqual(_d(p.eval_dates[-1]), p.expiry_date)
+                self.assertLess(_d(early[-1]), _d(p.eval_dates[-1]))
+
+        # 헛돌지 않았는지 — 제 설명서를 만난 네 건은 전부 실제로 교체됐어야 한다.
+        for p in Product.objects.all():
+            self.assertLess(_d(p.eval_dates[-1]), p.expiry_date,
+                            f"{p.issuer} {p.product_no}가 교체되지 않았다")
+
+    # ---------------------------------------------------------------- 만기평가일
+    def test_만기평가일_후보가_여럿이면_가장_늦은_날로_교체한다(self):
+        # 키움 4126호는 후보가 [07/19, 07/20, 07/23]이고 만기일이 07/25다.
+        seibro = ["2027-01-25", "2027-07-23", "2028-01-24", "2028-07-24",
+                  "2029-01-23", "2029-07-25"]
+        p = Product.objects.create(
+            issuer="키움증권", product_no="4126", prospectus_url="http://x",
+            barriers_raw=[90, 90, 85, 85, 80, 45], sub_end=_d("2026-07-22"),
+            base_eval_date=_d("2026-07-23"), expiry_date=_d("2029-07-25"),
+            eval_dates=list(seibro))
+        text = self._run(text=KIWOOM_4126, apply=True)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, seibro[:-1] + ["2029-07-23"])
+        self.assertEqual(p.eval_dates[:-1], seibro[:-1])
+        self.assertIn("+2일", text)
+
+
 class MaturityGapReportTests(TestCase):
     """만기평가일 차이 보고 커맨드 — 읽기만 하고 아무것도 고치지 않는다."""
 
@@ -768,3 +938,50 @@ class MaturityGapReportTests(TestCase):
         text = out.getvalue()
         self.assertIn("마지막 회차가 다른 건 1건", text)
         self.assertIn("+4일", text)     # 2027-08-10 vs 2027-08-06
+
+    def test_삼성_월수익형도_확인_못_함으로_빠지지_않는다(self):
+        # 삼성은 만기평가일을 '최종기준가격'으로 적는다. 포맷을 '중간기준가격'
+        # 하나로만 보면 월수익형이 통째로 '확인 못 함'으로 빠졌다.
+        seibro = ["2027-01-22", "2027-07-23", "2028-01-21", "2028-07-21",
+                  "2029-01-23", "2029-07-26"]
+        p = Product.objects.create(
+            issuer="삼성증권", product_no="31248", prospectus_url="http://x",
+            barriers_raw=[95, 90, 90, 85, 85, 40], sub_end=_d("2026-07-23"),
+            base_eval_date=_d("2026-07-23"), expiry_date=_d("2029-07-26"),
+            eval_dates=seibro)
+        target = ("core.management.commands.parse_prospectus_dates"
+                  ".Command._fetch_text")
+        out = io.StringIO()
+        with patch(target, return_value=(SAMSUNG_31248_MONTHLY, [])):
+            call_command("report_maturity_eval_gap", delay=0, stdout=out)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, seibro)      # 읽기 전용
+        text = out.getvalue()
+        self.assertIn("마지막 회차가 다른 건 1건", text)
+        self.assertIn("확인 못 함 0건", text)
+        self.assertIn("+3일", text)     # 2029-07-26 vs 2029-07-23
+
+    def test_삼성_판정_확대가_다른_발행사에는_닿지_않는다(self):
+        # samsung 플래그는 포맷명으로만 켜진다. 삼성 외 포맷은 물론이고
+        # 파싱 실패 사유 문자열도 SAMSUNG_FORMATS에 들어가면 안 된다.
+        for label, text, tables in (
+                ("KB_4486", KB_4486, None), ("KB_4496", KB_4496, None),
+                ("NH_369", NH_369, None), ("KYOBO_21", KYOBO_21, None),
+                ("KIWOOM_4126", KIWOOM_4126, None),
+                ("MERITZ_525", MERITZ_525, None),
+                ("SHINHAN_27859", SHINHAN_27859, None),
+                ("HANWHA_9555", HANWHA_9555_TEXT, HANWHA_9555_TABLES),
+                ("HANA_17786", HANA_17786_TEXT, HANA_17786_TABLES),
+                ("빈 문서", "평가일이 없는 문서", None)):
+            with self.subTest(label):
+                _dates_, fmt = extract_early_dates(text, tables)
+                self.assertNotIn(fmt, SAMSUNG_FORMATS)
+
+    def test_삼성_두_포맷만_최종기준가격을_본다(self):
+        for text, expected in ((SAMSUNG_31243, "중간기준가격"),
+                               (SAMSUNG_31248_MONTHLY, "월수익 중간기준가격")):
+            with self.subTest(expected):
+                _dates_, fmt = extract_early_dates(text)
+                self.assertEqual(fmt, expected)
+                self.assertIn(fmt, SAMSUNG_FORMATS)
+        self.assertEqual(SAMSUNG_FORMATS, ("중간기준가격", "월수익 중간기준가격"))
