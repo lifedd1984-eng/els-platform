@@ -123,6 +123,24 @@ SAMSUNG_31243 = (
     "2029년 01월 23일, 2029년 04월 23일 각 종가 ○ 최종기준가격 : 2029년 07월 23일 종가"
 )
 
+# 삼성증권 31248호 — 월수익형. 나열된 35개는 매월 지급 평가일이라 조기상환 회차가
+# 아니고, 그 중 6·12·18·24·30번째만 조기상환 평가일이다. 한 칸만 밀려도 조용히
+# 틀린 확정값이 남으므로 전문을 그대로 박아 둔다(공백 정규화만 함).
+# '12차 월수익 중간기준 / 가격결정일' 사이에 쪽 머리말이 끼어드는 것도 원문 그대로다.
+SAMSUNG_31248_MONTHLY = (
+    "○ 최초기준가격 : 2026년 07월 23일종가 ○ 월수익 중간기준가격 : 2026년 08월 21일, 2026년 09월 18일, "
+    "2026년 10월 23일, 2026년 11월 20일, 2026년 12월 23일, 2027년 01월 22일, 2027년 02월 22일, "
+    "2027년 03월 23일, 2027년 04월 23일, 2027년 05월 21일, 2027년 06월 23일, 2027년 07월 23일, "
+    "2027년 08월 23일, 2027년 09월 22일, 2027년 10월 22일, 2027년 11월 22일, 2027년 12월 23일, "
+    "2028년 01월 21일, 2028년 02월 22일, 2028년 03월 23일, 2028년 04월 21일, 2028년 05월 23일, "
+    "2028년 06월 23일, 2028년 07월 21일, 2028년 08월 23일, 2028년 09월 21일, 2028년 10월 23일, "
+    "2028년 11월 22일, 2028년 12월 22일, 2029년 01월 23일, 2029년 02월 22일, 2029년 03월 23일, "
+    "2029년 04월 23일, 2029년 05월 23일, 2029년 06월 22일 각 종가 "
+    "○ 자동조기상환가격 : 6차 월수익 중간기준가격결정일, 12차 월수익 중간기준 전자공시시스템 "
+    "dart.fss.or.kr Page 75 가격결정일, 18차 월수익 중간기준가격결정일, 24차 월수익 중간기준가격결정 일, "
+    "30차 월수익 중간기준가격결정일 각 종가 ○ 최종기준가격 : 2029년 07월 23일종가"
+)
+
 # 교보증권 21호 — 만기평가일에 콜론이 없는 표 형태.
 KYOBO_21 = (
     "○ 자동조기상환평가일 및 상환금액 차수 자동조기상환평가일 조건 상환금액(세전) "
@@ -338,6 +356,82 @@ class FormatCoverageTests(SimpleTestCase):
             "2028-07-24", "2028-11-24", "2029-03-26", "2029-07-24"))
 
 
+class SamsungMonthlyTurnRuleTests(SimpleTestCase):
+    """삼성증권 월수익형 — 나열된 35개 중 규칙이 가리키는 번호만 조기상환 회차다.
+
+    이 파일에서 유일하게 '목록의 순서 ≠ 회차'인 포맷이라 인덱스 오프셋이 유일한
+    위험이다. 6차가 1-based인지 0-based인지, 목록에 최초기준가격이 들어가는지에 따라
+    한 달씩 밀린다. 그래서 기대값을 SEIBro 확정값으로 못 박고, 한 칸 앞·뒤 값이
+    나오면 반드시 실패하게 해 뒀다.
+    """
+
+    BARRIERS = [95, 90, 90, 85, 85, 40]
+    # SEIBro 확정값(ISIN KR6SS0008FY4). 2026-08-19 운영 DB 읽기 전용 조회.
+    SEIBRO_EARLY = ["2027-01-22", "2027-07-23", "2028-01-21", "2028-07-21", "2029-01-23"]
+    # 같은 목록을 한 칸 앞(0-based)·한 칸 뒤로 읽었을 때 나오는 값. 절대 나오면 안 된다.
+    SHIFTED_BACK = ["2026-12-23", "2027-06-23", "2027-12-23", "2028-06-23", "2028-12-22"]
+    SHIFTED_FWD = ["2027-02-22", "2027-08-23", "2028-02-22", "2028-08-23", "2029-02-22"]
+
+    def _p(self, **kw):
+        kw.setdefault("barriers_raw", self.BARRIERS)
+        return _product(issuer="삼성증권", product_no="31248",
+                        base_eval_date=_d("2026-07-23"), sub_end=_d("2026-07-23"),
+                        expiry_date=_d("2029-07-26"), **kw)
+
+    def test_조기상환_5회차가_SEIBro_확정값과_같다(self):
+        dates, why = extract_schedule(self._p(), SAMSUNG_31248_MONTHLY)
+        self.assertEqual(why, "월수익 중간기준가격")
+        self.assertEqual([d.isoformat() for d in dates[:-1]], self.SEIBRO_EARLY)
+        # 삼성은 만기평가일을 '최종기준가격'으로 적는다. 만기일(2029-07-26)이 아니다.
+        self.assertEqual(dates[-1], _d("2029-07-23"))
+
+    def test_한_칸_밀린_값은_나오지_않는다(self):
+        dates, _ = extract_schedule(self._p(), SAMSUNG_31248_MONTHLY)
+        got = [d.isoformat() for d in dates[:-1]]
+        self.assertNotEqual(got, self.SHIFTED_BACK)
+        self.assertNotEqual(got, self.SHIFTED_FWD)
+        # 목록의 5·6·7번째를 직접 확인 — 6차는 여섯 번째다(1-based)
+        early, _ = extract_early_dates(SAMSUNG_31248_MONTHLY)
+        self.assertEqual(early[0], _d("2027-01-22"))
+
+    def test_규칙이_없는_일반_삼성_상품은_목록_그대로_쓴다(self):
+        """'자동조기상환가격' 항목이 없으면 중간기준가격 목록 자체가 회차다."""
+        p = _product(issuer="삼성증권", barriers_raw=[90] * 6 + [85] * 3 + [80, 80, 75],
+                     base_eval_date=_d("2026-07-23"), expiry_date=_d("2029-07-25"))
+        dates, why = extract_schedule(p, SAMSUNG_31243)
+        self.assertEqual(why, "중간기준가격")
+        self.assertEqual(dates[0], _d("2026-10-23"))
+
+    def test_차수가_목록_범위를_넘으면_저장하지_않는다(self):
+        text = SAMSUNG_31248_MONTHLY.replace("30차 월수익", "40차 월수익")
+        dates, why = extract_early_dates(text)
+        self.assertIsNone(dates)
+        self.assertIn("범위 밖", why)
+
+    def test_차수가_오름차순이_아니면_저장하지_않는다(self):
+        text = SAMSUNG_31248_MONTHLY.replace("18차 월수익", "11차 월수익")
+        dates, why = extract_early_dates(text)
+        self.assertIsNone(dates)
+        self.assertIn("오름차순", why)
+
+    def test_규칙이_중간기준가격을_가리키지_않으면_저장하지_않는다(self):
+        text = SAMSUNG_31248_MONTHLY.replace(
+            "○ 자동조기상환가격 : 6차 월수익 중간기준가격결정일, 12차 월수익 중간기준 전자공시시스템 "
+            "dart.fss.or.kr Page 75 가격결정일, 18차 월수익 중간기준가격결정일, "
+            "24차 월수익 중간기준가격결정 일, 30차 월수익 중간기준가격결정일 각 종가",
+            "○ 자동조기상환가격 : 6차 월수익 지급평가일, 12차 월수익 지급평가일 각 종가")
+        dates, why = extract_early_dates(text)
+        self.assertIsNone(dates)
+        self.assertIn("중간기준가격을 가리키지 않음", why)
+
+    def test_회차수가_배리어수와_다르면_저장하지_않는다(self):
+        # 규칙은 5회차인데 배리어가 6개가 아니면 회차 정렬을 믿을 수 없다
+        dates, why = extract_schedule(self._p(barriers_raw=[95, 90, 85, 40]),
+                                      SAMSUNG_31248_MONTHLY)
+        self.assertIsNone(dates)
+        self.assertIn("배리어", why)
+
+
 class MaturityDateRuleTests(SimpleTestCase):
     """만기평가일이 여러 날 나열되면 가장 늦은 날을 쓴다."""
 
@@ -402,9 +496,10 @@ class RejectionTests(SimpleTestCase):
         self.assertIsNone(dates)
         self.assertIn("이전", why)
 
-    def test_삼성_월수익형은_회차수가_안_맞아_저장하지_않는다(self):
-        # 중간기준가격이 35개(매월)인데 조기상환은 6회차뿐인 상품 — 골라내는 규칙을
-        # 세우지 않았으므로 근사로 남긴다. 틀린 확정값보다 낫다.
+    def test_월별_나열만_있고_차수_규칙이_없으면_저장하지_않는다(self):
+        # 중간기준가격이 매월 나열됐는데 '자동조기상환가격' 규칙 항목이 없으면
+        # 목록의 몇 번째가 조기상환 회차인지 가릴 근거가 없다. 그때는 목록 전체가
+        # 회차로 남아 배리어 수와 어긋나므로 근사로 남긴다. 틀린 확정값보다 낫다.
         mid = ", ".join(f"2026년 {m:02d}월 21일" for m in range(1, 13))
         text = f"○ 중간기준가격 : {mid} 각 종가 ○ 최종기준가격 : 2029년 07월 23일 종가"
         p = _product(barriers_raw=[95, 90, 90, 85, 85, 40],
@@ -495,6 +590,30 @@ class SaveBehaviourTests(TestCase):
         p.refresh_from_db()
         self.assertEqual(p.eval_dates, seibro)
         self.assertIn("상충 1건", out.getvalue())
+
+    def test_삼성_월수익형_근사였던_상품에_평가일을_채운다(self):
+        p = Product.objects.create(
+            issuer="삼성증권", product_no="2926", product_type="ELB",
+            prospectus_url="http://x", barriers_raw=[100] * 6,
+            sub_end=_d("2026-07-23"), expiry_date=_d("2029-07-25"))
+        self._run(SAMSUNG_31248_MONTHLY)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, [
+            "2027-01-22", "2027-07-23", "2028-01-21", "2028-07-21", "2029-01-23",
+            "2029-07-23"])
+
+    def test_삼성_월수익형_확정분은_덮어쓰지_않는다(self):
+        # SEIBro가 넣어 둔 값(마지막 칸이 만기일)을 그대로 둔다
+        seibro = ["2027-01-22", "2027-07-23", "2028-01-21", "2028-07-21",
+                  "2029-01-23", "2029-07-26"]
+        p = Product.objects.create(
+            issuer="삼성증권", product_no="31248", prospectus_url="http://x",
+            barriers_raw=[95, 90, 90, 85, 85, 40], sub_end=_d("2026-07-23"),
+            base_eval_date=_d("2026-07-23"), expiry_date=_d("2029-07-26"),
+            eval_dates=seibro)
+        self._run(SAMSUNG_31248_MONTHLY)
+        p.refresh_from_db()
+        self.assertEqual(p.eval_dates, seibro)
 
     def test_파싱_실패하면_평가일을_건드리지_않는다(self):
         p = Product.objects.create(

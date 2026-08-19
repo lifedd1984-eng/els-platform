@@ -96,11 +96,12 @@ def extract_dates(text):
 
 
 # ── 조기상환 평가일 스케줄 패턴 ────────────────────────────────────────
-# 설명서 999건 표본 조사 결과 포맷은 네 가지다.
+# 설명서 999건 표본 조사 결과 포맷은 다섯 가지다.
 #   ① 차수표     "차수 자동조기상환평가일 … 1차 2026년 11월 09일 2차 …"  (14개사)
 #   ② 괄호나열   "자동조기상환평가일 : (1) 2026년 10월 22일, (2) …"      (NH투자증권)
 #   ③ 중간기준가격 "중간기준가격 : 2026년 10월 23일, 2027년 01월 22일 …"  (삼성증권)
 #   ④ 리자드     "2-1차 / 2-2차"처럼 한 회차가 두 줄로 쪼개진 표          (일부 상품)
+#   ⑤ 월수익 중간기준가격 — ③의 변형. 날짜 목록이 조기상환 회차가 아니다  (삼성증권)
 # 표는 반드시 '스케줄 머리말 ~ 다음 항목' 사이에서만 읽는다. 월수익지급평가일·
 # 쿠폰지급평가일이 바로 뒤에 36회짜리 표로 붙는 상품이 있어 창을 안 끊으면 섞인다.
 SCHED_HEADS = [
@@ -125,6 +126,31 @@ LIZARD_RE = re.compile(r"(?<![\d\-])(\d{1,2})\s*-\s*(\d{1,2})\s*차\s*(?:" + D +
 PAREN_RE = re.compile(r"\((\d{1,2})\)\s*" + D)
 SAMSUNG_MID = re.compile(r"중간\s*기준\s*가격\s*[:：]\s*((?:" + D + r"\s*[,，]?\s*)+)")
 SAMSUNG_FIN = re.compile(r"최종\s*기준\s*가격\s*[:：]\s*((?:" + D + r"\s*[,，]?\s*)+)")
+
+# 삼성증권 월수익형(월지급식) — ③의 변형이라 따로 가려야 한다.
+# 일반 삼성 상품은 '○ 중간기준가격 : …'에 적힌 날짜가 그대로 조기상환 회차다.
+# 월수익형은 그 목록이 **매월 지급 평가일 35개**라 회차가 아니고, 그 중 몇 번째를
+# 조기상환에 쓰는지 바로 다음 항목에 규칙으로 적혀 있다(삼성 31248호 원문):
+#   "○ 월수익 중간기준가격 : 2026년 08월 21일, 2026년 09월 18일, … 2029년 06월 22일 각 종가"
+#   "○ 자동조기상환가격 : 6차 월수익 중간기준가격결정일, 12차 월수익 중간기준가격결정일,
+#    18차 …, 24차 …, 30차 월수익 중간기준가격결정일 각 종가"
+# 번호는 **1-based**다. 목록에 최초기준가격은 들어 있지 않고('○ 최초기준가격 : …'은
+# 별도 항목) 6번째가 곧 발행 6개월 뒤라 오프셋이 밀 자리가 없다. SEIBro 확정값이
+# 있는 4건(31248·31280·31313·31343) 전수를 6·12·18·24·30번째로 뽑아 대조했더니
+# 20개 날짜가 전부 일치했고, 한 칸 앞·한 칸 뒤로는 4건 모두 어긋났다. (2026-08-19)
+#
+# 이 규칙 항목이 없으면 손대지 않는다 — 그때는 목록 자체가 회차인 일반 삼성 상품이다
+# (표본 10건 전수 확인: 월수익형 11건은 이 항목이 있고 일반형 10건은 없다).
+# 다음 항목(○)을 넘지 않고 '각 종가'에서 끊어, 뒤따르는 손익구조표의 '1차·2차'를
+# 회차로 잘못 읽지 않게 한다.
+SAMSUNG_TURN_RULE = re.compile(
+    r"자동\s*조기\s*상환\s*가격\s*[:：]\s*([^○]{0,600}?)각\s*종가")
+SAMSUNG_RULE_REF = re.compile(r"중\s*간\s*기\s*준")
+# 앞에 숫자·하이픈이 붙은 "3-1차"를 "1차"로 잘못 읽으면 회차가 통째로 밀린다
+SAMSUNG_TURN_NO = re.compile(r"(?<![\d\-])(\d{1,2})\s*차")
+
+# extract_maturity_date가 '최종기준가격'을 만기평가일로 읽어야 하는 포맷
+SAMSUNG_FORMATS = ("중간기준가격", "월수익 중간기준가격")
 # 콜론이 없는 표 형태("만기평가일 2029년 07월 30일" — 교보증권)도 받는다.
 # 날짜가 바로 뒤에 붙어야만 매칭되므로 "만기평가일(포함)까지" 같은 본문은 안 걸린다.
 MATURITY_RE = re.compile(r"만기\s*평가일\s*[:：]?\s*((?:" + D + r"\s*[,，]?\s*)+)")
@@ -178,6 +204,35 @@ def extract_early_dates(text, tables=None):
     return None, why or twhy or "스케줄 구간 미검출"
 
 
+def _samsung_turn_rule(text, n_mid):
+    """'자동조기상환가격' 규칙이 가리키는 중간기준가격 번호(1-based) 목록.
+
+    반환
+      (번호목록, None) — 월수익형. 그 번호의 중간기준가격만 조기상환 평가일이다.
+      (None, None)     — 규칙 항목 자체가 없다. 일반 삼성 상품이므로 손대지 않는다.
+      (None, 사유)     — 규칙은 있는데 못 읽었다. 이 경우 저장하면 안 된다.
+
+    한 칸만 밀려도 조용히 틀린 확정값이 남으므로, 규칙을 확실히 읽지 못하면
+    번호를 하나도 돌려주지 않는다.
+    """
+    m = SAMSUNG_TURN_RULE.search(text)
+    if not m:
+        return None, None
+    seg = m.group(1)
+    # 이 규칙이 '중간기준가격'을 가리키는지부터 본다. 다른 것을 가리키는 표기가
+    # 나오면 근거가 사라지므로 저장하지 않는다.
+    if not SAMSUNG_RULE_REF.search(seg):
+        return None, "자동조기상환가격 규칙이 중간기준가격을 가리키지 않음"
+    turns = [int(t) for t in SAMSUNG_TURN_NO.findall(seg)]
+    if not turns:
+        return None, "자동조기상환가격 규칙에서 차수를 못 읽음"
+    if any(a >= b for a, b in zip(turns, turns[1:])):
+        return None, f"자동조기상환가격 차수가 오름차순이 아님 {turns}"
+    if turns[0] < 1 or turns[-1] > n_mid:
+        return None, f"자동조기상환가격 차수 {turns}가 중간기준가격 {n_mid}개 범위 밖"
+    return turns, None
+
+
 def _early_dates_from_text(text):
     """정규화 본문에서 차수표·괄호나열·중간기준가격을 순서대로 시도한다."""
     sec = _schedule_section(text)
@@ -229,9 +284,14 @@ def _early_dates_from_text(text):
     m = SAMSUNG_MID.search(text)
     if m:
         dates = _dates_in(m.group(1))
-        if dates and all(a < b for a, b in zip(dates, dates[1:])):
-            return dates, "중간기준가격"
-        return None, "중간기준가격 날짜 이상"
+        if not dates or any(a >= b for a, b in zip(dates, dates[1:])):
+            return None, "중간기준가격 날짜 이상"
+        turns, why = _samsung_turn_rule(text, len(dates))
+        if why:
+            return None, why
+        if turns:
+            return [dates[t - 1] for t in turns], "월수익 중간기준가격"
+        return dates, "중간기준가격"
     return None, None
 
 
@@ -314,7 +374,7 @@ def extract_schedule(product, text, tables=None):
     early, why = extract_early_dates(text, tables)
     if early is None:
         return None, why
-    maturity = extract_maturity_date(text, samsung=(why == "중간기준가격"))
+    maturity = extract_maturity_date(text, samsung=(why in SAMSUNG_FORMATS))
     if maturity is None:
         return None, "만기평가일 미검출"
     dates = early + [maturity]
