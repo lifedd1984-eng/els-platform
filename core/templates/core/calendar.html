@@ -49,8 +49,9 @@
 <div class="card" style="padding:14px 16px">
   <div class="card-title" style="padding:0 0 12px">
     <i class="fa-solid fa-calculator" style="color:var(--blue-dark)"></i>
-    {{ month }}월 예상 결과
-    <small style="font-weight:400;color:var(--text-3)">(조기상환 성공 가정)</small>
+    {{ month }}월 {% if summary.real_n %}결과{% else %}예상 결과{% endif %}
+    {% if summary.real_n %}<small style="font-weight:400;color:var(--text-3)">(실제 {{ summary.real_n }}건{% if summary.est_n %} + 추정 {{ summary.est_n }}건{% endif %})</small>
+    {% else %}<small style="font-weight:400;color:var(--text-3)">(조기상환 성공 가정)</small>{% endif %}
   </div>
   <div class="stat-grid cols-5" style="margin-bottom:0">
     <div class="stat-card">
@@ -58,6 +59,7 @@
       <div class="stat-value">{{ summary.count }}<small>건</small></div>
       <div class="type-split">
         <span>예정 <b>{{ summary.upcoming }}건</b></span>
+        {% if summary.done_n %}<span>상환 완료 <b>{{ summary.done_n }}건</b></span>{% endif %}
         <span>지남 <b>{{ summary.past }}건</b></span>
       </div>
     </div>
@@ -70,27 +72,37 @@
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">예상 상환금</div>
-      <div class="stat-value" style="color:var(--green)">{{ summary.expected|intcomma }}<small>원</small></div>
-      {% if summary.expected_n < summary.count %}
-      <div class="type-split"><span style="color:var(--text-3)">{{ summary.expected_n }}건 산출</span></div>
+      <div class="stat-label">{% if summary.real_n %}상환금{% else %}예상 상환금{% endif %}</div>
+      <div class="stat-value" style="color:var(--green)">{{ summary.redeem_total|intcomma }}<small>원</small></div>
+      {% if summary.real_n or summary.no_amount_n %}
+      <div class="type-split">
+        {% if summary.real_n %}<span><i class="dot" style="background:var(--green)"></i>실제 <b>{{ summary.real_n }}건</b> {{ summary.real_sum|intcomma }}원</span>{% endif %}
+        {% if summary.real_n and summary.est_n %}<span><i class="dot" style="background:var(--blue)"></i>추정 <b>{{ summary.est_n }}건</b> {{ summary.est_sum|intcomma }}원</span>{% endif %}
+        {% if summary.no_amount_n %}<span style="color:var(--text-3)">{{ summary.amount_n }}건 산출</span>{% endif %}
+      </div>
       {% endif %}
     </div>
     <div class="stat-card">
-      <div class="stat-label">예상 세전수익</div>
-      <div class="stat-value" style="color:var(--green)">+{{ summary.profit|intcomma }}<small>원</small></div>
+      <div class="stat-label">{% if summary.real_n %}세전수익{% else %}예상 세전수익{% endif %}</div>
+      <div class="stat-value" style="color:{% if summary.profit < 0 %}var(--red){% else %}var(--green){% endif %}">{% if summary.profit >= 0 %}+{% endif %}{{ summary.profit|intcomma }}<small>원</small></div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">예상 손실율 <small style="color:var(--text-3)">(금액가중)</small></div>
-      <div class="stat-value" style="color:{% if summary.loss_rate > 5 %}var(--red){% elif summary.loss_rate > 0 %}var(--orange){% else %}var(--green){% endif %}">
-        {% if summary.loss_rate != None %}{{ summary.loss_rate }}<small>%</small>{% else %}<small>-</small>{% endif %}
+      <div class="stat-label">{% if summary.real_n %}수익률{% else %}예상 수익률{% endif %} <small style="color:var(--text-3)">(투자금 대비)</small></div>
+      <div class="stat-value" style="color:{% if summary.return_rate < 0 %}var(--red){% elif summary.return_rate > 0 %}var(--green){% else %}var(--text-1){% endif %}">
+        {% if summary.return_rate != None %}{% if summary.return_rate > 0 %}+{% endif %}{{ summary.return_rate }}<small>%</small>{% else %}<small>-</small>{% endif %}
       </div>
     </div>
   </div>
   <div style="font-size:11.5px;color:var(--text-3);line-height:1.6;margin-top:10px">
-    이 달에 평가일이 있는 보유 상품 기준입니다.{% if done_count %} 상환이 끝난 {{ done_count }}건은 결과가 이미 나왔으므로 이 집계에서 뺐습니다.{% endif %}
-    예상 상환금·세전수익은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치이며 실제 결과는 평가일 종가로 결정됩니다.
-    {% if summary.loss_coverage < 100 %}<span style="color:var(--orange)">손실확률 산출 상품이 투자금의 {{ summary.loss_coverage }}%.</span>{% endif %}
+    {% if summary.real_n %}이 달에 평가일이 있는 보유·상환 상품 기준입니다.
+      상환이 끝난 {{ summary.real_n }}건은 <b>실제 상환금</b>으로{% if summary.est_n %},
+      나머지 {{ summary.est_n }}건은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치로 집계했습니다.
+      추정분의 실제 결과는 평가일 종가로 결정됩니다.{% else %} 집계했습니다.{% endif %}
+    {% else %}이 달에 평가일이 있는 보유 상품 기준입니다.
+      예상 상환금·세전수익은 <b>해당 회차에서 조기상환에 성공했을 때</b>의 추정치이며 실제 결과는 평가일 종가로 결정됩니다.
+    {% endif %}
+    수익률은 세전수익을 {% if summary.no_amount_n %}산출 대상{% else %}대상{% endif %} 투자금액으로 나눈 값입니다(연환산 아님).
+    {% if summary.no_amount_n %}<span style="color:var(--orange)">상환금을 알 수 없는 {{ summary.no_amount_n }}건(상환금 미등록 또는 상환 없이 지나간 회차)은 금액 집계에서 뺐습니다.</span>{% endif %}
   </div>
 </div>
 {% endif %}
