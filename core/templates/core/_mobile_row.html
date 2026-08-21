@@ -18,6 +18,12 @@
     {% if p.d_day is not None and p.d_day >= 0 %}<span class="m-dday">D-{{ p.d_day }}</span>
     {% elif p.sub_end %}<span class="m-dday done">마감</span>{% endif %}
   </div>
+  {# 비교 버튼 — 주간 목록에서만 compare_n이 붙는다(관심목록·검색에는 없어 자동으로 빠진다) #}
+  {% if p.compare_n %}
+  <span style="flex:none" onclick="event.stopPropagation()">
+    <button type="button" class="cmp-btn" onclick="els_cmp_open({{ p.id }})">비교 {{ p.compare_n }}</button>
+  </span>
+  {% endif %}
   {% if star and user.is_authenticated %}
   <span style="flex:none" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=p.id %}</span>
   {% endif %}

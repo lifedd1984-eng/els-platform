@@ -29,6 +29,8 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('weekly/', views.weekly, name='weekly'),
     path('product/<int:pk>/', views.product_detail, name='product_detail'),
+    # 유사상품 비교 패널 조각 (목록 모달·상세 토글이 함께 부른다)
+    path('product/<int:pk>/compare/', views.product_compare, name='product_compare'),
     path('presets/', views.presets, name='presets'),
     path('watchlist/', views.watchlist, name='watchlist'),
     path('watchlist/export/', views.watchlist_export, name='watchlist_export'),

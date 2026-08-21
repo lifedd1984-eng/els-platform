@@ -1,0 +1,63 @@
+{% comment %}
+유사상품 비교 — 모달 껍데기와 공용 스크립트. 주간 목록과 상품 상세가 함께 include한다.
+상세 화면은 패널을 카드 안에 바로 그리므로 모달을 열지 않지만, 토글이
+els_cmp_toggle을 쓰기 때문에 스크립트는 같이 필요하다.
+패널 알맹이는 서버가 그린다(core/_compare_panel.html) — 백분위·중앙값·최저·최고가
+모수에 따라 전부 달라져서, 토글을 화면에서 감추기만 하면 게이지가 거짓말을 한다.
+{% endcomment %}
+<style>
+  .cmp-btn{font-size:11px;font-weight:700;border:1px solid var(--blue);color:var(--blue-dark);
+    background:var(--card);border-radius:6px;padding:3px 8px;white-space:nowrap;cursor:pointer;line-height:1.5}
+  .cmp-btn:hover{background:var(--blue-bg)}
+</style>
+<div id="cmpModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--card);border-radius:14px;max-width:660px;width:100%;max-height:88vh;overflow:auto;padding:16px;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:2px">
+      <button type="button" onclick="els_cmp_close()" class="btn-icon btn" style="font-size:16px" aria-label="닫기"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div id="cmpBox" data-cmp-box></div>
+  </div>
+</div>
+<script>
+(function(){
+  var CMP_URL = "{% url 'product_compare' 0 %}";   // '/product/0/compare/' — 0을 상품 id로 갈아끼운다
+
+  function box_of(el){ return el.closest('[data-cmp-box]'); }
+
+  function load(box, pid, same){
+    box.style.opacity = '.45';
+    var url = CMP_URL.replace('/0/', '/' + pid + '/') + (same ? '?same=1' : '');
+    fetch(url, {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function(r){ if (!r.ok) throw new Error(r.status); return r.text(); })
+      .then(function(html){ box.innerHTML = html; box.style.opacity = ''; })
+      .catch(function(){
+        box.innerHTML = '<div style="padding:20px;font-size:12.5px;color:var(--text-2);line-height:1.7">' +
+          '비교 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</div>';
+        box.style.opacity = '';
+      });
+  }
+
+  // 같은 기초자산만 토글 — 모수가 바뀌므로 서버에서 다시 계산해 받는다
+  window.els_cmp_toggle = function(btn, pid, same){
+    var box = box_of(btn);
+    if (box) load(box, pid, same);
+  };
+
+  window.els_cmp_open = function(pid){
+    var m = document.getElementById('cmpModal');
+    var box = document.getElementById('cmpBox');
+    box.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12.5px">불러오는 중…</div>';
+    m.style.display = 'flex';
+    load(box, pid, 0);
+  };
+
+  window.els_cmp_close = function(){
+    document.getElementById('cmpModal').style.display = 'none';
+  };
+
+  document.getElementById('cmpModal').addEventListener('click', function(e){
+    if (e.target === this) els_cmp_close();
+  });
+  document.addEventListener('keydown', function(e){ if (e.key === 'Escape') els_cmp_close(); });
+})();
+</script>
