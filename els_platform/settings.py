@@ -83,8 +83,19 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     # /sitemap.xml 렌더용. django.contrib.sites는 쓰지 않는다 — 사이트맵 뷰가
     # RequestSite(요청 Host)로 폴백하므로 로컬·EC2가 각자 제 도메인을 낸다.
+    # ⚠ allauth를 붙이면서도 이 원칙을 지켰다. allauth는 sites 없이도 돌고
+    #   (allauth.app_settings.SITES_ENABLED = apps.is_installed("django.contrib.sites")),
+    #   소셜 앱 키를 DB(SocialApp)가 아니라 SOCIALACCOUNT_PROVIDERS 설정으로
+    #   주입하면 sites가 아예 필요 없다. sites를 넣었다면 sitemap 뷰의
+    #   get_current_site()가 Site 테이블을 보게 되어 도메인이 example.com으로
+    #   나가거나 Site.DoesNotExist로 사이트맵이 깨졌을 것이다.
     'django.contrib.sitemaps',
     'core',
+    # ── 소셜 로그인 ──
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    'allauth.socialaccount.providers.kakao',
 ]
 
 MIDDLEWARE = [
@@ -93,6 +104,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'allauth.account.middleware.AccountMiddleware',   # allauth 필수 (auth 뒤)
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'core.middleware.PageViewMiddleware',   # 자체 접속 집계 (맨 뒤: user 확정 후)
@@ -111,6 +123,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'core.context_processors.seo',
+                'core.context_processors.social',
             ],
         },
     },
@@ -195,6 +208,86 @@ if not DEBUG:
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/weekly/'   # 로그인 직후엔 주간청약 (홈 /는 항상 랜딩)
 LOGOUT_REDIRECT_URL = '/accounts/login/'
+
+# ── 소셜 로그인 (django-allauth) ─────────────────────────────
+# 카카오부터. 네이버·구글은 아래 SOCIAL_PROVIDERS 표에 한 줄 더 넣고
+# INSTALLED_APPS에 provider 앱을 추가하면 화면·URL이 함께 따라온다.
+#
+# 키는 .env에만 둔다. 코드·문서·저장소에 실제 값을 적지 않는다.
+# 키가 비어 있으면 SOCIAL_LOGIN_ENABLED가 False가 되고, 화면에서 버튼이
+# 사라지며 /accounts/kakao/login/ 도 로그인 화면으로 되돌린다
+# (core.views.kakao_login_entry). 눌러서 에러 페이지를 보는 일이 없게 한다.
+KAKAO_CLIENT_ID = os.environ.get("KAKAO_CLIENT_ID", "").strip()
+KAKAO_SECRET = os.environ.get("KAKAO_SECRET", "").strip()
+
+# 화면·URL 가드가 함께 보는 스위치. 3사 확장 시 여기에 항목이 늘어난다.
+#   provider_id: (사람이 읽는 이름, 키가 채워졌는가)
+SOCIAL_PROVIDERS = {
+    "kakao": {"label": "카카오", "enabled": bool(KAKAO_CLIENT_ID)},
+}
+SOCIAL_LOGIN_ENABLED = any(p["enabled"] for p in SOCIAL_PROVIDERS.values())
+
+AUTHENTICATION_BACKENDS = [
+    # 기존 5개 계정의 아이디·비밀번호 로그인. 순서상 먼저 시도된다.
+    'django.contrib.auth.backends.ModelBackend',
+    # 소셜 로그인 세션 수립용
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# 우리 로그인·가입 화면을 그대로 쓴다. allauth의 account 화면은 URL에 붙이지
+# 않으므로 아래 값들은 소셜 흐름이 참조하는 최소 설정이다.
+ACCOUNT_LOGIN_METHODS = {"username"}
+ACCOUNT_SIGNUP_FIELDS = ["username*", "email*", "password1*", "password2*"]
+# 이메일 인증 메일은 보내지 않는다 — 기존 가입 절차와 같게 둔다.
+ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_UNIQUE_EMAIL = True
+
+SOCIALACCOUNT_ADAPTER = "core.socialauth.ELSSocialAccountAdapter"
+# GET 한 번으로 로그인이 시작되지 않게 한다(CSRF·낚시 방지). 버튼은 POST 폼이다.
+SOCIALACCOUNT_LOGIN_ON_GET = False
+# 액세스 토큰을 DB에 남기지 않는다. 우리는 프로필을 한 번 읽고 끝이라
+# 보관할 이유가 없고, 남기면 유출 시 피해만 커진다.
+SOCIALACCOUNT_STORE_TOKENS = False
+SOCIALACCOUNT_QUERY_EMAIL = True
+# 카카오는 사용자가 이메일 제공에 동의하지 않을 수 있다. 이메일을 필수로 걸면
+# 그 사용자는 가입 자체가 막힌다 — 받지 못하면 못 받은 대로 가입시킨다.
+SOCIALACCOUNT_EMAIL_REQUIRED = False
+SOCIALACCOUNT_AUTO_SIGNUP = True
+
+# ⚠ 자동 연결의 핵심 두 줄 ─────────────────────────────────
+# EMAIL_AUTHENTICATION: 소셜에서 온 **검증된** 이메일이 기존 로컬 계정의
+#   이메일과 같으면 그 계정으로 로그인시킨다. allauth는 verified=True인
+#   주소만 대조한다(socialaccount/adapter.py authenticate_by_email:
+#   `[e.email for e in sociallogin.email_addresses if e.verified]`).
+#   카카오 provider는 kakao_account.is_email_verified 를 그대로 verified에
+#   싣는다(providers/kakao/provider.py extract_email_addresses).
+#   → 검증 안 된 이메일은 이 경로를 아예 타지 못한다.
+# ⚠ 전역(SOCIALACCOUNT_EMAIL_AUTHENTICATION)이 아니라 **provider별**로 켠다.
+#   공식 문서가 "fully trusted 한 provider에만 켜라"고 못 박고 있어서,
+#   네이버·구글을 붙일 때 그때마다 다시 판단하도록 강제한다.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = False
+# AUTO_CONNECT: 위 대조로 로그인한 뒤 소셜 계정을 그 로컬 계정에 실제로
+#   붙여 둔다. 붙여두지 않으면 나중에 이메일을 바꾸는 순간 소셜 로그인이
+#   끊긴다. 이 설정은 provider별 지정이 없어 전역으로만 켤 수 있다.
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True
+
+SOCIALACCOUNT_PROVIDERS = {
+    "kakao": {
+        # DB(SocialApp)가 아니라 설정으로 키를 준다 — django.contrib.sites를
+        # 안 쓰기 위한 선택이자, 키를 .env 한 곳에서만 관리하기 위한 선택이다.
+        # 키가 비어 있으면 APPS를 아예 넣지 않는다(설정에 빈 앱이 남아 있으면
+        # allauth가 그 앱으로 인증을 시도하다 500을 낸다).
+        **({"APPS": [{
+            "client_id": KAKAO_CLIENT_ID,
+            "secret": KAKAO_SECRET,
+            "key": "",
+        }]} if KAKAO_CLIENT_ID else {}),
+        # 카카오 개발자센터 '동의항목'에서 켠 것만 실제로 온다.
+        "SCOPE": ["account_email", "profile_nickname"],
+        # 이 provider만 이메일 대조 로그인을 허용한다 (위 주석 참조).
+        "EMAIL_AUTHENTICATION": True,
+    },
+}
 
 # ELS_Curator exe가 엑셀을 생성하는 폴더 (환경변수로 덮어쓰기 가능).
 # 프로젝트 폴더 바로 위의 downloads/를 가리킨다. 절대경로를 박아두면 폴더를

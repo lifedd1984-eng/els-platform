@@ -1,0 +1,19 @@
+{# allauth 기본 오류 화면(영문)을 우리 디자인으로 덮어쓴다 #}
+{% extends "core/base.html" %}
+{% block title %}소셜 로그인 오류 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> 소셜 로그인에 실패했습니다</div>
+<div class="page-sub">잠시 후 다시 시도하거나, 아이디로 로그인해 주세요.</div>
+
+<div class="card" style="max-width:480px">
+  <p style="font-size:13.5px;color:var(--text-2);margin:0 0 16px">
+    카카오와 주고받는 과정에서 문제가 생겼습니다.
+    계속 같은 화면이 나오면 브라우저를 새로 열고 다시 시도해 주세요.
+  </p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="{% url 'login' %}" class="btn btn-primary">로그인 화면으로</a>
+    <a href="{% url 'home' %}" class="btn">홈으로</a>
+  </div>
+</div>
+{% endblock %}

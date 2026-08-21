@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.contrib.sitemaps.views import sitemap
-from django.urls import path
+from django.urls import include, path
 
 from core import views
 from core.sitemaps import SITEMAPS
@@ -25,6 +25,28 @@ urlpatterns = [
         template_name='core/password_reset_confirm.html'), name='password_reset_confirm'),
     path('accounts/reset/done/', auth_views.PasswordResetCompleteView.as_view(
         template_name='core/password_reset_complete.html'), name='password_reset_complete'),
+
+    # ── 소셜 로그인 (allauth) ─────────────────────────────
+    # allauth.urls 를 통째로 붙이지 않는다. 그러면 allauth 자신의 로그인·가입·
+    # 비밀번호 재설정 화면이 /accounts/ 아래에 함께 생겨, 우리 한국어 화면과
+    # 영어 기본 화면이 두 벌로 굴러다닌다. 소셜에 필요한 것만 붙인다.
+    #
+    # allauth 내부가 reverse('account_login') 을 쓰므로(소셜 가입 세션이 끊겼을
+    # 때의 되돌림 등) 우리 로그인 뷰에 그 이름을 하나 더 달아 준다. 경로가
+    # 같으니 동작도 같다.
+    path('accounts/login/', views.RememberLoginView.as_view(), name='account_login'),
+    path('accounts/signup/', views.signup, name='account_signup'),
+    # 키가 없을 때를 막는 관문. allauth 의 같은 경로보다 먼저 등록해야 한다.
+    path('accounts/kakao/login/', views.kakao_login_entry, name='kakao_login_entry'),
+    path('accounts/kakao/login/callback/', views.kakao_callback_entry,
+         name='kakao_callback_entry'),
+    # 자동 연결을 하지 않았을 때의 안내 화면
+    path('accounts/social/help/', views.social_connect_help, name='social_connect_help'),
+    # 연결 목록·해제 (allauth 뷰 + 우리 템플릿) 및 소셜 가입 보조 화면
+    path('accounts/social/', include('allauth.socialaccount.urls')),
+    # /accounts/kakao/login/ 과 /accounts/kakao/login/callback/ 의 실제 구현.
+    # 위 관문이 먼저 매칭되므로 여기는 이름(kakao_login·kakao_callback) 역참조용이다.
+    path('accounts/', include('allauth.socialaccount.providers.kakao.urls')),
 
     path('', views.home, name='home'),
     path('weekly/', views.weekly, name='weekly'),

@@ -1,0 +1,32 @@
+{# allauth 기본 화면(영문)을 우리 디자인으로 덮어쓴다 #}
+{# 카카오 정보만으로 계정을 자동 생성할 수 없을 때(아이디 충돌 등) 뜬다 #}
+{% extends "core/base.html" %}
+{% block title %}카카오로 가입 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title">카카오로 가입</div>
+<div class="page-sub">마지막으로 아래 항목만 확인해 주세요.</div>
+
+<div class="card" style="max-width:420px">
+  {% if form.errors %}
+  <div style="background:var(--red-bg);color:var(--red);font-size:13px;padding:10px 12px;border-radius:6px;margin-bottom:14px;font-weight:600">
+    {% for field, errors in form.errors.items %}{% for e in errors %}{{ e }}<br>{% endfor %}{% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="{% url 'socialaccount_signup' %}">{% csrf_token %}
+    {% for field in form.visible_fields %}
+    <div class="form-field" style="margin-bottom:12px">
+      <label>{{ field.label }}</label>
+      {{ field }}
+    </div>
+    {% endfor %}
+    {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+    {{ redirect_field }}
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">가입하기</button>
+  </form>
+  <div style="font-size:11.5px;color:var(--text-3);margin-top:12px;text-align:center">
+    이미 계정이 있다면 <a href="{% url 'login' %}" style="color:var(--blue-dark);font-weight:700">아이디로 로그인</a>한 뒤
+    계정 연결 화면에서 카카오를 연결해 주세요.
+  </div>
+</div>
+{% endblock %}

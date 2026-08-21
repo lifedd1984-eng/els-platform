@@ -88,6 +88,49 @@ def signup(request):
     return render(request, "core/signup.html", {"form": form})
 
 
+# ── 소셜 로그인 (카카오) ──────────────────────────────
+# allauth 의 provider 뷰 앞에 세우는 관문. 같은 경로에 우리 것을 먼저 등록해
+# 두면 URL 해석은 여기로 오고, {% url 'kakao_login' %} 역참조는 allauth 가
+# 등록한 이름 그대로 쓸 수 있다(경로가 같으므로 결과도 같다).
+#
+# 왜 필요한가: 키(.env KAKAO_CLIENT_ID)가 없으면 allauth 는 소셜 앱을 못 찾아
+# 예외를 던진다. 아직 키를 발급받기 전이거나 배포 때 .env 를 빠뜨리면
+# 방문자가 에러 화면을 보게 된다. 그럴 땐 조용히 로그인 화면으로 되돌린다.
+def _social_disabled_redirect(request):
+    messages.error(request, "카카오 로그인은 현재 준비 중입니다. 아이디로 로그인해 주세요.")
+    return redirect("login")
+
+
+def kakao_login_entry(request):
+    """/accounts/kakao/login/ — 키가 있을 때만 allauth 로 넘긴다."""
+    if not getattr(settings, "SOCIAL_LOGIN_ENABLED", False):
+        return _social_disabled_redirect(request)
+    from allauth.socialaccount.providers.kakao.views import oauth2_login
+    return oauth2_login(request)
+
+
+def kakao_callback_entry(request):
+    """/accounts/kakao/login/callback/ — 위와 같은 이유의 관문."""
+    if not getattr(settings, "SOCIAL_LOGIN_ENABLED", False):
+        return _social_disabled_redirect(request)
+    from allauth.socialaccount.providers.kakao.views import oauth2_callback
+    return oauth2_callback(request)
+
+
+def social_connect_help(request):
+    """자동 연결을 일부러 하지 않았을 때 보여주는 안내 화면.
+
+    이 화면이 뜨는 두 경우 (core/socialauth.py 참조)
+      · 카카오가 준 이메일을 카카오가 검증하지 않았는데, 그 이메일을 쓰는
+        기존 계정이 있다 → 그대로 붙이면 남의 계정을 가져가는 길이 된다.
+      · 카카오에서 이메일을 아예 못 받았다 → 기존 회원인지 판별할 수 없다.
+    """
+    reason = request.GET.get("reason", "")
+    if reason not in ("unverified", "no-email"):
+        reason = "unverified"
+    return render(request, "core/social_connect_help.html", {"reason": reason})
+
+
 def find_id(request):
     """아이디 찾기 — 가입 이메일 입력 시 마스킹된 아이디 표시."""
     from django.contrib.auth import get_user_model
@@ -2779,16 +2822,22 @@ def account_delete(request):
         messages.error(request, "운영자 계정은 이 화면에서 탈퇴할 수 없습니다.")
         return redirect("weekly")
 
+    # 카카오로만 가입한 계정은 비밀번호가 없다(allauth 가 사용 불가로 둔다).
+    # 비밀번호 확인을 그대로 요구하면 그 사람은 영영 탈퇴할 수 없으므로,
+    # 확인 문구 하나만으로 진행한다.
+    has_password = user.has_usable_password()
+
     ctx = {
         "inv_count": Investment.objects.filter(user=user).count(),
         "watch_count": WatchItem.objects.filter(user=user).count(),
         "preset_count": Preset.objects.filter(user=user).count(),
+        "has_password": has_password,
     }
 
     if request.method == "POST":
         password = request.POST.get("password", "")
         confirm = (request.POST.get("confirm") or "").strip()
-        if not user.check_password(password):
+        if has_password and not user.check_password(password):
             ctx["error"] = "비밀번호가 올바르지 않습니다."
             return render(request, "core/account_delete.html", ctx)
         if confirm != "탈퇴합니다":
