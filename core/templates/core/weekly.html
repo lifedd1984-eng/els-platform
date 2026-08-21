@@ -495,6 +495,10 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
             {% if p.confirm_date %}{{ p.confirm_date|date:"n/j" }}{% else %}-{% endif %}
           </td>
           <td onclick="event.stopPropagation()" style="white-space:nowrap">
+            {# 비교 버튼 — 같은 조건 상품이 3건 미만이면 compare_n=0이라 아예 안 그린다 #}
+            {% if p.compare_n %}<button type="button" class="cmp-btn" style="margin-right:4px"
+              onclick="els_cmp_open({{ p.id }})"
+              title="같은 주 청약 · 같은 자산유형 · 낙인 동일값 상품과 조건 비교">비교 {{ p.compare_n }}</button>{% endif %}
             {% if user.is_authenticated %}
             <button type="button" class="btn btn-primary btn-sm" style="margin-right:2px"
               onclick="els_inv_open('{{ p.id }}', '{{ p.issuer }} {{ p.product_no }}')" title="투자 등록">등록</button>
@@ -528,4 +532,7 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
    — 지난 주 조회(offset<0)나 낙인 버킷이 빈 주 — 에는 아래 상품 표에만 신호 배지와
    손실확률이 남으므로, 그때는 이 자리에서 한 번 보여준다.{% endcomment %}
 {% if not ki_top5 and not top5_tracks %}{% include "core/_disclaimer_inline.html" %}{% endif %}
+
+{# 유사상품 비교 모달 — 목록의 '비교 N' 버튼이 여는 자리 #}
+{% include "core/_compare_modal.html" %}
 {% endblock %}

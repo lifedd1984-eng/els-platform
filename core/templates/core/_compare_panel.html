@@ -1,0 +1,133 @@
+{% comment %}
+유사상품 비교 패널 — 같은 주·같은 유형·같은 낙인 상품과 조건을 줄 세운 화면.
+컨텍스트는 core.compare.compare_context()가 통째로 만들어 넘긴다.
+같은 조각을 주간 목록의 모달과 상품 상세에서 함께 쓰고, 토글을 누를 때마다
+이 조각만 다시 받아 갈아끼운다(cmp-box의 innerHTML 교체) — 그래서 스타일도
+안에 함께 둔다. 한 화면에 한 번만 붙으므로 규칙이 겹치지 않는다.
+⚠ 세 축(수익률·1차 배리어·마지막 배리어)은 반드시 함께 나와야 한다.
+   수익률이 높으면 1차 배리어도 높은 경향이라 한 축만 보이면 왜곡된다.
+{% endcomment %}
+<style>
+  .cmp-panel{border:1px solid var(--blue);border-radius:13px;overflow:hidden;max-width:620px}
+  .cmp-title{background:var(--blue-bg);padding:13px 16px;border-bottom:1px solid var(--blue);
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+  .cmp-title b{font-size:14px;font-weight:800;letter-spacing:-0.2px}
+  .cmp-title .cmp-sub{font-size:11.5px;color:var(--text-2);margin-top:2px}
+  .cmp-toggle{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;
+    color:var(--text-2);white-space:nowrap;cursor:pointer;background:none;border:none;padding:0}
+  .cmp-sw{width:34px;height:19px;border-radius:999px;background:#CDD3D8;position:relative;flex:none}
+  .cmp-sw::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;
+    border-radius:50%;background:#fff;transition:.15s}
+  .cmp-sw.on{background:var(--blue)}
+  .cmp-sw.on::after{left:17px}
+  .cmp-body{padding:16px}
+  .cmp-gauge{margin-bottom:15px}
+  .cmp-glabel{display:flex;justify-content:space-between;gap:8px;font-size:12px;margin-bottom:5px}
+  .cmp-glabel b{font-weight:700}
+  .cmp-gbar{position:relative;height:26px;background:#F0F2F4;border-radius:7px}
+  .cmp-gfill{position:absolute;top:0;bottom:0;left:0;background:#DCE3EA;border-radius:7px 0 0 7px}
+  .cmp-gmark{position:absolute;top:-3px;bottom:-3px;width:3px;background:var(--blue);border-radius:2px}
+  .cmp-gmark::after{content:attr(data-v);position:absolute;top:-19px;left:50%;
+    transform:translateX(-50%);font-size:11px;font-weight:800;color:var(--blue-dark);white-space:nowrap}
+  .cmp-gmark.at-start::after{left:0;transform:none}
+  .cmp-gmark.at-end::after{left:auto;right:0;transform:none}
+  .cmp-gends{display:flex;justify-content:space-between;gap:6px;font-size:10.5px;color:var(--text-3);margin-top:4px}
+  .cmp-gnote{font-size:11.5px;color:var(--text-2);margin-top:6px;line-height:1.6}
+  .cmp-tblwrap{overflow-x:auto;border:1px solid var(--border);border-radius:9px}
+  {# min-width:max-content가 없으면 좁은 화면에서 표가 100%로 눌린 채 칸만 잘려 나간다 #}
+  {# — 배리어 수열이 길어 내용 폭이 400px을 넘는데, 표 상자가 295px로 굳으면 #}
+  {# 감싼 상자의 scrollWidth도 295로 잡혀서 가로 스크롤이 아예 생기지 않는다. #}
+  {# (375px 실측: 주기·배지 칸이 잘려 손댈 수 없었음) #}
+  {# min-content면 상품명 칸만 줄바꿈하고 나머지 칸은 제 폭을 지킨다 (max-content는 상품명까지 한 줄로 펴서 넓은 화면에서도 스크롤이 생겼다) #}
+  .cmp-panel table{width:100%;min-width:min-content;border-collapse:collapse;font-size:12.5px;margin:0}
+  .cmp-panel th,.cmp-panel td{padding:8px 9px;text-align:right;
+    border-bottom:1px solid var(--border);white-space:nowrap}
+  {# 상품명 칸만 줄바꿈을 허용한다. 최소폭이 없으면 좁은 화면에서 글자 하나 폭까지 눌려 행이 아주 높아진다 #}
+  .cmp-panel th:first-child,.cmp-panel td:first-child{text-align:left;white-space:normal;min-width:118px}
+  .cmp-panel th{background:#F7F8F9;font-weight:700;font-size:11.5px;color:var(--text-2)}
+  .cmp-panel tr.cmp-me td{background:var(--blue-bg);font-weight:700}
+  .cmp-panel tr:last-child td{border-bottom:none}
+  .cmp-seq{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--text-2)}
+  .cmp-warn{background:#FFF8E8;border:1px solid #FFE0A3;border-radius:9px;
+    padding:11px 13px;font-size:12px;color:#8A6100;line-height:1.6;margin-bottom:14px}
+  .cmp-foot{font-size:11.5px;color:var(--text-3);margin-top:11px;line-height:1.65;
+    border-top:1px solid var(--border);padding-top:11px}
+  @media (max-width:520px){
+    .cmp-title{padding:12px 13px}
+    .cmp-body{padding:13px}
+    .cmp-panel th,.cmp-panel td{padding:7px 8px}
+  }
+</style>
+<div class="cmp-panel" data-pid="{{ product.id }}">
+  <div class="cmp-title">
+    <div style="min-width:0">
+      <b>{{ product.issuer }} {{ product.product_no }} · 비슷한 조건 {{ count }}건과 비교</b>
+      <div class="cmp-sub">{{ monday|date:"n.j" }}~{{ sunday|date:"n.j" }} 청약 · {{ product.asset_type }} · <b>{{ ki_label }} 동일</b></div>
+    </div>
+    {# 토글은 서버에서 다시 계산해 온다 — 모수가 바뀌면 백분위·중앙값이 전부 바뀌기 때문 #}
+    <button type="button" class="cmp-toggle" aria-pressed="{% if same_assets %}true{% else %}false{% endif %}"
+            onclick="els_cmp_toggle(this, {{ product.id }}, {% if same_assets %}0{% else %}1{% endif %})">
+      <span class="cmp-sw {% if same_assets %}on{% endif %}"></span> 같은 기초자산만
+    </button>
+  </div>
+  <div class="cmp-body">
+
+    {% if too_few_same_assets %}
+    <div class="cmp-warn">
+      같은 기초자산을 쓰는 상품이 {{ min_peers }}건 미만이라 줄 세울 수 없습니다.
+      토글을 끄면 {{ total }}건과 비교합니다.
+    </div>
+    {% else %}
+
+    {% if low_sample %}
+    <div class="cmp-warn">비교 대상이 {{ count }}건뿐이라 참고용입니다.</div>
+    {% endif %}
+
+    {% for g in gauges %}
+    <div class="cmp-gauge">
+      <div class="cmp-glabel">
+        <b>{{ g.label }}</b>
+        <span style="font-weight:700;color:{% if g.tone == 'good' %}var(--green){% elif g.tone == 'warn' %}var(--orange){% else %}var(--text-2){% endif %}">{{ g.rank_label }}</span>
+      </div>
+      {# 막대 위치는 라벨과 무관하게 (값 − 최저) / (최고 − 최저) 그대로다 #}
+      <div class="cmp-gbar">
+        <div class="cmp-gfill" style="width:{{ g.pos }}%"></div>
+        <div class="cmp-gmark{% if g.pos < 8 %} at-start{% elif g.pos > 92 %} at-end{% endif %}"
+             style="left:{{ g.pos }}%" data-v="{{ g.value_text }}"></div>
+      </div>
+      <div class="cmp-gends">
+        <span>최저 {{ g.lo_text }}</span><span>중앙 {{ g.mid_text }}</span><span>최고 {{ g.hi_text }}</span>
+      </div>
+      <div class="cmp-gnote">{{ g.note }}</div>
+    </div>
+    {% endfor %}
+
+    <div style="font-size:12.5px;font-weight:700;margin:18px 0 6px">조건이 가장 가까운 {{ nearest|length }}건</div>
+    <div class="cmp-tblwrap">
+      <table>
+        <tr><th>상품</th><th>수익률</th><th>배리어 수열</th><th>주기</th><th>배지</th></tr>
+        {% for r in nearest %}
+        <tr {% if r.is_target %}class="cmp-me"{% endif %}>
+          <td>
+            {% if r.is_target %}{{ r.p.issuer }} {{ r.p.product_no }} (지금 보는 상품)
+            {% else %}<a href="{% url 'product_detail' r.p.id %}" style="color:var(--blue-dark)">{{ r.p.issuer }} {{ r.p.product_no }}</a>{% endif %}
+          </td>
+          <td>{{ r.yield_text }}</td>
+          <td class="cmp-seq">{{ r.barrier_seq }}</td>
+          <td>{{ r.period_text }}</td>
+          <td>{% if r.p.radar %}<span class="badge badge-blue">{{ r.p.radar.tier|cut:" 신호" }}</span>{% else %}-{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+
+    <div class="cmp-foot">
+      <b>비교 기준</b> — 같은 주 청약 · 같은 자산유형({{ product.asset_type }}) · {{ ki_label }} 동일.
+      조기상환 <b>주기는 제한하지 않습니다</b> — 대신 표에 실제 주기를 그대로 적습니다.
+      같은 6회차라도 3개월 주기면 1년 6개월, 6개월 주기면 3년짜리라 성격이 다릅니다.<br>
+      순위는 <b>제시 조건을 줄 세운 것일 뿐</b>이며 어느 상품이 더 낫다는 판단이 아닙니다.
+      실제 결과는 기초자산 가격으로 결정됩니다.
+    </div>
+  </div>
+</div>

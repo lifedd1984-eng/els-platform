@@ -10,7 +10,7 @@ from django.contrib.auth import login as auth_login
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.views import LoginView
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import ask_tools, portfolio_facts, telegram
+from .compare import MIN_PEERS, compare_context, peer_key, week_peer_counts
 from .models import (
     Feedback, FeedbackBannerDismissal, ImportLog, Investment, Preset, Product,
     RedemptionVerdict, WatchItem, attach_peak_ratios, peak_ratios,
@@ -439,6 +440,17 @@ def weekly(request):
             reverse=desc,
         )
 
+    # ── 유사상품 비교 버튼 라벨 ──────────────────
+    # 같은 주 · 같은 자산유형 · 같은 낙인값 상품이 몇 건인지. 상품마다 세면 200번
+    # 넘게 왕복하므로 한 주 전체를 값만 한 번 긁어 센다(쿼리 1회).
+    # 필터와 무관하게 그 주 전체가 모수다 — 내가 화면에서 좁혀 놓은 것 때문에
+    # 비교 대상이 줄면 백분위가 사용자 필터마다 달라져 뜻이 없어진다.
+    # 3건 미만이면 0으로 둬서 버튼 자체를 감춘다(혼자 1등인 건 의미가 없다).
+    _peer_counts = week_peer_counts(monday, sunday)
+    for p in products:
+        n = _peer_counts.get(peer_key(p), 0)
+        p.compare_n = n if n >= MIN_PEERS else 0
+
     # 정렬 헤더용 컬럼 메타 (URL은 현재 필터 유지 + 정렬 토글)
     base_params = request.GET.copy()
     base_params.pop("sort", None)
@@ -605,6 +617,14 @@ def weekly(request):
 
 
 # ── 상품 상세 ─────────────────────────────────────
+def _compare_html(request, product, same_assets=False):
+    """비교 패널을 미리 그려 둔 HTML. 비교가 성립하지 않으면 None."""
+    ctx = compare_context(product, same_assets=same_assets)
+    if ctx is None:
+        return None
+    return render_to_string("core/_compare_panel.html", ctx, request=request)
+
+
 def _product_meta_desc(product):
     """상품 상세의 검색 결과 스니펫.
 
@@ -781,8 +801,32 @@ def product_detail(request, pk):
         "ki_updated_at": ki_updated_at,
         "chart": chart,
         "my_inv": inv,  # 보유 중이면 상품 정보에 내 투자금액 표시
+        # 유사상품 비교 — 조각 템플릿이 컨텍스트를 통째로 받으므로 여기서 미리
+        # 그려 문자열로 넘긴다. 상세 컨텍스트에 키 열두 개를 풀어놓지 않기 위함이다.
+        # 같은 조건 상품이 3건 미만이면 None → 카드 자체가 안 나온다.
+        "compare_html": _compare_html(request, product),
         "active_nav": "weekly",
     })
+
+
+# ── 유사상품 비교 ─────────────────────────────────
+def product_compare(request, pk):
+    """비교 패널 조각만 돌려준다 — 주간 목록의 '비교 N' 모달과 상세 화면이 함께 쓴다.
+
+    ?same=1이면 '같은 기초자산만' 토글이 켜진 상태. 토글을 화면에서 감추는 대신
+    서버에 다시 물어보는 이유는 모수가 바뀌면 백분위·중앙값·최저·최고가 전부
+    다시 계산돼야 하기 때문이다 — 감추기만 하면 게이지가 거짓말을 한다.
+
+    저장하지 않는다(매주 모수가 바뀐다). 대신 모수 조회는 쿼리 한 번으로 끝낸다.
+    """
+    product = get_object_or_404(Product, pk=pk)
+    ctx = compare_context(product, same_assets=request.GET.get("same") == "1")
+    if ctx is None:
+        # 버튼이 안 보이는 상품인데 주소로 직접 들어온 경우 — 화면을 깨지 않고 알린다.
+        return HttpResponse(
+            '<div style="font-size:12.5px;color:var(--text-2);line-height:1.7">'
+            '같은 주에 조건이 같은 상품이 충분하지 않아 비교할 수 없습니다.</div>')
+    return render(request, "core/_compare_panel.html", ctx)
 
 
 # ── 프리셋 관리 ───────────────────────────────────
