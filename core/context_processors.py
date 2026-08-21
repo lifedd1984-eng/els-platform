@@ -1,5 +1,21 @@
 """템플릿 공통 컨텍스트."""
 
+from django.conf import settings
+
+
+def social(request):
+    """소셜 로그인 버튼을 그릴지 말지.
+
+    .env 에 키가 없으면 False 다. 버튼을 아예 그리지 않아, 키 없이 눌러서
+    에러 화면을 보는 일이 생기지 않는다(뷰 쪽 관문은 core.views.kakao_login_entry).
+    """
+    providers = getattr(settings, "SOCIAL_PROVIDERS", {})
+    return {
+        "social_login_enabled": getattr(settings, "SOCIAL_LOGIN_ENABLED", False),
+        "social_providers": providers,
+        "kakao_login_enabled": providers.get("kakao", {}).get("enabled", False),
+    }
+
 
 def seo(request):
     """canonical_url — 검색 결과에 노출할 이 화면의 대표 주소.

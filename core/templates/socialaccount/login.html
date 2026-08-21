@@ -1,0 +1,20 @@
+{# allauth 기본 화면(영문)을 우리 디자인으로 덮어쓴다 #}
+{# 버튼은 POST 로 보내므로 평소엔 뜨지 않는다. 주소창으로 직접 들어온 경우의 확인 화면 #}
+{% extends "core/base.html" %}
+{% block title %}카카오로 계속하기 — ELS 레이더{% endblock %}
+
+{% block content %}
+{% if process == "connect" %}
+<div class="page-title">카카오 계정 연결</div>
+<div class="page-sub">지금 쓰고 있는 계정에 카카오를 연결합니다.</div>
+{% else %}
+<div class="page-title">카카오로 로그인</div>
+<div class="page-sub">카카오 로그인 화면으로 이동합니다.</div>
+{% endif %}
+
+<div class="card" style="max-width:420px">
+  <form method="post">{% csrf_token %}
+    <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">계속하기</button>
+  </form>
+</div>
+{% endblock %}

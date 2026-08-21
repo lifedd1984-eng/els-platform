@@ -1,0 +1,38 @@
+{% extends "core/base.html" %}
+{% block title %}카카오 계정 연결 안내 — ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="page-title"><i class="fa-solid fa-link-slash" style="color:var(--blue)"></i> 카카오 계정을 연결하지 못했습니다</div>
+<div class="page-sub">안전을 위해 자동 연결을 멈췄습니다. 아래 방법으로 진행해 주세요.</div>
+
+<div class="card" style="max-width:560px;line-height:1.7">
+  {% if reason == "no-email" %}
+  <p style="font-size:13.5px;color:var(--text-2);margin:0 0 14px">
+    카카오에서 <b style="color:var(--text)">이메일을 받지 못했습니다</b>.
+    이메일이 없으면 이미 쓰고 계신 계정이 있는지 확인할 방법이 없어,
+    새 계정을 만들지도 기존 계정에 연결하지도 않았습니다.
+  </p>
+  <ul style="margin:0 0 18px;padding-left:20px;font-size:13.5px;color:var(--text-2)">
+    <li style="margin-bottom:4px">이미 계정이 있다면 <b style="color:var(--text)">아이디로 로그인한 뒤</b> 계정 연결 화면에서 카카오를 연결해 주세요.</li>
+    <li>계정이 없다면 회원가입으로 진행해 주세요.</li>
+  </ul>
+  {% else %}
+  <p style="font-size:13.5px;color:var(--text-2);margin:0 0 14px">
+    카카오가 보내준 이메일이 <b style="color:var(--text)">카카오에서 확인되지 않은 주소</b>였고,
+    같은 이메일을 쓰는 계정이 이미 있습니다.
+    확인되지 않은 이메일만 보고 기존 계정에 연결하면
+    남의 계정에 들어갈 수 있는 길이 열리므로 연결하지 않았습니다.
+  </p>
+  <ul style="margin:0 0 18px;padding-left:20px;font-size:13.5px;color:var(--text-2)">
+    <li style="margin-bottom:4px">본인 계정이라면 <b style="color:var(--text)">아이디·비밀번호로 로그인한 뒤</b> 계정 연결 화면에서 카카오를 연결해 주세요. 그 뒤로는 카카오 로그인이 바로 됩니다.</li>
+    <li>비밀번호가 기억나지 않으면 비밀번호 찾기를 이용해 주세요.</li>
+  </ul>
+  {% endif %}
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a href="{% url 'login' %}" class="btn btn-primary">아이디로 로그인</a>
+    <a href="{% url 'signup' %}" class="btn">회원가입</a>
+    <a href="{% url 'password_reset' %}" class="btn">비밀번호 찾기</a>
+  </div>
+</div>
+{% endblock %}

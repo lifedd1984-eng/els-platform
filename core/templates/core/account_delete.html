@@ -34,10 +34,12 @@
   </div>
 
   <form method="post">{% csrf_token %}
+    {% if has_password %}
     <div class="form-field" style="margin-bottom:14px">
       <label>비밀번호 확인</label>
       <input type="password" name="password" autocomplete="current-password" required style="width:100%">
     </div>
+    {% endif %}
     <div class="form-field" style="margin-bottom:6px">
       <label>확인 문구 입력</label>
       <input type="text" name="confirm" placeholder="탈퇴합니다" required autocomplete="off" style="width:100%">
