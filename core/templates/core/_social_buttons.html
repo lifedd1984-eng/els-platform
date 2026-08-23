@@ -4,6 +4,7 @@
 .social-sep { display:flex; align-items:center; gap:10px; margin:20px 0 14px; color:#8B95A1; font-size:12px; }
 .social-sep::before, .social-sep::after { content:""; flex:1; height:1px; background:#E5E8EB; }
 .social-form { margin:0; }
+.social-form + .social-form { margin-top:10px; } /* 버튼 순서를 바꿔도 간격이 항상 맞도록 */
 /* 카카오 로그인 버튼 디자인 가이드: 컨테이너 #FEE500, 심볼 #000000,
    레이블 #000000 85%, 모서리 12px. 이 값들은 가이드가 정한 것이라 바꾸지 않는다. */
 .btn-kakao {
@@ -22,7 +23,7 @@
   width:100%; display:flex; align-items:center; justify-content:center; gap:10px;
   background:#fff; border:1px solid #DADCE0; border-radius:12px; padding:11px;
   font-family:inherit; font-size:15px; font-weight:600; cursor:pointer;
-  color:#3C4043; margin-top:10px;
+  color:#3C4043;
 }
 .btn-google:hover { background:#F7F8F8; }
 .btn-google-symbol { display:block; flex:none; }
@@ -32,7 +33,7 @@
   width:100%; display:flex; align-items:center; justify-content:center; gap:9px;
   background:#03C75A; border:none; border-radius:12px; padding:12px;
   font-family:inherit; font-size:15px; font-weight:700; cursor:pointer;
-  color:#fff; margin-top:10px;
+  color:#fff;
 }
 .btn-naver:hover { background:#02B350; }
 .btn-naver-symbol { display:block; flex:none; }
@@ -40,19 +41,6 @@
 </style>
 
 <div class="social-sep"><span>또는</span></div>
-
-{% if kakao_login_enabled %}
-{# 심볼 없이 버튼을 구성할 수 없다는 것이 가이드 규정이라 항상 함께 그린다 #}
-{# ⚠ 아래 말풍선 심볼은 형태를 옮겨 그린 것이다. 카카오 개발자센터 '리소스 다운로드'의 공식 심볼 파일로 교체하면 가장 안전하다 #}
-{# GET 한 번으로 로그인이 시작되지 않도록 POST 로 보낸다 (SOCIALACCOUNT_LOGIN_ON_GET=False) #}
-<form method="post" action="{% url 'kakao_login' %}" class="social-form">{% csrf_token %}
-  <input type="hidden" name="process" value="{{ social_process|default:'login' }}">
-  <button type="submit" class="btn-kakao">
-    <svg class="btn-kakao-symbol" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="#000000" d="M12 3.5c-4.86 0-8.8 3.06-8.8 6.83 0 2.42 1.63 4.55 4.09 5.76-.18.66-.65 2.4-.74 2.77-.12.47.17.46.36.34.15-.1 2.34-1.59 3.29-2.24.58.08 1.18.13 1.8.13 4.86 0 8.8-3.06 8.8-6.83S16.86 3.5 12 3.5z"/></svg>
-    <span class="btn-kakao-label">{{ social_label|default:"카카오 로그인" }}</span>
-  </button>
-</form>
-{% endif %}
 
 {% if google_login_enabled %}
 {# 구글 공식 4색 G 로고. developers.google.com/identity 브랜딩 가이드 원본 경로 그대로 사용 #}
@@ -66,6 +54,19 @@
       <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/>
     </svg>
     <span>{{ google_social_label|default:"Google로 로그인" }}</span>
+  </button>
+</form>
+{% endif %}
+
+{% if kakao_login_enabled %}
+{# 심볼 없이 버튼을 구성할 수 없다는 것이 가이드 규정이라 항상 함께 그린다 #}
+{# ⚠ 아래 말풍선 심볼은 형태를 옮겨 그린 것이다. 카카오 개발자센터 '리소스 다운로드'의 공식 심볼 파일로 교체하면 가장 안전하다 #}
+{# GET 한 번으로 로그인이 시작되지 않도록 POST 로 보낸다 (SOCIALACCOUNT_LOGIN_ON_GET=False) #}
+<form method="post" action="{% url 'kakao_login' %}" class="social-form">{% csrf_token %}
+  <input type="hidden" name="process" value="{{ social_process|default:'login' }}">
+  <button type="submit" class="btn-kakao">
+    <svg class="btn-kakao-symbol" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path fill="#000000" d="M12 3.5c-4.86 0-8.8 3.06-8.8 6.83 0 2.42 1.63 4.55 4.09 5.76-.18.66-.65 2.4-.74 2.77-.12.47.17.46.36.34.15-.1 2.34-1.59 3.29-2.24.58.08 1.18.13 1.8.13 4.86 0 8.8-3.06 8.8-6.83S16.86 3.5 12 3.5z"/></svg>
+    <span class="btn-kakao-label">{{ social_label|default:"카카오 로그인" }}</span>
   </button>
 </form>
 {% endif %}
