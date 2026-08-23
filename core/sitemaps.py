@@ -17,6 +17,7 @@ from django.contrib.sitemaps import Sitemap
 from django.db.models import Max
 from django.urls import reverse
 
+from .asset_pages import TOP_ASSETS
 from .models import Product
 
 # 1편 리포트 본문이 확정된 날 (= 본문에 적힌 집계 기준일).
@@ -49,6 +50,7 @@ class StaticViewSitemap(Sitemap):
         ("home", 1.0, "weekly"),          # 랜딩 — TOP5가 매주 바뀐다
         ("weekly", 0.9, "weekly"),        # 주간 청약 — 매주 월요일 갱신
         ("report_els_10year", 0.8, "monthly"),   # 10년 성적표 리포트
+        ("asset_list", 0.7, "weekly"),    # 기초자산 허브 목록
         ("trend", 0.6, "weekly"),         # 시장 트렌드 — 20주 추이
         ("disclaimer", 0.3, "yearly"),
         ("terms", 0.2, "yearly"),
@@ -123,6 +125,28 @@ class ProductSitemap(Sitemap):
         return "daily" if obj.sub_end and obj.sub_end >= date.today() else "monthly"
 
 
+class AssetSitemap(Sitemap):
+    """기초자산별 공개 페이지 (/assets/<slug>/) — 상위 10개 고정.
+
+    엘마 벤치마크로 만든 검색 유입용 지면(경쟁분석_엘마_v1.md 6장 1순위,
+    2026-08-24). 상품 상세와 달리 URL이 늘 10개뿐이라 만료 걱정 없이
+    항상 전량을 낸다.
+    """
+
+    protocol = "https"
+    changefreq = "weekly"   # 최근 발행 집계라 주간 배치 때마다 바뀐다
+    priority = 0.7
+
+    def items(self):
+        return [slug for slug, _, _ in TOP_ASSETS]
+
+    def location(self, slug):
+        return reverse("asset_detail", args=[slug])
+
+    def lastmod(self, slug):
+        return _last_collected()
+
+
 def _last_collected():
     """주간 데이터가 마지막으로 들어온 날짜 (없으면 None)."""
     latest = Product.objects.listed().aggregate(m=Max("collected_at"))["m"]
@@ -132,4 +156,5 @@ def _last_collected():
 SITEMAPS = {
     "static": StaticViewSitemap,
     "products": ProductSitemap,
+    "assets": AssetSitemap,
 }

@@ -1,0 +1,109 @@
+{% extends "core/base.html" %}
+{% load els_extras %}
+{% block title %}{{ name }} ELS — 기초자산별 발행 현황 · ELS 레이더{% endblock %}
+{% block og_title %}{{ name }} ELS — 기초자산별 발행 현황 · ELS 레이더{% endblock %}
+{% block twitter_title %}{{ name }} ELS — 기초자산별 발행 현황 · ELS 레이더{% endblock %}
+
+{% block content %}
+<div class="crumb"><a href="{% url 'asset_list' %}">기초자산</a> <i class="fa-solid fa-chevron-right"></i> {{ name }}</div>
+<h1 class="page-title">{{ name }} ELS</h1>
+<p class="page-sub">{{ name }}를 기초자산으로 하는 국내 발행 ELS를 매주 자동으로 모아 정리합니다.</p>
+
+<div class="chips">
+  <a class="chip on">{{ name }}</a>
+  {% for s, n in others %}
+  <a class="chip" href="{% url 'asset_detail' s %}">{{ n }}</a>
+  {% endfor %}
+</div>
+
+{% if count == 0 %}
+<div class="card" style="margin-top:16px">
+  최근 {{ window_days }}일 사이 {{ name }}를 기초자산으로 하는 발행이 없었습니다.
+</div>
+{% else %}
+
+<div class="stat-grid" style="margin-top:16px">
+  <div class="stat-card">
+    <div class="stat-label">최근 {{ window_days }}일 발행</div>
+    <div class="stat-value">{{ count }}<small>건</small></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">낙인(KI) 범위</div>
+    <div class="stat-value">{% if ki_lo %}{{ ki_lo }}~{{ ki_hi }}{% else %}-{% endif %}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">제시 쿠폰 범위</div>
+    <div class="stat-value">{% if yield_lo %}{{ yield_lo }}~{{ yield_hi }}<small>%</small>{% else %}-{% endif %}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">발행 증권사</div>
+    <div class="stat-value">{{ issuer_count }}<small>곳</small></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">발행사 구성 <span style="font-weight:400;font-size:12px;color:var(--text-3)">(최근 {{ window_days }}일)</span></div>
+  <div class="issuerbar">
+    {% for row in top_issuers %}
+    <div class="irow">
+      <span class="iname">{{ row.name }}</span>
+      <span class="itrack"><span class="ifill" style="width:{{ row.pct }}%"></span></span>
+      <span class="icount">{{ row.count }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-title">최근 발행 상품</div>
+  <div class="plist">
+    {% for p in recent %}
+    <div class="prow" onclick="location.href='{% url 'product_detail' p.id %}'" style="cursor:pointer">
+      <div class="pmain">
+        <div class="pname">{{ p.issuer }} · {{ p.assets_raw|asset_short }}</div>
+        <div class="pmeta">{% if p.is_no_ki %}노낙인{% else %}낙인 {{ p.ki }}{% endif %} · 청약마감 {{ p.sub_end|date:"n/j" }}</div>
+      </div>
+      {% if p.yield_rate %}<div class="pyield">{{ p.yield_rate }}%</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="cta">
+  <div>
+    <div class="t">로그인하면 배지·손실확률·포트폴리오까지 볼 수 있습니다</div>
+    <div class="d">이 화면은 발행 현황만 보여줍니다. 어떤 상품이 조건이 좋은지는 로그인 후 확인하세요.</div>
+  </div>
+  <a href="{% url 'signup' %}" class="btn btn-primary">무료로 시작하기</a>
+</div>
+
+{% endif %}
+
+<style>
+.crumb{font-size:12px;color:var(--text-3);margin-bottom:4px}
+.crumb a{color:var(--text-3);text-decoration:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 4px}
+.chip{font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;
+  background:var(--bg);color:var(--text-2);border:1px solid var(--border);text-decoration:none}
+.chip.on{background:var(--blue-bg);color:var(--blue-dark);border-color:var(--blue)}
+.chip:hover{border-color:var(--blue)}
+.issuerbar{display:flex;flex-direction:column;gap:8px}
+.irow{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.iname{width:96px;flex:none;color:var(--text-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.itrack{flex:1;height:10px;background:var(--bg);border-radius:5px;overflow:hidden}
+.ifill{display:block;height:100%;background:var(--blue);border-radius:5px}
+.icount{width:32px;flex:none;text-align:right;font-weight:700}
+.plist{border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.prow{display:flex;gap:10px;align-items:center;padding:11px 13px;border-bottom:1px solid var(--border);font-size:12.5px}
+.prow:last-child{border-bottom:none}
+.prow:hover{background:var(--bg)}
+.pmain{flex:1;min-width:0}
+.pname{font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pmeta{font-size:11.5px;color:var(--text-3);margin-top:2px}
+.pyield{font-weight:800;font-size:14px;white-space:nowrap;color:var(--blue-dark)}
+.cta{margin-top:16px;background:var(--blue-bg);border:1px solid var(--blue);border-radius:12px;
+  padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.cta .t{font-size:13px;font-weight:700;color:var(--blue-dark)}
+.cta .d{font-size:11.5px;color:var(--text-2);margin-top:2px}
+</style>
+{% endblock %}

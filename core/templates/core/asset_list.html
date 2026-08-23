@@ -1,0 +1,28 @@
+{% extends "core/base.html" %}
+{% block title %}기초자산별 ELS 발행 현황 — ELS 레이더{% endblock %}
+{% block og_title %}기초자산별 ELS 발행 현황 — ELS 레이더{% endblock %}
+{% block twitter_title %}기초자산별 ELS 발행 현황 — ELS 레이더{% endblock %}
+
+{% block content %}
+<h1 class="page-title">기초자산별 ELS</h1>
+<p class="page-sub">종목·지수별로 최근 발행된 ELS 조건을 로그인 없이 볼 수 있습니다</p>
+
+<div class="asset-grid">
+  {% for slug, ticker, name in assets %}
+  <a class="asset-card" href="{% url 'asset_detail' slug %}">
+    <span class="name">{{ name }}</span>
+    <i class="fa-solid fa-arrow-right"></i>
+  </a>
+  {% endfor %}
+</div>
+
+<style>
+.asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.asset-card{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--card);border:1px solid var(--border);border-radius:12px;
+  padding:16px 18px;text-decoration:none;color:var(--text);font-weight:700;font-size:14.5px}
+.asset-card i{color:var(--text-3);font-size:12px}
+.asset-card:hover{border-color:var(--blue)}
+.asset-card:hover i{color:var(--blue-dark)}
+</style>
+{% endblock %}

@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import ask_tools, portfolio_facts, telegram
+from .asset_pages import TOP_ASSETS, asset_context
 from .compare import MIN_PEERS, compare_context, peer_key, week_peer_counts
 from .models import (
     Feedback, FeedbackBannerDismissal, ImportLog, Investment, Preset, Product,
@@ -1892,6 +1893,27 @@ def market_trend(request):
         "radar": radar,
         "active_nav": "trend",
     })
+
+
+# ── 기초자산별 공개 페이지 (로그인 불필요, 검색 유입용) ──────────────
+def asset_list(request):
+    """기초자산 허브 목록 — 상위 10개 카드."""
+    return render(request, "core/asset_list.html", {
+        "meta_desc": "삼성전자·SK하이닉스·KOSPI200 등 기초자산별로 최근 발행된 ELS 조건을 모아봅니다.",
+        "assets": TOP_ASSETS,
+    })
+
+
+def asset_detail(request, slug):
+    """기초자산별 발행 현황 — 로그인 없이 본다."""
+    ctx = asset_context(slug)
+    if ctx is None:
+        raise Http404
+    ctx["meta_desc"] = (
+        f"{ctx['name']}를 기초자산으로 하는 ELS 발행 현황입니다. "
+        f"최근 {ctx['window_days']}일 {ctx['count']}건, 낙인·쿠폰 조건과 발행사 구성을 정리했습니다."
+    )
+    return render(request, "core/asset_detail.html", ctx)
 
 
 # ── 상환 캘린더 ───────────────────────────────────
