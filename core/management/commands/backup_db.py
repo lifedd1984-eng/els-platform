@@ -9,6 +9,7 @@ DB(SQLite)와 .env를 백업한다. 일일 배치 마지막에 실행.
 """
 
 import gzip
+import re
 import shutil
 import sqlite3
 import tempfile
@@ -21,6 +22,14 @@ from django.core.management.base import BaseCommand
 KEEP_PRIMARY = 30   # F: (PC 대용량 드라이브)
 KEEP_LOCAL = 5      # EC2 로컬 폴백 — DB 383MB 시대 기준 재조정 (2026-07-31, 디스크 87% 사건)
 PRIMARY_DIR = Path("F:/ELS_backup")
+
+# 이 커맨드가 만든 파일만 매칭한다 (db_20260823_0937.sqlite3.gz).
+# db_pre_social_20260821_110153.sqlite3 같은 마이그레이션 전 수동 백업은
+# "db_"로 시작해 예전엔 같은 glob(db_*.sqlite3)에 걸렸다 — 그런데 파일명
+# 정렬에서 "pre"의 p가 숫자보다 뒤라 그 수동 백업들이 항상 "최신"으로
+# 취급되어, 방금 만든 진짜 최신 백업이 보관 개수 밖으로 밀려 삭제되고
+# 있었다(2026-08-22 이후 매일 backup_db 실패의 원인).
+AUTO_BACKUP_RE = re.compile(r"^db_\d{8}_\d{4}\.sqlite3(\.gz)?$")
 
 
 class Command(BaseCommand):
@@ -67,9 +76,12 @@ class Command(BaseCommand):
         if env.exists():
             shutil.copy2(env, dest_dir / "env_backup.txt")
 
-        # 구형(무압축 .sqlite3) 포함해 보관 개수 관리
-        backups = sorted(list(dest_dir.glob("db_*.sqlite3.gz"))
-                         + list(dest_dir.glob("db_*.sqlite3")))
+        # 이 커맨드가 만든 파일만 대상으로 보관 개수 관리 (마이그레이션 전
+        # 수동 백업 db_pre_*.sqlite3 등은 건드리지 않는다 — 위 정규식 주석 참조)
+        backups = sorted(
+            (p for p in dest_dir.iterdir() if AUTO_BACKUP_RE.match(p.name)),
+            key=lambda p: p.name,
+        )
         removed = 0
         for old in backups[:-keep]:
             old.unlink()
