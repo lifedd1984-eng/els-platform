@@ -88,32 +88,56 @@ def signup(request):
     return render(request, "core/signup.html", {"form": form})
 
 
-# ── 소셜 로그인 (카카오) ──────────────────────────────
+# ── 소셜 로그인 (카카오·구글) ──────────────────────────────
 # allauth 의 provider 뷰 앞에 세우는 관문. 같은 경로에 우리 것을 먼저 등록해
 # 두면 URL 해석은 여기로 오고, {% url 'kakao_login' %} 역참조는 allauth 가
 # 등록한 이름 그대로 쓸 수 있다(경로가 같으므로 결과도 같다).
 #
-# 왜 필요한가: 키(.env KAKAO_CLIENT_ID)가 없으면 allauth 는 소셜 앱을 못 찾아
+# 왜 필요한가: 키(.env 의 CLIENT_ID)가 없으면 allauth 는 소셜 앱을 못 찾아
 # 예외를 던진다. 아직 키를 발급받기 전이거나 배포 때 .env 를 빠뜨리면
 # 방문자가 에러 화면을 보게 된다. 그럴 땐 조용히 로그인 화면으로 되돌린다.
-def _social_disabled_redirect(request):
-    messages.error(request, "카카오 로그인은 현재 준비 중입니다. 아이디로 로그인해 주세요.")
+#
+# provider별로 개별 확인한다(전체 SOCIAL_LOGIN_ENABLED가 아니다) — 카카오만
+# 키가 있고 구글은 아직 없는 상태에서 구글 진입점이 "하나라도 켜져 있으니
+# 통과"로 잘못 판단해 allauth로 넘겼다가 그대로 500이 나는 걸 막기 위해서다.
+def _social_disabled_redirect(request, label):
+    messages.error(request, f"{label} 로그인은 현재 준비 중입니다. 아이디로 로그인해 주세요.")
     return redirect("login")
+
+
+def _provider_enabled(provider_id):
+    return getattr(settings, "SOCIAL_PROVIDERS", {}).get(provider_id, {}).get("enabled", False)
 
 
 def kakao_login_entry(request):
     """/accounts/kakao/login/ — 키가 있을 때만 allauth 로 넘긴다."""
-    if not getattr(settings, "SOCIAL_LOGIN_ENABLED", False):
-        return _social_disabled_redirect(request)
+    if not _provider_enabled("kakao"):
+        return _social_disabled_redirect(request, "카카오")
     from allauth.socialaccount.providers.kakao.views import oauth2_login
     return oauth2_login(request)
 
 
 def kakao_callback_entry(request):
     """/accounts/kakao/login/callback/ — 위와 같은 이유의 관문."""
-    if not getattr(settings, "SOCIAL_LOGIN_ENABLED", False):
-        return _social_disabled_redirect(request)
+    if not _provider_enabled("kakao"):
+        return _social_disabled_redirect(request, "카카오")
     from allauth.socialaccount.providers.kakao.views import oauth2_callback
+    return oauth2_callback(request)
+
+
+def google_login_entry(request):
+    """/accounts/google/login/ — 키가 있을 때만 allauth 로 넘긴다."""
+    if not _provider_enabled("google"):
+        return _social_disabled_redirect(request, "구글")
+    from allauth.socialaccount.providers.google.views import oauth2_login
+    return oauth2_login(request)
+
+
+def google_callback_entry(request):
+    """/accounts/google/login/callback/ — 위와 같은 이유의 관문."""
+    if not _provider_enabled("google"):
+        return _social_disabled_redirect(request, "구글")
+    from allauth.socialaccount.providers.google.views import oauth2_callback
     return oauth2_callback(request)
 
 

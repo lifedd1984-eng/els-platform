@@ -96,6 +96,7 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     'allauth.socialaccount.providers.kakao',
+    'allauth.socialaccount.providers.google',
 ]
 
 MIDDLEWARE = [
@@ -219,11 +220,14 @@ LOGOUT_REDIRECT_URL = '/accounts/login/'
 # (core.views.kakao_login_entry). 눌러서 에러 페이지를 보는 일이 없게 한다.
 KAKAO_CLIENT_ID = os.environ.get("KAKAO_CLIENT_ID", "").strip()
 KAKAO_SECRET = os.environ.get("KAKAO_SECRET", "").strip()
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "").strip()
 
 # 화면·URL 가드가 함께 보는 스위치. 3사 확장 시 여기에 항목이 늘어난다.
 #   provider_id: (사람이 읽는 이름, 키가 채워졌는가)
 SOCIAL_PROVIDERS = {
     "kakao": {"label": "카카오", "enabled": bool(KAKAO_CLIENT_ID)},
+    "google": {"label": "구글", "enabled": bool(GOOGLE_CLIENT_ID)},
 }
 SOCIAL_LOGIN_ENABLED = any(p["enabled"] for p in SOCIAL_PROVIDERS.values())
 
@@ -285,6 +289,17 @@ SOCIALACCOUNT_PROVIDERS = {
         # 카카오 개발자센터 '동의항목'에서 켠 것만 실제로 온다.
         "SCOPE": ["account_email", "profile_nickname"],
         # 이 provider만 이메일 대조 로그인을 허용한다 (위 주석 참조).
+        "EMAIL_AUTHENTICATION": True,
+    },
+    "google": {
+        **({"APPS": [{
+            "client_id": GOOGLE_CLIENT_ID,
+            "secret": GOOGLE_SECRET,
+            "key": "",
+        }]} if GOOGLE_CLIENT_ID else {}),
+        "SCOPE": ["profile", "email"],
+        # 구글은 스스로 이메일 소유를 확인한 계정만 내려주므로(카카오처럼
+        # 사용자 설정에 따라 안 온 채 통과하는 경우가 없다) 신뢰하고 켠다.
         "EMAIL_AUTHENTICATION": True,
     },
 }
