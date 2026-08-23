@@ -97,6 +97,7 @@ INSTALLED_APPS = [
     'allauth.socialaccount',
     'allauth.socialaccount.providers.kakao',
     'allauth.socialaccount.providers.google',
+    'allauth.socialaccount.providers.naver',
 ]
 
 MIDDLEWARE = [
@@ -222,12 +223,15 @@ KAKAO_CLIENT_ID = os.environ.get("KAKAO_CLIENT_ID", "").strip()
 KAKAO_SECRET = os.environ.get("KAKAO_SECRET", "").strip()
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "").strip()
 GOOGLE_SECRET = os.environ.get("GOOGLE_SECRET", "").strip()
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "").strip()
+NAVER_SECRET = os.environ.get("NAVER_SECRET", "").strip()
 
 # 화면·URL 가드가 함께 보는 스위치. 3사 확장 시 여기에 항목이 늘어난다.
 #   provider_id: (사람이 읽는 이름, 키가 채워졌는가)
 SOCIAL_PROVIDERS = {
     "kakao": {"label": "카카오", "enabled": bool(KAKAO_CLIENT_ID)},
     "google": {"label": "구글", "enabled": bool(GOOGLE_CLIENT_ID)},
+    "naver": {"label": "네이버", "enabled": bool(NAVER_CLIENT_ID)},
 }
 SOCIAL_LOGIN_ENABLED = any(p["enabled"] for p in SOCIAL_PROVIDERS.values())
 
@@ -300,6 +304,17 @@ SOCIALACCOUNT_PROVIDERS = {
         "SCOPE": ["profile", "email"],
         # 구글은 스스로 이메일 소유를 확인한 계정만 내려주므로(카카오처럼
         # 사용자 설정에 따라 안 온 채 통과하는 경우가 없다) 신뢰하고 켠다.
+        "EMAIL_AUTHENTICATION": True,
+    },
+    "naver": {
+        **({"APPS": [{
+            "client_id": NAVER_CLIENT_ID,
+            "secret": NAVER_SECRET,
+            "key": "",
+        }]} if NAVER_CLIENT_ID else {}),
+        # 네이버는 OAuth 요청에 scope를 안 싣는다 — 무엇을 내려줄지는
+        # 네이버 개발자센터 '제공정보' 설정이 서버 쪽에서 결정한다.
+        # allauth 쪽도 이메일이 오면 항상 verified=True로 싣는다(같은 이유로 신뢰).
         "EMAIL_AUTHENTICATION": True,
     },
 }

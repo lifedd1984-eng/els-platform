@@ -27,6 +27,16 @@
 .btn-google:hover { background:#F7F8F8; }
 .btn-google-symbol { display:block; flex:none; }
 @media (max-width:400px) { .btn-google { font-size:14px; } }
+/* 네이버 로그인 버튼 디자인 가이드: 배경 #03C75A, 흰 글자, 좌측 흰 N 심볼. */
+.btn-naver {
+  width:100%; display:flex; align-items:center; justify-content:center; gap:9px;
+  background:#03C75A; border:none; border-radius:12px; padding:12px;
+  font-family:inherit; font-size:15px; font-weight:700; cursor:pointer;
+  color:#fff; margin-top:10px;
+}
+.btn-naver:hover { background:#02B350; }
+.btn-naver-symbol { display:block; flex:none; }
+@media (max-width:400px) { .btn-naver { font-size:14px; } }
 </style>
 
 <div class="social-sep"><span>또는</span></div>
@@ -60,5 +70,14 @@
 </form>
 {% endif %}
 
-{# 네이버는 여기에 같은 모양으로 한 블록 더 늘어난다 #}
+{% if naver_login_enabled %}
+{# 네이버 공식 흰색 N 심볼. developers.naver.com 로그인 버튼 가이드 원본 형태 #}
+<form method="post" action="{% url 'naver_login' %}" class="social-form">{% csrf_token %}
+  <input type="hidden" name="process" value="{{ social_process|default:'login' }}">
+  <button type="submit" class="btn-naver">
+    <svg class="btn-naver-symbol" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="#fff" d="M13.6 12.9 8.9 6H5v12h4.4v-6.9L14.1 18H18V6h-4.4z"/></svg>
+    <span>{{ naver_social_label|default:"네이버 로그인" }}</span>
+  </button>
+</form>
+{% endif %}
 {% endif %}

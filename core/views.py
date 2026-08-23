@@ -141,6 +141,22 @@ def google_callback_entry(request):
     return oauth2_callback(request)
 
 
+def naver_login_entry(request):
+    """/accounts/naver/login/ — 키가 있을 때만 allauth 로 넘긴다."""
+    if not _provider_enabled("naver"):
+        return _social_disabled_redirect(request, "네이버")
+    from allauth.socialaccount.providers.naver.views import oauth2_login
+    return oauth2_login(request)
+
+
+def naver_callback_entry(request):
+    """/accounts/naver/login/callback/ — 위와 같은 이유의 관문."""
+    if not _provider_enabled("naver"):
+        return _social_disabled_redirect(request, "네이버")
+    from allauth.socialaccount.providers.naver.views import oauth2_callback
+    return oauth2_callback(request)
+
+
 def social_connect_help(request):
     """자동 연결을 일부러 하지 않았을 때 보여주는 안내 화면.
 

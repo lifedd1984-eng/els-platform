@@ -15,6 +15,7 @@ def social(request):
         "social_providers": providers,
         "kakao_login_enabled": providers.get("kakao", {}).get("enabled", False),
         "google_login_enabled": providers.get("google", {}).get("enabled", False),
+        "naver_login_enabled": providers.get("naver", {}).get("enabled", False),
     }
 
 

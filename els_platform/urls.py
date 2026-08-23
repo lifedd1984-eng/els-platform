@@ -43,14 +43,18 @@ urlpatterns = [
     path('accounts/google/login/', views.google_login_entry, name='google_login_entry'),
     path('accounts/google/login/callback/', views.google_callback_entry,
          name='google_callback_entry'),
+    path('accounts/naver/login/', views.naver_login_entry, name='naver_login_entry'),
+    path('accounts/naver/login/callback/', views.naver_callback_entry,
+         name='naver_callback_entry'),
     # 자동 연결을 하지 않았을 때의 안내 화면
     path('accounts/social/help/', views.social_connect_help, name='social_connect_help'),
     # 연결 목록·해제 (allauth 뷰 + 우리 템플릿) 및 소셜 가입 보조 화면
     path('accounts/social/', include('allauth.socialaccount.urls')),
     # /accounts/kakao/login/ 등의 실제 구현. 위 관문이 먼저 매칭되므로 여기는
-    # 이름(kakao_login·google_login 등) 역참조용이다.
+    # 이름(kakao_login·google_login·naver_login 등) 역참조용이다.
     path('accounts/', include('allauth.socialaccount.providers.kakao.urls')),
     path('accounts/', include('allauth.socialaccount.providers.google.urls')),
+    path('accounts/', include('allauth.socialaccount.providers.naver.urls')),
 
     path('', views.home, name='home'),
     path('weekly/', views.weekly, name='weekly'),

@@ -5,9 +5,11 @@ yfinance>=0.2
 finance-datareader>=0.9  # KRX 종목마스터 (기초자산 티커 자동 해결)
 pdfplumber>=0.11         # 간이투자설명서 PDF 파싱 (최초기준가격평가일 추출)
 pywebpush>=2.0           # 브라우저 웹 푸시 발송 (VAPID)
-# 소셜 로그인(카카오). 버전을 고정한다 — allauth 는 마이너 판올림에서 설정 이름과
+# 소셜 로그인(카카오·구글). 버전을 고정한다 — allauth 는 마이너 판올림에서 설정 이름과
 # 계정 자동연결 방어 동작이 바뀌는 일이 있어, 서버가 다른 버전을 집어 오면
 # 검증한 것과 다른 흐름이 돌 수 있다. 올릴 때는 릴리스 노트를 보고 올린다.
 # 카카오는 OAuth2 라 requests(위)만 있으면 되고 oauthlib·pyjwt 는 쓰지 않는다.
-# OAuth1 이나 OIDC 방식 제공자를 나중에 붙이면 django-allauth[socialaccount] 로 바꿔야 한다.
+# 구글은 OIDC라 ID 토큰(JWT) 서명 검증에 PyJWT[crypto]가 필요하다 — 없으면
+# 콜백에서 ModuleNotFoundError: No module named 'jwt'로 500이 난다(2026-08-23 확인).
 django-allauth==65.19.1
+PyJWT[crypto]==2.10.1
