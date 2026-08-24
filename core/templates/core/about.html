@@ -31,6 +31,10 @@
   padding:3px 9px; border-radius:999px; }
 .lp-panel-more { display:block; text-align:center; font-size:13px; font-weight:700;
   color:var(--blue-dark); padding:11px 0 5px; }
+.lp-panel-empty-body { text-align:center; padding:28px 10px 22px; }
+.lp-panel-empty-body i { font-size:22px; color:var(--text-3); margin-bottom:10px; }
+.lp-panel-empty-body p { font-size:14.5px; font-weight:700; margin:0 0 6px; }
+.lp-panel-empty-body span { font-size:12px; color:var(--text-3); line-height:1.6; }
 
 /* 장 공통 */
 .lp-sec { margin-top:130px; text-align:center; }
@@ -241,6 +245,18 @@ body.js-anim .lp-sec.in { opacity:1; transform:none; }
       </div>
     </a>
     {% endfor %}
+    <a class="lp-panel-more" href="{% url 'weekly' %}">이번주 전체 상품 보기 →</a>
+  </div>
+  {% else %}
+  <div class="lp-hero-panel lp-hero-panel-empty">
+    <div class="lp-panel-head">
+      <span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" style="vertical-align:-2px"><path d="M19.07 4.93A10 10 0 1 1 4.93 4.93"/><circle cx="12" cy="12" r="1.2" fill="var(--blue)" stroke="none"/><path d="M12 12 18 6"/></svg> 이번주 TOP5</span>
+    </div>
+    <div class="lp-panel-empty-body">
+      <i class="fa-regular fa-clock"></i>
+      <p>이번 주 신호를 준비 중입니다</p>
+      <span>발행이 적은 주간엔 기준을 통과하는 상품이 없을 수 있습니다.<br>전체 청약 현황은 아래에서 확인하세요.</span>
+    </div>
     <a class="lp-panel-more" href="{% url 'weekly' %}">이번주 전체 상품 보기 →</a>
   </div>
   {% endif %}
