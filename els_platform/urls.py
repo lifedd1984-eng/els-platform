@@ -93,6 +93,8 @@ urlpatterns = [
     path('sw.js', views.service_worker, name='service_worker'),
     path('sitemap.xml', sitemap, {'sitemaps': SITEMAPS}, name='django.contrib.sitemaps.views.sitemap'),
     path('robots.txt', views.robots_txt, name='robots_txt'),
+    # 네이버 소유확인 파일 — 루트에 있어야 네이버가 찾는다
+    path(views.NAVER_VERIFY_FILE, views.naver_verify, name='naver_verify'),
     path('push/subscribe/', views.push_subscribe, name='push_subscribe'),
     path('push/unsubscribe/', views.push_unsubscribe, name='push_unsubscribe'),
     path('push/test/', views.push_test, name='push_test'),

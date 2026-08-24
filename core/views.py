@@ -2253,6 +2253,19 @@ def robots_txt(request):
     return HttpResponse("\n".join(lines), content_type="text/plain; charset=utf-8")
 
 
+# 네이버 서치어드바이저 사이트 소유확인 파일 (2026-08-24).
+# 파일을 정적으로 두지 않고 뷰로 내는 이유: 이 프로젝트는 정적 파일 서빙 경로를
+# 따로 두지 않아 루트에 파일 하나 올리는 게 오히려 번거롭다.
+# 값은 비밀이 아니다 — 네이버가 이 주소를 그대로 읽어 대조하는 용도다.
+NAVER_VERIFY_FILE = "naver4dd9d4b93cb376cada118943e077602d.html"
+
+
+def naver_verify(request):
+    """/naver<해시>.html — 네이버가 이 파일을 읽어 소유를 확인한다."""
+    return HttpResponse(f"naver-site-verification: {NAVER_VERIFY_FILE}",
+                        content_type="text/html; charset=utf-8")
+
+
 def _push_login_required(view):
     """푸시 엔드포인트 전용 로그인 검사.
 
