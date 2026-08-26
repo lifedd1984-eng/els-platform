@@ -221,6 +221,60 @@ def fetch_prospectus_text(url: str, pages: int = 12) -> str:
     return re.sub(r"\s+", " ", "\n".join(parts))
 
 
+def auto_repair_product(product):
+    """설명서 근거가 명확하고 모든 시세 매핑이 잡힐 때만 기초자산을 저장한다.
+
+    배치에서 호출하는 보수적인 자동복구 경로다. 후보 추출, 유형 판정, 티커
+    매핑 중 하나라도 불확실하면 DB를 전혀 바꾸지 않고 사유를 돌려준다.
+    시뮬레이션은 호출자가 저장 성공 뒤 해당 상품만 별도로 실행한다.
+    """
+    from core import market
+
+    if (product.assets_raw or "").strip():
+        return {"ok": False, "reason": "이미 기초자산 값이 있음"}
+    if not product.prospectus_url:
+        return {"ok": False, "reason": "간이투자설명서 URL 없음"}
+
+    try:
+        text = fetch_prospectus_text(product.prospectus_url)
+        candidate, evidence = extract_assets_from_prospectus(text)
+    except Exception as exc:  # 조사 실패가 전체 수집 배치를 깨뜨리면 안 된다.
+        return {"ok": False, "reason": f"설명서 조회 실패: {exc}"}
+
+    if not candidate or not evidence:
+        return {"ok": False, "reason": "설명서에서 확실한 후보를 추출하지 못함"}
+    asset_type = parsers.classify_asset(candidate) or ""
+    if not asset_type:
+        return {"ok": False, "reason": "지수형/종목형 판정 실패", "candidate": candidate}
+
+    assets = market.split_assets(candidate)
+    if not assets or len(assets) > 5:
+        return {"ok": False, "reason": "기초자산 개수 검증 실패", "candidate": candidate}
+    ticker_map = {name: market.resolve_ticker(name) for name in assets}
+    missing = [name for name, ticker in ticker_map.items() if not ticker]
+    if missing:
+        return {
+            "ok": False,
+            "reason": f"시세 매핑 없음: {', '.join(missing)}",
+            "candidate": candidate,
+        }
+
+    product.assets_raw = candidate
+    product.asset_type = asset_type
+    product.loss_prob = None
+    product.sim_result = None
+    product.sim_samples = None
+    product.save(update_fields=["assets_raw", "asset_type", "loss_prob",
+                                "sim_result", "sim_samples"])
+    return {
+        "ok": True,
+        "candidate": candidate,
+        "asset_type": asset_type,
+        "tickers": ticker_map,
+        "evidence": evidence,
+    }
+
+
 class Command(BaseCommand):
     help = "기초자산이 빈 상품을 간이투자설명서 근거로 확인·보정 (기본 dry-run)"
 

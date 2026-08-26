@@ -6,6 +6,7 @@ ELS_Curator.exe 수동 실행 없이 자동 수집하는 경로.
 product_code(KOFIA 고유코드)가 있으면 그것으로, 없으면 (issuer, product_no, sub_end)로 upsert.
 """
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from core import kofia_scraper, notify, parsers, telegram
@@ -180,7 +181,68 @@ class Command(BaseCommand):
 
         self.stdout.write(f"[자동수집] KOFIA {len(rows)}건 중 신규 {n_new}건")
 
-        # 기초자산 결손 경보 — 보정 전까지 매 배치 상기
+        # 기초자산 결손 자동복구. 설명서 표에서 후보가 명확하고 유형·모든 시세
+        # 티커 검증까지 통과한 경우에만 저장한 뒤 해당 상품 하나만 시뮬레이션한다.
+        # 하나라도 불확실하면 기존 경보 대상으로 남겨 사람이 확인한다.
+        auto_repaired = []
+        unresolved_assets = []
+        if missing_assets:
+            from core.management.commands.fix_missing_assets import auto_repair_product
+
+            for row in missing_assets:
+                product = self._find_existing(row)
+                if not product:
+                    row["_repair_reason"] = "저장된 상품을 다시 찾지 못함"
+                    unresolved_assets.append(row)
+                    continue
+                result = auto_repair_product(product)
+                if not result["ok"]:
+                    row["_repair_reason"] = result.get("reason", "자동검증 실패")
+                    unresolved_assets.append(row)
+                    continue
+                simulation_error = ""
+                try:
+                    call_command(
+                        "simulate_products", product_id=product.id, missing_only=True,
+                        stdout=self.stdout, stderr=self.stderr,
+                    )
+                except Exception as exc:  # 보정 성공 뒤 시세 장애가 수집 전체를 깨면 안 됨
+                    simulation_error = str(exc)
+                    self.stderr.write(
+                        f"[기초자산 자동보정] {product.id} 시뮬레이션 실패: {exc}")
+                product.refresh_from_db(fields=["loss_prob", "sim_result", "sim_samples"])
+                result["product"] = product
+                result["simulation_error"] = simulation_error
+                result["simulated"] = bool(
+                    product.sim_result and product.sim_result.get("available")
+                )
+                auto_repaired.append(result)
+
+        if auto_repaired and should_notify:
+            lines = [f"[기초자산 자동보정 완료] {len(auto_repaired)}건"]
+            for result in auto_repaired[:10]:
+                p = result["product"]
+                ticker_text = ", ".join(
+                    f"{name}→{ticker}" for name, ticker in result["tickers"].items())
+                sim_text = (f"실패 ({result['simulation_error']})"
+                            if result["simulation_error"] else
+                            f"완료 (손실확률 {p.loss_prob:g}%)"
+                            if result["simulated"] and p.loss_prob is not None
+                            else "불가 — 다음 배치에서 재시도")
+                lines += [
+                    f"- {p.issuer} {p.product_no}",
+                    f"  설명서: {result['candidate']} / {result['asset_type']}",
+                    f"  시세: {ticker_text}",
+                    f"  시뮬레이션: {sim_text}",
+                ]
+            if len(auto_repaired) > 10:
+                lines.append(f"... 외 {len(auto_repaired) - 10}건")
+            telegram.send_message("\n".join(lines))
+            self.stdout.write(f"[기초자산 자동보정] {len(auto_repaired)}건 완료")
+
+        missing_assets = unresolved_assets
+
+        # 기초자산 결손 경보 — 자동검증을 통과하지 못한 건만 매 배치 상기
         #
         # ⚠ 예전 문구는 "KOFIA 웹에서 실물 확인"이었는데 이는 헛걸음이다.
         #   빈 값의 출처가 KOFIA 목록(val8) 자체라 KOFIA 웹 화면에서도 그 칸이 비어 있다.
@@ -193,6 +255,8 @@ class Command(BaseCommand):
             ]
             for r in missing_assets[:10]:
                 lines.append(f"- {r['issuer']} {r['product_no']} (~{r['sub_end']})")
+                if r.get("_repair_reason"):
+                    lines.append(f"  자동보정 보류: {r['_repair_reason']}")
                 if r.get("prospectus_url"):
                     lines.append(f"  설명서: {r['prospectus_url']}")
             if len(missing_assets) > 10:

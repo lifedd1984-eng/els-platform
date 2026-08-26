@@ -30,6 +30,8 @@ class Command(BaseCommand):
     help = "기초자산 과거 데이터로 회차별 상환/손실 분포 시뮬레이션 후 캐시"
 
     def add_arguments(self, parser):
+        parser.add_argument("--id", dest="product_id", type=int, default=0,
+                            help="지정한 Product.id 한 건만 대상")
         parser.add_argument("--days", type=int, default=45,
                             help="최근 N일 내 청약마감 상품만 대상 (기본 45)")
         parser.add_argument("--all", action="store_true", help="전체 상품 대상")
@@ -45,6 +47,8 @@ class Command(BaseCommand):
             barriers_raw__isnull=False, period_months__isnull=False,
             yield_rate__isnull=False,
         )
+        if opts["product_id"]:
+            base = base.filter(id=opts["product_id"])
         if opts["all"]:
             qs = base
         else:
