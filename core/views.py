@@ -2977,6 +2977,7 @@ def article_list(request):
     return render(request, "core/article_list.html", {
         "active_nav": "articles",
         "meta_desc": "ELS가 처음이어도 괜찮아요. 기초자산, 조기상환, 낙인, 만기 조건을 확인하는 순서대로 쉽게 알려드려요.",
+        "og_image_url": request.build_absolute_uri("/articles/media/learning-hub-hero-v2.png"),
     })
 
 
@@ -2985,11 +2986,17 @@ def article_els_basics(request):
     return render(request, "core/article_els_basics.html", {
         "active_nav": "articles",
         "meta_desc": "ELS의 조기상환, 낙인, 만기 손실 구조를 세 단계로 나눠 그림과 예시로 쉽게 설명해요.",
+        "og_image_url": request.build_absolute_uri("/articles/media/els-basics-hero-v2.png"),
+        "articles_url": request.build_absolute_uri("/articles/"),
+        "faq_question": "낙인이 발생하면 바로 원금손실일까요?",
+        "faq_answer": "아니에요. 만기 평가일에 상환 조건 이상으로 회복하면 원금과 약정 수익을 받을 수 있어요. 낙인 발생과 만기 미회복이 함께 나타났을 때 원금손실 가능성이 생깁니다.",
     })
 
 
 def _article_lesson(request, template_name, **lesson):
     """두 번째 수업부터 공통 화면 틀과 앞뒤 이동을 함께 전달한다."""
+    lesson["og_image_url"] = request.build_absolute_uri(f"/articles/media/{lesson['lesson_image']}")
+    lesson["articles_url"] = request.build_absolute_uri("/articles/")
     return render(request, template_name, {"active_nav": "articles", **lesson})
 
 
@@ -3006,6 +3013,8 @@ def article_els_stepdown(request):
         lesson_image="els-stepdown-hero-v1.png",
         lesson_image_alt="시간이 지날수록 낮아지는 여섯 개의 조기상환 문",
         meta_desc="90-90-85-85처럼 내려가는 ELS 조기상환 기준을 평가일과 연결해 쉬운 예시와 그림으로 설명해요.",
+        faq_question="가장 낮은 자산이 88이에요. 12개월 기준은 90, 18개월 기준은 85라면?",
+        faq_answer="정답: 12개월에는 조기상환되지 않고, 18개월에도 88이라면 기준 85를 넘어 조기상환돼요. 숫자는 반드시 날짜와 짝지어 읽어야 합니다.",
         prev_url_name="article_els_basics",
         prev_label="ELS는 결국, 세 가지를 확인하는 상품이에요",
         next_url_name="article_els_knock_in",
@@ -3026,6 +3035,8 @@ def article_els_knock_in(request):
         lesson_image="els-knock-in-hero-v1.png",
         lesson_image_alt="낙인선 아래로 내려갔다가 만기 기준 위로 회복하는 가격선",
         meta_desc="ELS 낙인이 발생해도 손실이 바로 확정되지 않는 이유와 낙인 뒤 만기 결과 세 가지를 그림으로 설명해요.",
+        faq_question="낙인 45를 한 번 건드렸지만 만기 때 80까지 회복했어요. 만기상환 기준은 75라면?",
+        faq_answer="정답: 일반적인 예시 조건이라면 만기상환 기준 75를 넘었으므로 원금과 약정 수익을 받는 구조예요. 낙인 발생만으로 손실이 바로 확정되지는 않습니다.",
         prev_url_name="article_els_stepdown",
         prev_label="90-90-85-85, 이 숫자는 왜 내려갈까요?",
         next_url_name="article_els_worst_of",
@@ -3046,6 +3057,8 @@ def article_els_worst_of(request):
         lesson_image="els-worst-of-hero-v1.png",
         lesson_image_alt="서로 다른 위치에 있는 세 기초자산이 하나의 결승선을 향하는 모습",
         meta_desc="ELS가 여러 기초자산의 평균이 아니라 가장 많이 하락한 자산을 기준으로 상환 여부를 판단하는 이유를 설명해요.",
+        faq_question="세 자산이 104, 91, 84이고 조기상환 기준은 90이에요. 평균은 93인데 상환될까요?",
+        faq_answer="정답: 조기상환되지 않아요. 가장 낮은 자산 84가 기준선 90보다 낮기 때문이에요. 이 상품에서는 평균보다 가장 낮은 하나가 중요합니다.",
         prev_url_name="article_els_knock_in",
         prev_label="낙인이 생기면 바로 손실일까요?",
         next_url_name="article_els_yield",
@@ -3062,10 +3075,12 @@ def article_els_yield(request):
         lesson_title_line1="연 8퍼센트 ELS,",
         lesson_title_line2="실제로 받는 돈은 얼마일까요?",
         lesson_deck="표시 수익률에 상환 시점을 붙여야 실제 금액이 보여요. 1천만 원 예시로 천천히 계산해볼게요.",
-        lesson_read_time=4,
+        lesson_read_time=5,
         lesson_image="els-yield-hero-v1.png",
         lesson_image_alt="시계와 달력, 동전이 수익 지급함으로 이어지는 모습",
-        meta_desc="연 8퍼센트 ELS에 1천만 원을 넣었을 때 조기상환 시점에 따른 예상 세전 수익을 쉽게 계산해요.",
+        meta_desc="연 8퍼센트 ELS에 1천만 원을 넣었을 때 조기상환 시점에 따른 예상 세전·세후 수익을 쉽게 계산해요.",
+        faq_question="1천만 원을 연 8퍼센트 조건으로 넣고 6개월 만에 상환됐다면 단순 계산한 세전 수익은?",
+        faq_answer="정답: 세전 약 40만 원이에요. 일반 계좌에서 15.4퍼센트를 원천징수한다고 단순 계산하면 세후 수익은 약 33만 8천 원이에요. 실제 지급액과 세금은 상품, 계좌 종류, 개인 상황에 따라 달라질 수 있어요.",
         prev_url_name="article_els_worst_of",
         prev_label="기초자산이 세 개인데 왜 하나만 보나요?",
         next_url_name="article_els_vs_elb",
@@ -3086,6 +3101,8 @@ def article_els_vs_elb(request):
         lesson_image="els-vs-elb-hero-v1.png",
         lesson_image_alt="서로 다른 위험 구조를 가진 ELS 길과 ELB 길",
         meta_desc="ELS와 ELB의 만기 원금 구조, 수익 방식, 중도상환 위험, 발행사 신용위험을 초보자 눈높이에서 비교해요.",
+        faq_question="“ELB는 만기 원금지급 구조니까 은행 예금과 같다.” 맞을까요?",
+        faq_answer="정답: 아니에요. ELB는 예금자보호 대상이 아니고 발행사 신용위험이 있어요. 만기 전에 현금화하면 원금보다 적게 받을 수도 있습니다.",
         prev_url_name="article_els_yield",
         prev_label="연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?",
         next_url_name=None,

@@ -21,14 +21,14 @@
 <meta property="og:locale" content="ko_KR">
 <meta property="og:title" content="{% block og_title %}ELS 레이더{% endblock %}">
 <meta property="og:description" content="{{ seo_desc }}">
-<meta property="og:image" content="https://elsrader.site/og.png">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
+  <meta property="og:image" content="{% if og_image_url %}{{ og_image_url }}{% else %}https://elsrader.site/og.png{% endif %}">
+  {% if not og_image_url %}<meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">{% endif %}
 <meta property="og:url" content="{{ canonical_url }}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{% block twitter_title %}ELS 레이더{% endblock %}">
 <meta name="twitter:description" content="{{ seo_desc }}">
-<meta name="twitter:image" content="https://elsrader.site/og.png">
+  <meta name="twitter:image" content="{% if og_image_url %}{{ og_image_url }}{% else %}https://elsrader.site/og.png{% endif %}">
 {% endwith %}
 <link rel="apple-touch-icon" href="/icons/icon-180.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">

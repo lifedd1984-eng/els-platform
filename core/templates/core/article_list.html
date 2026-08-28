@@ -1,6 +1,7 @@
 {% extends "core/base.html" %}
 {% block title %}처음 배우는 ELS | ELS 레이더{% endblock %}
 {% block og_title %}처음 배우는 ELS | ELS 레이더{% endblock %}
+{% block twitter_title %}처음 배우는 ELS | ELS 레이더{% endblock %}
 {% block head %}<style>
 :root{--learn-ink:#171D26;--learn-muted:#596373;--learn-soft:#F4F7FB;--learn-line:#E7ECF2;--learn-blue:#2573E8;--learn-blue-soft:#EAF3FF;--learn-radius:24px}
 body{background:#fff;color:var(--learn-ink)}.container{max-width:none;padding:0}.learn-home{overflow:hidden}.learn-shell{width:min(1180px,calc(100% - 48px));margin:0 auto}
@@ -23,7 +24,7 @@ body{background:#fff;color:var(--learn-ink)}.container{max-width:none;padding:0}
 <a class="course-item" href="{% url 'article_els_stepdown' %}"><span class="course-icon"><i class="fa-solid fa-stairs"></i></span><div class="course-copy"><h3>90-90-85-85, 이 숫자는 왜 내려갈까요?</h3><p>평가일과 조기상환선을 달력 위에 놓고 읽는 법을 배워요.</p></div><span class="course-meta">두 번째 수업 · 5분 <i class="fa-solid fa-arrow-right"></i></span></a>
 <a class="course-item" href="{% url 'article_els_knock_in' %}"><span class="course-icon"><i class="fa-solid fa-shield-halved"></i></span><div class="course-copy"><h3>낙인이 생기면 바로 손실일까요?</h3><p>중간의 위험 기록과 만기의 최종 결과를 나누어 살펴봐요.</p></div><span class="course-meta">세 번째 수업 · 5분 <i class="fa-solid fa-arrow-right"></i></span></a>
 <a class="course-item" href="{% url 'article_els_worst_of' %}"><span class="course-icon"><i class="fa-solid fa-arrow-down-short-wide"></i></span><div class="course-copy"><h3>기초자산이 세 개인데 왜 하나만 보나요?</h3><p>평균이 아니라 가장 낮은 자산이 결과를 정하는 이유를 알아봐요.</p></div><span class="course-meta">네 번째 수업 · 5분 <i class="fa-solid fa-arrow-right"></i></span></a>
-<a class="course-item" href="{% url 'article_els_yield' %}"><span class="course-icon"><i class="fa-solid fa-calculator"></i></span><div class="course-copy"><h3>연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?</h3><p>1천만 원 예시로 상환 시점에 따른 세전 수익을 계산해요.</p></div><span class="course-meta">다섯 번째 수업 · 4분 <i class="fa-solid fa-arrow-right"></i></span></a>
+<a class="course-item" href="{% url 'article_els_yield' %}"><span class="course-icon"><i class="fa-solid fa-calculator"></i></span><div class="course-copy"><h3>연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?</h3><p>1천만 원 예시로 상환 시점에 따른 세전·세후 수익을 계산해요.</p></div><span class="course-meta">다섯 번째 수업 · 5분 <i class="fa-solid fa-arrow-right"></i></span></a>
 <a class="course-item" href="{% url 'article_els_vs_elb' %}"><span class="course-icon"><i class="fa-solid fa-code-compare"></i></span><div class="course-copy"><h3>ELS와 ELB, 이름은 비슷한데 위험은 달라요</h3><p>만기 원금 구조와 발행사 위험을 나란히 비교해요.</p></div><span class="course-meta">여섯 번째 수업 · 5분 <i class="fa-solid fa-arrow-right"></i></span></a>
 </div></div></section>
 <section class="learn-method"><div class="learn-shell method-grid"><div><h2>모든 수업은 같은 방식으로 설명해요</h2><p>글마다 설명 방식이 바뀌면 다시 적응해야 하니까요. 익숙한 리듬으로 끝까지 이어갈게요.</p></div><div class="method-steps"><div class="method-step"><i class="fa-regular fa-message"></i><div><b>먼저 질문을 꺼내요</b><span>초보자가 실제로 막히는 지점에서 시작해요.</span></div></div><div class="method-step"><i class="fa-regular fa-image"></i><div><b>그림으로 구조를 보여줘요</b><span>읽기 전에 눈으로 흐름을 파악할 수 있어요.</span></div></div><div class="method-step"><i class="fa-solid fa-list-check"></i><div><b>정확한 조건으로 정리해요</b><span>마지막에는 실제 상품 화면에서 찾을 항목을 남겨요.</span></div></div></div></div></section>
