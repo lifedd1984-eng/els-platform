@@ -1,0 +1,63 @@
+{% extends "core/article_lesson_base.html" %}
+{% block lesson_body %}
+<p><strong>90-90-85-85-80-75.</strong> ELS 상품 화면에서 이런 숫자를 만나면 암호처럼 느껴질 수 있어요. 하지만 숫자를 한꺼번에 읽지 말고, 달력의 약속 날짜에 하나씩 붙이면 금방 단순해집니다.</p>
+<p>이 숫자들은 보통 <strong>각 조기상환 평가일에 넘어야 하는 기준선</strong>이에요. 놀이공원 입구의 키 제한선이 날짜마다 조금씩 낮아진다고 생각하면 쉬워요.</p>
+
+<div class="wide quick-view" aria-label="이번 수업에서 기억할 세 가지">
+  <div class="quick-item"><i class="fa-regular fa-calendar"></i><b>숫자 하나에는<br>평가일 하나가 짝이에요</b><span>앞에서부터 첫 번째, 두 번째, 세 번째 평가일 순서로 읽어요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-arrow-trend-down"></i><b>뒤로 갈수록 기준선이 낮아져요</b><span>기다린 만큼 상환 문턱을 조금 낮춰 주는 구조예요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-flag-checkered"></i><b>한 번 통과하면 수업은 끝나요</b><span>조건을 충족한 평가일에 조기상환되고 뒤 숫자는 더 보지 않아요.</span></div>
+</div>
+
+<h2>달력 위에 숫자를 올려볼게요</h2>
+<p>만기가 3년이고 6개월마다 평가하는 상품을 예로 들어볼게요. 최초 기준가격을 100이라고 두면, 첫 6개월에는 가장 낮은 기초자산이 90 이상이어야 해요.</p>
+
+<div class="wide visual">
+  <div class="visual-title">6개월마다 열리는 여섯 개의 문</div>
+  <div class="visual-caption">아래 수치는 이해를 돕기 위한 일반적인 예시예요.</div>
+  <div class="timeline" aria-label="조기상환 평가일과 기준선">
+    <div class="time-node active"><div class="time-mark">90</div><b>6개월</b><span>첫 평가</span></div>
+    <div class="time-node"><div class="time-mark">90</div><b>12개월</b><span>두 번째</span></div>
+    <div class="time-node"><div class="time-mark">85</div><b>18개월</b><span>세 번째</span></div>
+    <div class="time-node"><div class="time-mark">85</div><b>24개월</b><span>네 번째</span></div>
+    <div class="time-node"><div class="time-mark">80</div><b>30개월</b><span>다섯 번째</span></div>
+    <div class="time-node"><div class="time-mark">75</div><b>36개월</b><span>만기 평가</span></div>
+  </div>
+</div>
+
+<div class="teacher"><b>과외 선생님의 한마디</b><p>90은 주가가 90원이 되어야 한다는 뜻이 아니에요. 각 기초자산의 최초 기준가격을 100으로 놓았을 때 90퍼센트 이상인지를 본다는 뜻이에요.</p></div>
+
+<h2>가장 낮은 자산이 88이라면요?</h2>
+<p>첫 평가일의 기준선이 90인데 가장 낮은 기초자산이 88이라면 문을 넘지 못해요. 그렇다고 바로 손실이 확정되는 건 아니에요. 다음 평가일까지 상품이 이어집니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">같은 88도 날짜에 따라 결과가 달라져요</div>
+  <div class="checkpoint">
+    <div class="checkpoint-side"><span>12개월 기준선</span><b>90</b></div>
+    <div class="checkpoint-arrow"><i class="fa-solid fa-arrow-right"></i><span>88은 부족해요</span></div>
+    <div class="checkpoint-side"><span>결과</span><b>계속 관찰</b></div>
+  </div>
+  <div class="checkpoint">
+    <div class="checkpoint-side"><span>18개월 기준선</span><b>85</b></div>
+    <div class="checkpoint-arrow"><i class="fa-solid fa-arrow-right"></i><span>88은 넘어요</span></div>
+    <div class="checkpoint-side pass"><span>결과</span><b>조기상환</b></div>
+  </div>
+</div>
+
+<p>숫자가 내려가는 이유가 바로 여기에 있어요. 시장이 처음보다 조금 낮아도, 시간이 지난 뒤에는 조기상환될 기회를 주는 거예요.</p>
+
+<h2>문턱이 낮아져도 위험이 사라지진 않아요</h2>
+<p>뒤 숫자가 85, 80, 75로 낮아진다고 해서 상품이 점점 안전해진다는 뜻은 아니에요. 문이 열릴 가능성은 커지지만, 그동안 기초자산이 더 떨어질 수도 있어요. 낙인 조건과 만기 손실 조건은 따로 확인해야 합니다.</p>
+
+<div class="teacher warn"><b>여기서 많이 헷갈려요</b><p>90을 넘지 못했다는 말은 그날 조기상환에 실패했다는 뜻이에요. 그 순간 원금 손실이 확정됐다는 뜻은 아닙니다. 다음 평가일이나 만기 조건을 계속 봐야 해요.</p></div>
+
+<h2>상품 화면에서는 네 가지만 찾아보세요</h2>
+<div class="wide check-list">
+  <div class="check-item"><div class="check-icon"><i class="fa-regular fa-calendar-days"></i></div><b>평가 주기와 날짜</b><span>몇 개월마다 확인하는지, 첫 평가일이 언제인지 봐요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-stairs"></i></div><b>상환 기준선 순서</b><span>90-90-85처럼 앞에서부터 평가일과 짝지어요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-chart-simple"></i></div><b>평가가격을 정하는 방식</b><span>종가, 평균가격처럼 어떤 가격을 쓰는지 확인해요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-regular fa-credit-card"></i></div><b>실제 지급 날짜</b><span>평가일과 돈이 들어오는 날은 다를 수 있어요.</span></div>
+</div>
+
+<section class="quiz"><small>30초 확인 문제</small><h2>가장 낮은 자산이 88이에요. 12개월 기준은 90, 18개월 기준은 85라면?</h2><p>두 평가일의 결과를 차례대로 생각해보세요.</p><div class="quiz-answer"><strong>정답:</strong> 12개월에는 조기상환되지 않고, 18개월에도 88이라면 기준 85를 넘어 조기상환돼요. 숫자는 반드시 날짜와 짝지어 읽어야 합니다.</div></section>
+{% endblock %}

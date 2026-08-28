@@ -1,0 +1,55 @@
+{% extends "core/article_lesson_base.html" %}
+{% block lesson_body %}
+<p>기초자산이 세 개라면 세 개를 평균 내면 될 것 같아요. 하지만 많은 ELS는 그렇지 않아요. <strong>가장 많이 떨어진 하나</strong>가 상환 여부를 결정합니다.</p>
+<p>세 사람이 한 줄로 묶여 결승선을 통과하는 경기라고 생각해보세요. 두 사람이 먼저 들어와도 한 사람이 선 밖에 있으면 팀 전체가 아직 통과하지 못한 거예요.</p>
+
+<div class="wide quick-view" aria-label="가장 낮은 기초자산을 찾는 순서">
+  <div class="quick-item"><i class="fa-solid fa-people-group"></i><b>세 자산은<br>한 팀으로 움직여요</b><span>조기상환 기준은 보통 모든 기초자산이 함께 충족해야 해요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-arrows-up-down"></i><b>먼저 모두 100으로 맞춰요</b><span>가격 단위가 달라도 최초 기준가격 대비 비율로 비교할 수 있어요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-arrow-down"></i><b>가장 낮은 하나를 골라요</b><span>그 자산이 기준선을 넘었는지만 보면 판단이 빨라져요.</span></div>
+</div>
+
+<h2>가격표를 100점 시험으로 바꿔볼게요</h2>
+<p>지수는 3만, 주가는 200달러처럼 단위가 제각각이에요. 그래서 각 자산의 최초 기준가격을 모두 100으로 바꾼 뒤, 지금 몇 퍼센트 남아 있는지 비교합니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">세 기초자산의 현재 위치</div>
+  <div class="visual-caption">최초 기준가격을 각각 100으로 놓은 가상 예시예요.</div>
+  <div class="asset-race">
+    <div class="asset-card"><span>가 자산</span><b>104</b><small><i class="fa-solid fa-arrow-up"></i> 최초보다 4퍼센트 상승</small></div>
+    <div class="asset-card"><span>나 자산</span><b>91</b><small><i class="fa-solid fa-check"></i> 기준선 90 위</small></div>
+    <div class="asset-card low"><span>다 자산</span><b>84</b><small><i class="fa-solid fa-arrow-down"></i> 세 자산 중 가장 낮음</small></div>
+  </div>
+  <div class="team-verdict"><i class="fa-solid fa-link"></i><div><b>상환 판단에 쓰는 값은 84</b><span>가 자산과 나 자산이 기준을 넘어도 다 자산이 90 아래라 팀 전체는 조기상환되지 않아요.</span></div></div>
+</div>
+
+<div class="teacher"><b>과외 선생님의 한마디</b><p>평균은 93이에요. 그래도 기준선이 90이면 조기상환되지 않아요. 이 경기에서는 평균 점수가 아니라 가장 낮은 점수를 보기 때문이에요.</p></div>
+
+<h2>왜 좋은 자산 두 개가 구해주지 못할까요?</h2>
+<p>상환 조건이 보통 <strong>모든 기초자산이 기준선 이상</strong>이기 때문이에요. 이는 곧 어느 하나라도 기준선 아래면 조건을 충족하지 못한다는 뜻입니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">기준선 90을 넘는지 한 번에 확인해요</div>
+  <div class="stat-grid">
+    <div class="stat-box good"><span>가 자산 104</span><b>통과</b></div>
+    <div class="stat-box good"><span>나 자산 91</span><b>통과</b></div>
+    <div class="stat-box bad"><span>다 자산 84</span><b>미통과</b></div>
+  </div>
+</div>
+
+<h2>자산이 많으면 더 분산되는 걸까요?</h2>
+<p>일반적인 주식 묶음은 여러 자산이 서로의 등락을 보완할 수 있어요. 하지만 가장 낮은 자산을 보는 ELS에서는 기초자산이 늘어날수록 <strong>기준선을 벗어날 수 있는 후보도 늘어납니다.</strong></p>
+<p>그래서 기초자산 수만 보고 분산 효과가 크다고 생각하면 안 돼요. 각 자산의 성격과 서로 함께 움직이는 정도까지 따로 봐야 합니다.</p>
+
+<div class="teacher warn"><b>좋은 소식만 더하면 안 돼요</b><p>“가 자산은 올랐고 나 자산도 버텼다”는 말만으로는 충분하지 않아요. 다 자산이 왜 떨어졌는지, 회복 가능 조건까지 함께 봐야 전체 그림이 보여요.</p></div>
+
+<h2>ELS 레이더에서는 이렇게 읽어보세요</h2>
+<div class="wide check-list">
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-list-ol"></i></div><b>기초자산 수 세기</b><span>두 개인지 세 개인지 먼저 확인해요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-percent"></i></div><b>각 자산의 현재 비율 보기</b><span>모두 최초 기준가격 100에 맞춰 비교해요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-arrow-down-short-wide"></i></div><b>가장 낮은 자산 찾기</b><span>상환 결과를 좌우하는 한 자산을 먼저 표시해요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-regular fa-newspaper"></i></div><b>하락 이유 살펴보기</b><span>일시적인 움직임인지 구조적인 위험인지 맥락을 확인해요.</span></div>
+</div>
+
+<section class="quiz"><small>30초 확인 문제</small><h2>세 자산이 104, 91, 84이고 조기상환 기준은 90이에요. 평균은 93인데 상환될까요?</h2><p>팀의 평균이 아니라 가장 낮은 자산을 찾아보세요.</p><div class="quiz-answer"><strong>정답:</strong> 조기상환되지 않아요. 가장 낮은 자산 84가 기준선 90보다 낮기 때문이에요. 이 상품에서는 평균보다 가장 낮은 하나가 중요합니다.</div></section>
+{% endblock %}

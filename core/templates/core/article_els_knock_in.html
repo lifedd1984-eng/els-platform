@@ -1,0 +1,59 @@
+{% extends "core/article_lesson_base.html" %}
+{% block lesson_body %}
+<p>낙인이라는 말을 들으면 도장이 찍히는 순간 손실이 확정될 것 같아요. 하지만 일반적인 낙인형 ELS에서 낙인은 <strong>중간에 위험 구간을 지나갔다는 기록</strong>에 더 가깝습니다.</p>
+<p>등산으로 비유하면, 미끄러운 구간을 한 번 밟았다는 기록이에요. 정상에 무사히 도착할지 여부는 아직 남아 있습니다.</p>
+
+<div class="wide quick-view" aria-label="낙인을 이해하는 세 가지 열쇠">
+  <div class="quick-item"><i class="fa-solid fa-route"></i><b>낙인은 결승점이 아니라<br>지나온 길의 기록이에요</b><span>낙인이 생겨도 만기 결과를 더 봐야 손익을 판단할 수 있어요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-arrow-down-long"></i><b>낙인 45는 55퍼센트 하락이에요</b><span>최초 기준가격 100에서 45 이하를 건드렸다는 뜻이에요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-rotate"></i><b>만기 때 회복하면 달라져요</b><span>낙인 뒤에도 만기상환 기준을 회복하면 약정된 방식으로 상환될 수 있어요.</span></div>
+</div>
+
+<h2>낙인 45를 그림으로 볼까요?</h2>
+<p>최초 기준가격이 100이라면 낙인 45는 기초자산 중 하나라도 45 이하로 내려간 적이 있는지 확인한다는 뜻이에요. 상품마다 장중 가격, 종가 등 관찰 방식이 다를 수 있으니 투자설명서가 기준입니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">45 아래로 내려갔다가 다시 올라온 가격</div>
+  <div class="visual-caption">파란 선은 이해를 돕기 위한 가상의 가격 흐름이에요.</div>
+  <div class="price-chart">
+    <svg viewBox="0 0 760 300" role="img" aria-label="가격이 낙인선 아래로 내려갔다가 만기 기준 위로 회복하는 그래프">
+      <line x1="58" y1="55" x2="724" y2="55" stroke="#D9E1EB" stroke-width="2"/>
+      <line x1="58" y1="176" x2="724" y2="176" stroke="#D94E47" stroke-width="3" stroke-dasharray="8 8"/>
+      <line x1="58" y1="115" x2="724" y2="115" stroke="#D98616" stroke-width="3" stroke-dasharray="8 8"/>
+      <text x="12" y="61" fill="#596373" font-size="15">100</text><text x="23" y="121" fill="#B86A06" font-size="15">75</text><text x="23" y="182" fill="#D94E47" font-size="15">45</text>
+      <path d="M60 55 C150 69 190 100 246 146 S333 213 390 202 S472 137 534 128 S637 97 722 104" fill="none" stroke="#2573E8" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="352" cy="205" r="11" fill="#fff" stroke="#D94E47" stroke-width="6"/><text x="319" y="241" fill="#D94E47" font-size="15" font-weight="700">낙인 발생</text>
+      <circle cx="722" cy="104" r="10" fill="#2573E8"/><text x="637" y="82" fill="#2573E8" font-size="15" font-weight="700">만기 때 회복</text>
+    </svg>
+    <div class="chart-key"><span><i class="key-line"></i>기초자산 가격</span><span><i class="key-line red"></i>낙인선 45</span><span><i class="key-line amber"></i>만기상환 기준 75</span></div>
+  </div>
+</div>
+
+<div class="teacher"><b>과외 선생님의 한마디</b><p>낙인선과 만기상환 기준은 역할이 달라요. 낙인선은 중간의 위험 기록이고, 만기상환 기준은 마지막 결과를 가르는 선이에요.</p></div>
+
+<h2>결과는 세 갈래로 나뉘어요</h2>
+<p>일반적인 낙인형 계단식 ELS라면 만기까지 갔을 때 다음 세 장면을 구분하면 돼요.</p>
+
+<div class="wide visual">
+  <div class="visual-title">낙인과 만기 회복을 함께 보는 표</div>
+  <div class="scenario-grid">
+    <div class="scenario good"><i class="fa-regular fa-circle-check"></i><b>낙인이 없었어요</b><p>만기 조건에 따라 원금과 약정 수익을 받는 구조예요.</p></div>
+    <div class="scenario good"><i class="fa-solid fa-arrow-up-right-dots"></i><b>낙인은 있었지만 회복했어요</b><p>만기상환 기준을 충족하면 원금과 약정 수익을 받는 구조예요.</p></div>
+    <div class="scenario bad wide-one"><i class="fa-solid fa-triangle-exclamation"></i><b>낙인이 있었고, 만기에도 회복하지 못했어요</b><p>이때는 가장 많이 떨어진 기초자산의 하락률에 따라 원금 손실이 생길 수 있어요. 정확한 계산은 상품별 조건을 확인해야 합니다.</p></div>
+  </div>
+</div>
+
+<h2>그래서 낙인이 생긴 뒤에는 무엇을 볼까요?</h2>
+<p>과거의 낙인 여부만 계속 보는 것보다 <strong>현재 가장 낮은 기초자산이 만기상환 기준에서 얼마나 떨어져 있는지</strong> 확인하는 편이 이해에 도움이 돼요. 이미 지나간 기록과 앞으로 남은 조건을 나눠 보는 거예요.</p>
+
+<div class="wide check-list">
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-ruler-horizontal"></i></div><b>낙인 기준</b><span>최초 기준가격의 몇 퍼센트인지 확인해요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-regular fa-eye"></i></div><b>관찰 방식</b><span>장중, 종가처럼 어떤 가격으로 낙인을 판단하는지 봐요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-flag"></i></div><b>만기상환 기준</b><span>낙인 뒤에도 회복으로 인정되는 마지막 선을 찾아요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-chart-line"></i></div><b>가장 낮은 기초자산</b><span>여러 자산 중 현재 만기 결과를 좌우하는 자산을 봐요.</span></div>
+</div>
+
+<div class="teacher warn"><b>구조가 다르면 판단도 달라져요</b><p>낙인선이 없는 상품도 있고, 만기 조건이나 손실 계산식도 상품마다 달라요. 이 글의 흐름을 실제 상품에 적용하기 전에는 투자설명서의 상환 조건을 꼭 확인해야 합니다.</p></div>
+
+<section class="quiz"><small>30초 확인 문제</small><h2>낙인 45를 한 번 건드렸지만 만기 때 80까지 회복했어요. 만기상환 기준은 75라면?</h2><p>낙인이 생긴 사실과 만기 회복 여부를 나눠 생각해보세요.</p><div class="quiz-answer"><strong>정답:</strong> 일반적인 예시 조건이라면 만기상환 기준 75를 넘었으므로 원금과 약정 수익을 받는 구조예요. 낙인 발생만으로 손실이 바로 확정되지는 않습니다.</div></section>
+{% endblock %}

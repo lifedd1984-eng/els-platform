@@ -24,6 +24,7 @@ from .models import Product
 # 수치를 갱신하면 이 값도 함께 올린다 — 검색엔진에 "내용이 바뀌었다"고
 # 알리는 유일한 신호다.
 REPORT_10YEAR_UPDATED = date(2026, 8, 13)
+ARTICLES_UPDATED = date(2026, 8, 28)
 
 # 상품 상세를 사이트맵에 넣는 기간 (청약마감일 기준, 일).
 # 왜 전량이 아닌가는 ProductSitemap docstring 참조. 나중에 Search Console에서
@@ -50,6 +51,13 @@ class StaticViewSitemap(Sitemap):
         ("home", 1.0, "weekly"),          # 랜딩 — TOP5가 매주 바뀐다
         ("weekly", 0.9, "weekly"),        # 주간 청약 — 매주 월요일 갱신
         ("report_els_10year", 0.8, "monthly"),   # 10년 성적표 리포트
+        ("article_list", 0.8, "monthly"),
+        ("article_els_basics", 0.7, "monthly"),
+        ("article_els_stepdown", 0.7, "monthly"),
+        ("article_els_knock_in", 0.7, "monthly"),
+        ("article_els_worst_of", 0.7, "monthly"),
+        ("article_els_yield", 0.7, "monthly"),
+        ("article_els_vs_elb", 0.7, "monthly"),
         ("asset_list", 0.7, "weekly"),    # 기초자산 허브 목록
         ("trend", 0.6, "weekly"),         # 시장 트렌드 — 20주 추이
         ("disclaimer", 0.3, "yearly"),
@@ -73,6 +81,8 @@ class StaticViewSitemap(Sitemap):
         name = item[0]
         if name == "report_els_10year":
             return REPORT_10YEAR_UPDATED
+        if name.startswith("article_"):
+            return ARTICLES_UPDATED
         if name in ("home", "weekly", "trend"):
             # 주간 데이터가 마지막으로 들어온 날. 없으면 lastmod 를 아예 뺀다 —
             # 지어낸 날짜를 넣는 것보다 없는 편이 낫다.

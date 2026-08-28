@@ -1,0 +1,53 @@
+{% extends "core/article_lesson_base.html" %}
+{% block lesson_body %}
+<p>ELS와 ELB는 이름도 비슷하고 둘 다 주가지수나 주식의 움직임에 수익이 연결돼요. 하지만 원금을 다루는 기본 구조는 다릅니다.</p>
+<p>같은 산을 바라보는 두 길이라고 생각해보세요. ELS는 시장이 정해진 선을 벗어나면 원금 손실이 생길 수 있는 길이고, ELB는 발행사가 약속을 지킨다는 전제 아래 만기에 원금을 지급하도록 설계한 길이에요.</p>
+
+<div class="wide quick-view" aria-label="ELS와 ELB의 핵심 차이">
+  <div class="quick-item"><i class="fa-solid fa-code-compare"></i><b>이름보다 먼저<br>만기 원금 구조를 봐요</b><span>한 글자 차이지만 감수하는 시장 위험은 크게 달라질 수 있어요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-wave-square"></i><b>ELS는 원금 손실이 가능해요</b><span>기초자산과 상환 조건에 따라 손실이 생길 수 있어요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-landmark"></i><b>ELB도 예금은 아니에요</b><span>만기 원금지급 구조여도 발행사 신용위험과 중도상환 위험이 있어요.</span></div>
+</div>
+
+<h2>가장 큰 차이는 만기 원금이에요</h2>
+<p>일반적인 ELS는 기초자산이 크게 떨어지고 정해진 회복 조건을 충족하지 못하면 원금 손실이 생길 수 있어요. ELB는 보통 만기까지 보유하고 발행사가 지급 의무를 이행하면 원금을 지급하도록 설계됩니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">같은 시장을 보지만 출발 규칙이 달라요</div>
+  <div class="compare">
+    <div class="compare-col els"><h3>ELS</h3><div class="compare-row"><span>만기 원금</span><b>조건에 따라 손실 가능</b></div><div class="compare-row"><span>수익 방식</span><b>조기상환 조건과 약정 수익률 중심</b></div><div class="compare-row"><span>주요 위험</span><b>기초자산 하락과 발행사 신용위험</b></div><div class="compare-row"><span>어울리는 질문</span><b>어디까지 떨어지면 손실이 나는가?</b></div></div>
+    <div class="compare-col elb"><h3>ELB</h3><div class="compare-row"><span>만기 원금</span><b>발행사가 이행하면 원금지급 구조</b></div><div class="compare-row"><span>수익 방식</span><b>기초자산 움직임에 따라 추가 수익 결정</b></div><div class="compare-row"><span>주요 위험</span><b>발행사 신용위험과 중도상환 가격</b></div><div class="compare-row"><span>어울리는 질문</span><b>만기와 중도상환 조건은 무엇인가?</b></div></div>
+  </div>
+</div>
+
+<div class="teacher"><b>과외 선생님의 한마디</b><p>ELB를 설명할 때는 “원금 보장”보다 “만기 원금지급 구조”라고 읽는 편이 정확해요. 만기 전 매도나 중도상환, 발행사의 지급 능력까지 조건이 붙기 때문이에요.</p></div>
+
+<h2>ELB도 안전한 예금은 아니에요</h2>
+<p>ELB는 은행 예금처럼 예금자보호를 받는 상품이 아니에요. 증권사가 발행한 채무증권이므로 발행사가 어려워져 약속을 이행하지 못하면 원금과 수익을 받지 못할 수 있습니다.</p>
+<p>또 만기 전에 현금화하면 시장 상황과 평가가격에 따라 원금보다 적게 받을 수 있어요. <strong>만기 원금지급 구조는 만기까지 보유하고 발행사가 의무를 이행한다는 조건</strong>과 함께 읽어야 합니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">ELB의 원금 앞에 붙는 두 가지 조건</div>
+  <div class="checkpoint">
+    <div class="checkpoint-side"><span>보유 기간</span><b>만기까지</b></div>
+    <div class="checkpoint-arrow"><i class="fa-solid fa-plus"></i><span>그리고</span></div>
+    <div class="checkpoint-side pass"><span>발행사</span><b>지급 이행</b></div>
+  </div>
+</div>
+
+<h2>수익 모양도 달라요</h2>
+<p>ELS는 정해진 조기상환선을 넘으면 약정 수익과 함께 끝나는 구조가 흔해요. ELB는 기초자산이 일정 범위에서 오르거나 내려간 정도에 따라 수익이 달라지는 구조가 많습니다.</p>
+<p>따라서 ELB라고 모두 같은 수익을 주는 것도 아니고, ELS보다 무조건 유리하다고 말할 수도 없어요. 손실을 감수하는 방식과 기대하는 수익의 모양이 다른 상품입니다.</p>
+
+<h2>이름을 본 뒤 네 줄만 확인하세요</h2>
+<div class="wide check-list">
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-tag"></i></div><b>상품 이름</b><span>ELS인지 ELB인지 첫 줄에서 구분해요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-piggy-bank"></i></div><b>만기 원금지급 조건</b><span>원금 손실 가능 여부와 조건을 정확히 읽어요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-right-from-bracket"></i></div><b>중도상환 조건</b><span>만기 전에 나올 때 가격이 어떻게 정해지는지 봐요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-building-columns"></i></div><b>발행사 신용위험</b><span>두 상품 모두 발행사의 지급 능력이 중요해요.</span></div>
+</div>
+
+<div class="teacher warn"><b>마지막으로 이것만 기억해요</b><p>ELS와 ELB 모두 예금자보호 대상이 아니에요. 이름만 보고 안전성을 판단하지 말고, 투자설명서의 원금지급 조건과 발행사 신용위험을 함께 확인해야 합니다.</p></div>
+
+<section class="quiz"><small>30초 확인 문제</small><h2>“ELB는 만기 원금지급 구조니까 은행 예금과 같다.” 맞을까요?</h2><p>만기, 발행사, 예금자보호라는 세 단어를 떠올려보세요.</p><div class="quiz-answer"><strong>정답:</strong> 아니에요. ELB는 예금자보호 대상이 아니고 발행사 신용위험이 있어요. 만기 전에 현금화하면 원금보다 적게 받을 수도 있습니다.</div></section>
+{% endblock %}

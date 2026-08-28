@@ -1,0 +1,53 @@
+{% extends "core/article_lesson_base.html" %}
+{% block lesson_body %}
+<p>“연 8퍼센트”라고 쓰여 있으면 1천만 원을 넣고 1년 뒤 80만 원을 받는다고 생각하기 쉬워요. ELS에서는 두 가지를 더 붙여 읽어야 정확해요. <strong>상환 조건을 충족했는지</strong>, 그리고 <strong>얼마 동안 보유했는지</strong>예요.</p>
+<p>시급이 같아도 일한 시간이 다르면 월급이 달라지듯, 표시된 연 수익률이 같아도 상환 시점에 따라 실제 수익은 달라집니다.</p>
+
+<div class="wide quick-view" aria-label="표시 수익률을 읽는 세 가지 열쇠">
+  <div class="quick-item"><i class="fa-regular fa-clock"></i><b>연 수익률에는<br>보유 시간이 필요해요</b><span>6개월에 상환되면 1년치가 아니라 약 6개월치 수익을 계산해요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-filter-circle-dollar"></i><b>조건을 충족해야 받을 수 있어요</b><span>표시 수익률은 상환 조건을 만족했을 때의 약정 수익률이에요.</span></div>
+  <div class="quick-item"><i class="fa-solid fa-receipt"></i><b>세전과 세후를 구분해요</b><span>상품 화면의 예상금액이 세전인지 먼저 확인해야 해요.</span></div>
+</div>
+
+<h2>1천만 원, 연 8퍼센트를 계산해볼게요</h2>
+<p>이해하기 쉽게 월수로 단순 계산하면 아래와 같아요. 실제 상품은 날짜 계산과 반올림 방식이 다를 수 있으니 최종 금액은 투자설명서를 확인해야 합니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">예상 세전 수익의 기본 계산</div>
+  <div class="formula">
+    <div class="formula-line"><span class="formula-pill">투자금 1천만 원</span><i class="formula-sign">×</i><span class="formula-pill">연 8퍼센트</span><i class="formula-sign">×</i><span class="formula-pill">보유 개월 ÷ 12</span></div>
+    <div class="formula-result">6개월 보유라면 <b>약 40만 원</b></div>
+  </div>
+  <div class="money-cases">
+    <div class="money-case"><span>6개월에 조기상환</span><b>약 40만 원</b><p>1천만 원 × 8퍼센트 × 6개월 ÷ 12개월</p></div>
+    <div class="money-case"><span>18개월에 조기상환</span><b>약 120만 원</b><p>1천만 원 × 8퍼센트 × 18개월 ÷ 12개월</p></div>
+  </div>
+</div>
+
+<div class="teacher"><b>과외 선생님의 한마디</b><p>연 8퍼센트는 통장에 매년 8퍼센트가 자동으로 쌓인다는 뜻이 아니에요. 약속된 상환 조건을 충족했을 때, 보유 기간에 맞춰 계산하는 기준입니다.</p></div>
+
+<h2>조기상환에 실패한 6개월은요?</h2>
+<p>일반적인 계단식 ELS에서는 첫 평가일에 조건을 충족하지 못했다고 해서 6개월치 수익이 바로 입금되지는 않아요. 상품은 다음 평가일까지 이어지고, 나중에 상환 조건을 충족했을 때 약정된 방식으로 계산합니다.</p>
+<p>다만 월지급식처럼 중간에 수익을 나누어 지급하는 구조도 있어요. 상품 이름이 비슷해도 지급 방식은 다를 수 있습니다.</p>
+
+<div class="wide visual">
+  <div class="visual-title">같은 연 8퍼센트라도 결과가 달라지는 이유</div>
+  <div class="scenario-grid">
+    <div class="scenario good"><i class="fa-solid fa-door-open"></i><b>6개월에 조건 충족</b><p>조기에 끝나므로 약 6개월치 약정 수익을 계산해요.</p></div>
+    <div class="scenario"><i class="fa-solid fa-hourglass-half"></i><b>6개월에 조건 미충족</b><p>상품이 계속되고, 다음 상환 평가를 기다려요.</p></div>
+    <div class="scenario bad wide-one"><i class="fa-solid fa-chart-line"></i><b>만기까지 회복하지 못함</b><p>낙인과 만기 조건에 따라 원금 손실이 날 수 있어요. 높은 표시 수익률이 원금 손실을 막아주지는 않습니다.</p></div>
+  </div>
+</div>
+
+<h2>수익률 옆에서 꼭 같이 볼 것</h2>
+<div class="wide check-list">
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-percent"></i></div><b>연환산 수익률인지</b><span>표시된 숫자가 기간 전체 수익률인지 연 기준인지 확인해요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-regular fa-calendar-check"></i></div><b>상환 평가 주기</b><span>6개월, 12개월처럼 돈을 받을 수 있는 시점을 봐요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-coins"></i></div><b>수익 지급 방식</b><span>상환 때 한꺼번에 받는지, 중간에 나누어 받는지 살펴봐요.</span></div>
+  <div class="check-item"><div class="check-icon"><i class="fa-solid fa-file-invoice-dollar"></i></div><b>세전과 세후</b><span>광고 수익률과 실제 입금액의 기준이 같은지 확인해요.</span></div>
+</div>
+
+<div class="teacher warn"><b>수익률은 혼자 읽지 마세요</b><p>표시 수익률은 상환 조건을 충족했을 때 적용되는 약정 수익률이에요. 조기상환선, 낙인선, 만기 손실 조건을 함께 봐야 그 숫자의 의미가 완성됩니다.</p></div>
+
+<section class="quiz"><small>30초 확인 문제</small><h2>1천만 원을 연 8퍼센트 조건으로 넣고 6개월 만에 상환됐다면 단순 계산한 세전 수익은?</h2><p>연 수익률에 보유 기간 6개월을 곱해보세요.</p><div class="quiz-answer"><strong>정답:</strong> 약 40만 원이에요. 1천만 원 × 8퍼센트 × 6개월 ÷ 12개월로 계산합니다. 실제 지급액은 상품별 날짜 계산과 세금에 따라 달라질 수 있어요.</div></section>
+{% endblock %}

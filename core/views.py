@@ -2970,3 +2970,150 @@ def stats(request):
         },
     }
     return render(request, "core/stats.html", ctx)
+
+
+def article_list(request):
+    """초보자를 위한 공개 ELS 아티클 목록."""
+    return render(request, "core/article_list.html", {
+        "active_nav": "articles",
+        "meta_desc": "ELS가 처음이어도 괜찮아요. 기초자산, 조기상환, 낙인, 만기 조건을 확인하는 순서대로 쉽게 알려드려요.",
+    })
+
+
+def article_els_basics(request):
+    """첫 번째 ELS 입문 아티클."""
+    return render(request, "core/article_els_basics.html", {
+        "active_nav": "articles",
+        "meta_desc": "ELS의 조기상환, 낙인, 만기 손실 구조를 세 단계로 나눠 그림과 예시로 쉽게 설명해요.",
+    })
+
+
+def _article_lesson(request, template_name, **lesson):
+    """두 번째 수업부터 공통 화면 틀과 앞뒤 이동을 함께 전달한다."""
+    return render(request, template_name, {"active_nav": "articles", **lesson})
+
+
+def article_els_stepdown(request):
+    return _article_lesson(
+        request, "core/article_els_stepdown.html",
+        lesson_meta_title="90-90-85-85, 숫자가 내려가는 이유 | ELS 레이더",
+        lesson_title_plain="90-90-85-85, 이 숫자는 왜 내려갈까요?",
+        lesson_kicker="ELS 두 번째 수업",
+        lesson_title_line1="90-90-85-85,",
+        lesson_title_line2="이 숫자는 왜 내려갈까요?",
+        lesson_deck="숫자 하나를 평가일 하나와 짝지으면, 복잡해 보이던 조기상환 조건이 달력처럼 읽혀요.",
+        lesson_read_time=5,
+        lesson_image="els-stepdown-hero-v1.png",
+        lesson_image_alt="시간이 지날수록 낮아지는 여섯 개의 조기상환 문",
+        meta_desc="90-90-85-85처럼 내려가는 ELS 조기상환 기준을 평가일과 연결해 쉬운 예시와 그림으로 설명해요.",
+        prev_url_name="article_els_basics",
+        prev_label="ELS는 결국, 세 가지를 확인하는 상품이에요",
+        next_url_name="article_els_knock_in",
+        next_label="낙인이 생기면 바로 손실일까요?",
+    )
+
+
+def article_els_knock_in(request):
+    return _article_lesson(
+        request, "core/article_els_knock_in.html",
+        lesson_meta_title="낙인이 생기면 바로 손실일까요? | ELS 레이더",
+        lesson_title_plain="낙인이 생기면 바로 손실일까요?",
+        lesson_kicker="ELS 세 번째 수업",
+        lesson_title_line1="낙인이 생기면",
+        lesson_title_line2="바로 손실일까요?",
+        lesson_deck="낙인은 손실 확정 도장이 아니라 중간의 위험 기록이에요. 마지막 회복 조건까지 함께 볼게요.",
+        lesson_read_time=5,
+        lesson_image="els-knock-in-hero-v1.png",
+        lesson_image_alt="낙인선 아래로 내려갔다가 만기 기준 위로 회복하는 가격선",
+        meta_desc="ELS 낙인이 발생해도 손실이 바로 확정되지 않는 이유와 낙인 뒤 만기 결과 세 가지를 그림으로 설명해요.",
+        prev_url_name="article_els_stepdown",
+        prev_label="90-90-85-85, 이 숫자는 왜 내려갈까요?",
+        next_url_name="article_els_worst_of",
+        next_label="기초자산이 세 개인데 왜 하나만 보나요?",
+    )
+
+
+def article_els_worst_of(request):
+    return _article_lesson(
+        request, "core/article_els_worst_of.html",
+        lesson_meta_title="기초자산이 세 개인데 왜 하나만 보나요? | ELS 레이더",
+        lesson_title_plain="기초자산이 세 개인데 왜 하나만 보나요?",
+        lesson_kicker="ELS 네 번째 수업",
+        lesson_title_line1="기초자산이 세 개인데",
+        lesson_title_line2="왜 하나만 보나요?",
+        lesson_deck="평균이 아니라 가장 낮은 자산이 결과를 정해요. 세 자산을 한 팀의 달리기처럼 비교해볼게요.",
+        lesson_read_time=5,
+        lesson_image="els-worst-of-hero-v1.png",
+        lesson_image_alt="서로 다른 위치에 있는 세 기초자산이 하나의 결승선을 향하는 모습",
+        meta_desc="ELS가 여러 기초자산의 평균이 아니라 가장 많이 하락한 자산을 기준으로 상환 여부를 판단하는 이유를 설명해요.",
+        prev_url_name="article_els_knock_in",
+        prev_label="낙인이 생기면 바로 손실일까요?",
+        next_url_name="article_els_yield",
+        next_label="연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?",
+    )
+
+
+def article_els_yield(request):
+    return _article_lesson(
+        request, "core/article_els_yield.html",
+        lesson_meta_title="연 8퍼센트 ELS, 실제 받는 돈 계산하기 | ELS 레이더",
+        lesson_title_plain="연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?",
+        lesson_kicker="ELS 다섯 번째 수업",
+        lesson_title_line1="연 8퍼센트 ELS,",
+        lesson_title_line2="실제로 받는 돈은 얼마일까요?",
+        lesson_deck="표시 수익률에 상환 시점을 붙여야 실제 금액이 보여요. 1천만 원 예시로 천천히 계산해볼게요.",
+        lesson_read_time=4,
+        lesson_image="els-yield-hero-v1.png",
+        lesson_image_alt="시계와 달력, 동전이 수익 지급함으로 이어지는 모습",
+        meta_desc="연 8퍼센트 ELS에 1천만 원을 넣었을 때 조기상환 시점에 따른 예상 세전 수익을 쉽게 계산해요.",
+        prev_url_name="article_els_worst_of",
+        prev_label="기초자산이 세 개인데 왜 하나만 보나요?",
+        next_url_name="article_els_vs_elb",
+        next_label="ELS와 ELB, 이름은 비슷한데 위험은 달라요",
+    )
+
+
+def article_els_vs_elb(request):
+    return _article_lesson(
+        request, "core/article_els_vs_elb.html",
+        lesson_meta_title="ELS와 ELB, 이름은 비슷한데 위험은 달라요 | ELS 레이더",
+        lesson_title_plain="ELS와 ELB, 이름은 비슷한데 위험은 달라요",
+        lesson_kicker="ELS 여섯 번째 수업",
+        lesson_title_line1="ELS와 ELB,",
+        lesson_title_line2="이름은 비슷한데 위험은 달라요",
+        lesson_deck="한 글자 차이지만 원금을 다루는 방식은 달라요. 예금과도 무엇이 다른지 함께 비교해볼게요.",
+        lesson_read_time=5,
+        lesson_image="els-vs-elb-hero-v1.png",
+        lesson_image_alt="서로 다른 위험 구조를 가진 ELS 길과 ELB 길",
+        meta_desc="ELS와 ELB의 만기 원금 구조, 수익 방식, 중도상환 위험, 발행사 신용위험을 초보자 눈높이에서 비교해요.",
+        prev_url_name="article_els_yield",
+        prev_label="연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?",
+        next_url_name=None,
+        next_label=None,
+    )
+
+
+def article_image(request, name):
+    """아티클 전용 이미지. 허용 목록 밖의 파일은 공개하지 않는다."""
+    from pathlib import Path
+
+    from django.conf import settings as _s
+    from django.http import FileResponse, Http404
+
+    allowed = {
+        "learning-hub-hero-v2.png",
+        "els-basics-hero-v2.png",
+        "els-stepdown-hero-v1.png",
+        "els-knock-in-hero-v1.png",
+        "els-worst-of-hero-v1.png",
+        "els-yield-hero-v1.png",
+        "els-vs-elb-hero-v1.png",
+    }
+    if name not in allowed:
+        raise Http404
+    path = Path(_s.BASE_DIR) / "core" / "assets" / "articles" / name
+    if not path.exists():
+        raise Http404
+    response = FileResponse(open(path, "rb"), content_type="image/png")
+    response["Cache-Control"] = "public, max-age=604800, immutable"
+    return response
