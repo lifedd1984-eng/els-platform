@@ -1,0 +1,9 @@
+{% extends "core/article_lesson_base.html" %}
+{% block lesson_body %}
+<p class="article-lead">{{ lead }}</p>
+<section class="visual data-summary" aria-label="핵심 수치 요약"><div class="visual-title">먼저 숫자 세 개만 볼게요</div><div class="visual-caption">숫자 아래의 작은 글씨가 기준과 분모예요.</div><div class="stat-grid">{% for label, value, detail in stats %}<div class="stat-box{% if forloop.counter == 2 %} good{% endif %}"><span>{{ label }}</span><b>{{ value }}</b><small>{{ detail }}</small></div>{% endfor %}</div></section>
+{% for heading, copy in sections %}<section class="lesson-section"><span class="section-number">0{{ forloop.counter }}</span><h2>{{ heading }}</h2><p>{{ copy }}</p></section>{% if forloop.counter == 1 %}<figure class="data-chart wide"><img src="{% url 'article_image' lesson_image %}" alt="{{ lesson_image_alt }}" width="1600" height="900"><figcaption>ELS 레이더 · 2016~2025년 공모 ELS 판정 표본 · 집계 기준 2026년 8월 13일</figcaption></figure>{% endif %}{% endfor %}
+<aside class="teacher"><b><i class="fa-regular fa-lightbulb"></i> 과외 선생님 한마디</b><p>{{ note }}</p></aside>
+<div class="service-note">숫자의 산출 기준과 전체 표를 더 자세히 보고 싶다면 <a href="{% url 'report_els_10year' %}">10년 성적표 원문 보기 <i class="fa-solid fa-arrow-right"></i></a></div>
+<section class="quiz"><small>마지막 확인</small><h3>{{ faq_question }}</h3><p>답을 떠올린 뒤 아래 설명과 비교해보세요.</p><div class="quiz-answer"><strong>정답</strong><br>{{ faq_answer }}</div></section>
+{% endblock %}

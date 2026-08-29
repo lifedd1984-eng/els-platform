@@ -3105,8 +3105,36 @@ def article_els_vs_elb(request):
         faq_answer="정답: 아니에요. ELB는 예금자보호 대상이 아니고 발행사 신용위험이 있어요. 만기 전에 현금화하면 원금보다 적게 받을 수도 있습니다.",
         prev_url_name="article_els_yield",
         prev_label="연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?",
-        next_url_name=None,
-        next_label=None,
+        next_url_name="article_els_redemption_rate",
+        next_label="조기상환은 실제로 얼마나 자주 됐을까요?",
+    )
+
+
+def article_data_lesson(request, slug):
+    """검증된 10년 집계를 같은 수업 화면으로 보여준다."""
+    from .article_data import DATA_LESSONS, DATA_LESSON_ORDER
+
+    lesson = DATA_LESSONS.get(slug)
+    if lesson is None:
+        raise Http404
+    index = DATA_LESSON_ORDER.index(slug)
+    previous = DATA_LESSONS[DATA_LESSON_ORDER[index - 1]] if index else None
+    following = DATA_LESSONS[DATA_LESSON_ORDER[index + 1]] if index + 1 < len(DATA_LESSON_ORDER) else None
+    return _article_lesson(
+        request, "core/article_data_lesson.html",
+        lesson_meta_title=f"{lesson['title']} | ELS 레이더",
+        lesson_title_plain=lesson["title"],
+        lesson_kicker=f"ELS 데이터 수업 {lesson['number'] - 6}",
+        lesson_title_line1=lesson["line1"], lesson_title_line2=lesson["line2"],
+        lesson_deck=lesson["deck"], lesson_read_time=lesson["read_time"],
+        lesson_image=lesson["image"], lesson_image_alt=lesson["image_alt"],
+        lesson_chart_hero=True, meta_desc=lesson["meta"],
+        lead=lesson["lead"], stats=lesson["stats"], sections=lesson["sections"], note=lesson["note"],
+        faq_question=lesson["faq_q"], faq_answer=lesson["faq_a"],
+        prev_url_name=previous["view_name"] if previous else "article_els_vs_elb",
+        prev_label=previous["title"] if previous else "ELS와 ELB, 이름은 비슷한데 위험은 달라요",
+        next_url_name=following["view_name"] if following else None,
+        next_label=following["title"] if following else None,
     )
 
 
@@ -3125,6 +3153,15 @@ def article_image(request, name):
         "els-worst-of-hero-v1.png",
         "els-yield-hero-v1.png",
         "els-vs-elb-hero-v1.png",
+        "els-redemption-data-v1.png",
+        "els-coupon-data-v1.png",
+        "els-timing-data-v1.png",
+        "els-maturity-denominator-v1.png",
+        "els-type-mix-v1.png",
+        "els-type-loss-v1.png",
+        "els-recent-loss-v1.png",
+        "els-redemption-loss-v1.png",
+        "els-statistics-checklist-v1.png",
     }
     if name not in allowed:
         raise Http404

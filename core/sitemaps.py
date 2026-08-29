@@ -24,7 +24,7 @@ from .models import Product
 # 수치를 갱신하면 이 값도 함께 올린다 — 검색엔진에 "내용이 바뀌었다"고
 # 알리는 유일한 신호다.
 REPORT_10YEAR_UPDATED = date(2026, 8, 13)
-ARTICLES_UPDATED = date(2026, 8, 28)
+ARTICLES_UPDATED = date(2026, 8, 29)
 
 # 상품 상세를 사이트맵에 넣는 기간 (청약마감일 기준, 일).
 # 왜 전량이 아닌가는 ProductSitemap docstring 참조. 나중에 Search Console에서
@@ -58,6 +58,15 @@ class StaticViewSitemap(Sitemap):
         ("article_els_worst_of", 0.7, "monthly"),
         ("article_els_yield", 0.7, "monthly"),
         ("article_els_vs_elb", 0.7, "monthly"),
+        ("article_els_redemption_rate", 0.7, "monthly"),
+        ("article_els_coupon_risk", 0.7, "monthly"),
+        ("article_els_issue_timing", 0.7, "monthly"),
+        ("article_els_maturity_denominator", 0.7, "monthly"),
+        ("article_els_type_mix", 0.7, "monthly"),
+        ("article_els_type_loss", 0.7, "monthly"),
+        ("article_els_recent_three_years", 0.7, "monthly"),
+        ("article_els_redemption_and_loss", 0.7, "monthly"),
+        ("article_els_statistics_checklist", 0.7, "monthly"),
         ("asset_list", 0.7, "weekly"),    # 기초자산 허브 목록
         ("trend", 0.6, "weekly"),         # 시장 트렌드 — 20주 추이
         ("disclaimer", 0.3, "yearly"),
