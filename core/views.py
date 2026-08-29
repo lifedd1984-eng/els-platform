@@ -2987,7 +2987,7 @@ def article_els_basics(request):
     """첫 번째 ELS 입문 아티클."""
     return render(request, "core/article_els_basics.html", {
         "active_nav": "articles",
-        "meta_desc": "ELS가 무엇인지부터 주식과의 차이, 1천만 원 투자 시 수익이 들어오는 과정, 장점과 원금손실 위험까지 초보자 눈높이로 설명해요.",
+        "meta_desc": "ELS가 무엇인지부터 주식과의 차이, 1천만 원 투자 시 수익이 들어오는 과정, 장점과 원금손실 위험, 낙인의 뜻까지 초보자 눈높이로 설명해요.",
         "og_image_url": request.build_absolute_uri("/articles/media/els-basics-hero-v2.png"),
         "articles_url": request.build_absolute_uri("/articles/"),
         "canonical_url": request.build_absolute_uri(request.path),
