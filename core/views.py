@@ -2987,11 +2987,12 @@ def article_els_basics(request):
     """첫 번째 ELS 입문 아티클."""
     return render(request, "core/article_els_basics.html", {
         "active_nav": "articles",
-        "meta_desc": "ELS의 조기상환, 낙인, 만기 손실 구조를 세 단계로 나눠 그림과 예시로 쉽게 설명해요.",
+        "meta_desc": "ELS가 무엇인지부터 주식과의 차이, 1천만 원 투자 시 수익이 들어오는 과정, 장점과 원금손실 위험까지 초보자 눈높이로 설명해요.",
         "og_image_url": request.build_absolute_uri("/articles/media/els-basics-hero-v2.png"),
         "articles_url": request.build_absolute_uri("/articles/"),
-        "faq_question": "낙인이 발생하면 바로 원금손실일까요?",
-        "faq_answer": "아니에요. 만기 평가일에 상환 조건 이상으로 회복하면 원금과 약정 수익을 받을 수 있어요. 낙인 발생과 만기 미회복이 함께 나타났을 때 원금손실 가능성이 생깁니다.",
+        "canonical_url": request.build_absolute_uri(request.path),
+        "faq_question": "ELS는 기초자산이 올라야만 수익이 날까요?",
+        "faq_answer": "아니에요. 기초자산이 크게 오르지 않거나 조금 하락해도 평가일에 약속한 상환 조건을 충족하면 원금과 약정 수익을 받을 수 있어요. 다만 조건을 충족하지 못하고 만기까지 크게 하락한 상태라면 원금손실이 생길 수 있습니다.",
     })
 
 
