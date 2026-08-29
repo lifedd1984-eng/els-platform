@@ -58,15 +58,7 @@ class StaticViewSitemap(Sitemap):
         ("article_els_worst_of", 0.7, "monthly"),
         ("article_els_yield", 0.7, "monthly"),
         ("article_els_vs_elb", 0.7, "monthly"),
-        ("article_els_redemption_rate", 0.7, "monthly"),
-        ("article_els_coupon_risk", 0.7, "monthly"),
-        ("article_els_issue_timing", 0.7, "monthly"),
-        ("article_els_maturity_denominator", 0.7, "monthly"),
-        ("article_els_type_mix", 0.7, "monthly"),
-        ("article_els_type_loss", 0.7, "monthly"),
-        ("article_els_recent_three_years", 0.7, "monthly"),
-        ("article_els_redemption_and_loss", 0.7, "monthly"),
-        ("article_els_statistics_checklist", 0.7, "monthly"),
+        *[(f"article_course_{number:02d}", 0.7, "monthly") for number in range(7, 31)],
         ("asset_list", 0.7, "weekly"),    # 기초자산 허브 목록
         ("trend", 0.6, "weekly"),         # 시장 트렌드 — 20주 추이
         ("disclaimer", 0.3, "yearly"),

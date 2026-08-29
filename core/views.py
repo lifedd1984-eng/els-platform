@@ -2974,10 +2974,12 @@ def stats(request):
 
 def article_list(request):
     """초보자를 위한 공개 ELS 아티클 목록."""
+    from .course_lessons import COURSE_LESSONS
     return render(request, "core/article_list.html", {
         "active_nav": "articles",
         "meta_desc": "ELS가 처음이어도 괜찮아요. 기초자산, 조기상환, 낙인, 만기 조건을 확인하는 순서대로 쉽게 알려드려요.",
         "og_image_url": request.build_absolute_uri("/articles/media/learning-hub-hero-v2.png"),
+        "course_lessons": COURSE_LESSONS,
     })
 
 
@@ -2995,8 +2997,10 @@ def article_els_basics(request):
 
 def _article_lesson(request, template_name, **lesson):
     """두 번째 수업부터 공통 화면 틀과 앞뒤 이동을 함께 전달한다."""
-    lesson["og_image_url"] = request.build_absolute_uri(f"/articles/media/{lesson['lesson_image']}")
+    image_name = lesson.get("lesson_image") or "learning-hub-hero-v2.png"
+    lesson["og_image_url"] = request.build_absolute_uri(f"/articles/media/{image_name}")
     lesson["articles_url"] = request.build_absolute_uri("/articles/")
+    lesson["canonical_url"] = request.build_absolute_uri(request.path)
     return render(request, template_name, {"active_nav": "articles", **lesson})
 
 
@@ -3105,8 +3109,35 @@ def article_els_vs_elb(request):
         faq_answer="정답: 아니에요. ELB는 예금자보호 대상이 아니고 발행사 신용위험이 있어요. 만기 전에 현금화하면 원금보다 적게 받을 수도 있습니다.",
         prev_url_name="article_els_yield",
         prev_label="연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?",
-        next_url_name="article_els_redemption_rate",
-        next_label="조기상환은 실제로 얼마나 자주 됐을까요?",
+        next_url_name="article_course_07",
+        next_label="지수형과 종목형 ELS, 무엇이 다를까요?",
+    )
+
+
+def article_course_lesson(request, slug):
+    """승인된 30편 목록 가운데 7~30편을 같은 수업 화면으로 보여준다."""
+    from .course_lessons import COURSE_LESSONS, COURSE_LESSONS_BY_SLUG
+
+    item = COURSE_LESSONS_BY_SLUG.get(slug)
+    if item is None:
+        raise Http404
+    index = COURSE_LESSONS.index(item)
+    previous = COURSE_LESSONS[index - 1] if index else None
+    following = COURSE_LESSONS[index + 1] if index + 1 < len(COURSE_LESSONS) else None
+    return _article_lesson(
+        request, "core/article_course_lesson.html",
+        lesson_meta_title=f"{item['title']} | ELS 레이더",
+        lesson_title_plain=item["title"], lesson_kicker=f"ELS {item['number']}번째 수업",
+        lesson_title_line1=item["title"], lesson_title_line2=None,
+        lesson_deck=item["deck"], lesson_read_time=item["read_time"],
+        lesson_image=None, lesson_image_alt="", lesson_number=item["number"],
+        meta_desc=item["deck"], lead=item["lead"], stats=item["stats"],
+        sections=item["sections"], steps=item["steps"], note=item["note"], chart=item["chart"],
+        faq_question=item["faq_q"], faq_answer=item["faq_a"],
+        prev_url_name=previous["view_name"] if previous else "article_els_vs_elb",
+        prev_label=previous["title"] if previous else "ELS와 ELB, 이름은 비슷한데 위험은 달라요",
+        next_url_name=following["view_name"] if following else None,
+        next_label=following["title"] if following else None,
     )
 
 
