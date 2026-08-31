@@ -1235,6 +1235,8 @@ class Investment(models.Model):
         p = self.product
         if not p.barriers_raw or not p.period_months:
             return "확인필요"
+        if p.fixed_eval_dates:
+            return None
         nxt = self.next_evaluation
         if nxt and nxt.get("date_confirmed"):
             return None

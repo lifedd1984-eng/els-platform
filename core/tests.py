@@ -78,15 +78,16 @@ class ScheduleBadgeTest(TestCase):
         self.assertIsNone(inv.schedule_badge)
 
     def test_배지와_스케줄은_언제나_같은_판단을_쓴다(self):
-        # 배지가 '확정'(None)인데 스케줄이 근사인 조합이 하나도 없어야 한다
+        # 전체 일정이 확정됐거나 현재 다음 회차가 확정된 경우에만 배지를 숨긴다.
         cases = [None, [], "abc", ["2025-7-10", "2026-1-12", "2026-7-13"],
                  ["2025-07-11", None, "2026-07-13"], ["2025-07-11", "2026-01-12"],
                  ["2025-07-11", "2026-01-12", "2026-07-13"]]
         for ev in cases:
             inv = self._inv(ev)
-            근사 = [r["date"] for r in inv.schedule] == [
-                date(2025, 7, 10), date(2026, 1, 10), date(2026, 7, 10)]
-            self.assertEqual(inv.schedule_badge is None, not 근사, f"eval_dates={ev!r}")
+            nxt = inv.next_evaluation
+            확정 = bool(inv.product.fixed_eval_dates) or bool(
+                nxt and nxt.get("date_confirmed"))
+            self.assertEqual(inv.schedule_badge is None, 확정, f"eval_dates={ev!r}")
 
 
 class ThreadsReplyClassifierTest(SimpleTestCase):
