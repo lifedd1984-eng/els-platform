@@ -70,6 +70,13 @@ class ScheduleBadgeTest(TestCase):
         inv = self._inv(["2025-07-11", "2026-01-12"])
         self.assertEqual(inv.schedule_badge, "추정")
 
+    def test_첫_평가일만_확정되면_그_회차는_추정이_아니다(self):
+        inv = self._inv(["2099-07-11"])
+        self.assertEqual(inv.schedule[0]["date"], date(2099, 7, 11))
+        self.assertTrue(inv.schedule[0]["date_confirmed"])
+        self.assertFalse(inv.schedule[1]["date_confirmed"])
+        self.assertIsNone(inv.schedule_badge)
+
     def test_배지와_스케줄은_언제나_같은_판단을_쓴다(self):
         # 배지가 '확정'(None)인데 스케줄이 근사인 조합이 하나도 없어야 한다
         cases = [None, [], "abc", ["2025-7-10", "2026-1-12", "2026-7-13"],

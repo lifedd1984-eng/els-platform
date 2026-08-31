@@ -875,6 +875,25 @@ class Product(models.Model):
         return self.real_issue_date or self.issue_date
 
     @property
+    def parsed_eval_dates(self):
+        """날짜로 읽을 수 있는 평가일 목록. 앞 회차 일부만 있어도 반환한다.
+
+        설명서에서 1차 평가일만 확인된 경우 그 날짜까지는 확정값으로 쓰고,
+        나머지 회차는 주기 계산으로 보완한다. 배리어보다 날짜가 많거나 값 하나라도
+        깨져 있으면 회차 정렬을 신뢰할 수 없으므로 전부 사용하지 않는다.
+        """
+        raw = self.eval_dates
+        if not isinstance(raw, (list, tuple)) or not raw:
+            return None
+        barriers = self.barriers_raw or []
+        if not barriers or len(raw) > len(barriers):
+            return None
+        try:
+            return [date.fromisoformat(str(d)[:10]) for d in raw]
+        except (ValueError, TypeError):
+            return None
+
+    @property
     def fixed_eval_dates(self):
         """확정 평가일 [date, ...]. 쓸 수 없으면 None (= 근사 폴백해야 한다는 뜻).
 
@@ -886,16 +905,10 @@ class Product(models.Model):
 
         개수가 배리어와 맞아야 한다 — 부분 일치는 회차 정렬이 어긋나 신뢰할 수 없다.
         """
-        raw = self.eval_dates
-        # JSONField에 문자열이 그대로 들어간 경우 len()이 글자수라 개수 검사를 통과할 수 있다
-        if not isinstance(raw, (list, tuple)) or not raw:
+        parsed = self.parsed_eval_dates
+        if not parsed or len(parsed) != len(self.barriers_raw or []):
             return None
-        if len(raw) != len(self.barriers_raw or []):
-            return None
-        try:
-            return [date.fromisoformat(str(d)[:10]) for d in raw]
-        except (ValueError, TypeError):
-            return None
+        return parsed
 
     @property
     def term_months(self):
@@ -1187,13 +1200,14 @@ class Investment(models.Model):
             return []
         first = p.first_eval_months if p.first_eval_months else p.period_months
         interval = p.period_months
-        # 확정 평가일 — 판정은 Product.fixed_eval_dates 한 곳에서만 한다.
-        # 여기서 따로 파싱하면 schedule_badge와 결과가 갈린다(과거 사고).
-        fixed = p.fixed_eval_dates
+        # 확인된 앞 회차는 실제 평가일, 나머지는 기준일+주기 근사값을 쓴다.
+        # 파싱 판정은 Product.parsed_eval_dates 한 곳에서만 한다.
+        parsed = p.parsed_eval_dates or []
         rows = []
         for n in range(1, n_barriers + 1):
             months = first + (n - 1) * interval
-            eval_date = fixed[n - 1] if fixed else _add_months(base, months)
+            confirmed = n <= len(parsed)
+            eval_date = parsed[n - 1] if confirmed else _add_months(base, months)
             barrier = barriers[n - 1]
             expected = expected_after_tax = None
             if p.yield_rate is not None:
@@ -1202,6 +1216,7 @@ class Investment(models.Model):
             rows.append({
                 "n": n, "date": eval_date, "barrier": barrier,
                 "expected": expected, "expected_after_tax": expected_after_tax,
+                "date_confirmed": confirmed,
             })
         return rows
 
@@ -1220,7 +1235,8 @@ class Investment(models.Model):
         p = self.product
         if not p.barriers_raw or not p.period_months:
             return "확인필요"
-        if p.fixed_eval_dates:
+        nxt = self.next_evaluation
+        if nxt and nxt.get("date_confirmed"):
             return None
         return "추정"
 
