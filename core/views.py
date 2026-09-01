@@ -346,6 +346,72 @@ def _market_regime(monday, sunday):
             "cond": cond, "indexes": idx, "stocks": stocks}
 
 
+def _weekly_asset_moves(monday, sunday):
+    """이번 주를 포함한 직전 1개월 판매 상품의 전체 기초자산 등락률.
+
+    상품에 등장한 자산만 보여주고, 동일 티커는 하나로 합친다. 기간별 기준선은
+    달력 일수 기준이며 해당 날짜의 직전 거래일 종가를 사용한다.
+    """
+    from core import market as _m
+
+    window_start = monday - timedelta(days=31)
+    products = Product.objects.listed().filter(
+        sub_end__gte=window_start, sub_end__lte=sunday,
+    ).only("assets_raw", "asset_type")
+    assets = {}
+    index_tickers = {_m.resolve_ticker(name) for _, name in REGIME_INDEXES}
+    index_tickers |= {"229200.KS"}  # KOSDAQ150 proxy
+    for product in products:
+        for raw_name in _m.split_assets(product.assets_raw or ""):
+            ticker = _m.resolve_ticker(raw_name)
+            if not ticker:
+                continue
+            key = ticker.upper()
+            row = assets.setdefault(key, {
+                "ticker": ticker,
+                "name": _m.shorten_asset_display(raw_name),
+                "count": 0,
+                "is_index": product.asset_type == "지수형" or ticker in index_tickers,
+            })
+            row["count"] += 1
+            row["is_index"] = row["is_index"] or product.asset_type == "지수형" or ticker in index_tickers
+
+    period_days = (("1m", 31), ("3m", 93), ("6m", 186), ("1y", 370))
+    latest_at = None
+    rows = []
+    for row in assets.values():
+        hist = _m.fetch_history(row["ticker"], days=390)
+        if len(hist) < 2:
+            continue
+        end_date, end_price = hist[-1]
+        latest_at = max(latest_at, end_date) if latest_at else end_date
+        returns = {}
+        for key, days in period_days:
+            target = end_date - timedelta(days=days)
+            base = next((price for d, price in reversed(hist) if d <= target), None)
+            if base in (None, 0):
+                returns[key] = None
+            else:
+                returns[key] = round((end_price / base - 1) * 100, 1)
+        row["returns"] = returns
+        row["r1m"] = returns["1m"]
+        row["r3m"] = returns["3m"]
+        row["r6m"] = returns["6m"]
+        row["r1y"] = returns["1y"]
+        rows.append(row)
+
+    # 종목형 먼저, 지수형은 아래에 모으고 각 그룹은 최근 판매 등장 횟수 순.
+    rows.sort(key=lambda r: (r["is_index"], -r["count"], r["name"].lower()))
+    return {
+        "rows": rows,
+        "stocks": [r for r in rows if not r["is_index"]],
+        "indexes": [r for r in rows if r["is_index"]],
+        "updated": latest_at,
+        "window_start": window_start,
+        "window_end": sunday,
+    }
+
+
 # 이 일수를 넘겨 수집 기록이 없으면 '수집이 멈췄다'로 본다(배지 경고색).
 FRESHNESS_STALE_DAYS = 7
 
@@ -567,7 +633,7 @@ def weekly(request):
             user=request.user, status="보유중").values_list("product_id", flat=True))
     freshness = _freshness(ImportLog.objects.first())
 
-    regime = _market_regime(monday, sunday)
+    asset_moves = _weekly_asset_moves(monday, sunday)
 
     # 발행사 필터 후보 (이번 주 상품에 존재하는 발행사)
     # 목록과 같은 .listed()를 태운다 — 안 그러면 골라도 0건인 발행사가 남는다
@@ -676,7 +742,7 @@ def weekly(request):
     return render(request, "core/weekly.html", {
         "meta_desc": ("이번 주 청약하는 ELS를 한 곳에 모아 낙인 배리어·연 수익률·"
                       "만기손실확률·조기상환 조건까지 한 표로 비교합니다. 매주 월요일 갱신."),
-        "regime": regime,
+        "asset_moves": asset_moves,
         "products": products,
         "top5_tracks": top5_tracks,
         "ki_top5": ki_top5,
@@ -1203,6 +1269,37 @@ def _portfolio_context(request):
 
     # ── 리스크 분석 ──────────────────────────────
     risk = portfolio_facts.analyze_risk(holding, total_invested)
+    portfolio_comment = None
+    if risk:
+        notes = []
+        top_asset = risk["assets"][0] if risk["assets"] else None
+        top_week = risk["weeks"][0] if risk["weeks"] else None
+        top_issuer = risk["issuers"][0] if risk["issuers"] else None
+
+        def _comment_note(label, row, guide):
+            limit_amount = round(total_invested * guide / 100)
+            display_name = "상위 발행사" if label == "발행사 집중도" else row["name"]
+            return {
+                "label": label, "name": display_name,
+                "value": row["pct"], "guide": guide,
+                "gap": max(row["pct"] - guide, 0),
+                "amount": row["amount"], "count": row["count"],
+                "excess_amount": max(row["amount"] - limit_amount, 0),
+            }
+
+        if top_asset:
+            notes.append(_comment_note("기초자산 집중도", top_asset, 30))
+        if top_week:
+            notes.append(_comment_note("청약 시기 집중도", top_week, 15))
+        if top_issuer:
+            notes.append(_comment_note("발행사 집중도", top_issuer, 25))
+        from . import ask_agent
+        summary = ask_agent.portfolio_comment_summary(notes, total_invested, today)
+        portfolio_comment = {
+            "notes": notes, "as_of": today,
+            "summary": summary["text"], "generated_by": summary["generated_by"],
+            "total_invested": total_invested,
+        }
 
     # ── 스트레스 테스트 (계산은 core/portfolio_facts.py — /ask/ 도구와 공용) ──
     stress = portfolio_facts.stress_test(holding, total_invested)
@@ -1389,6 +1486,7 @@ def _portfolio_context(request):
         "port_loss_rate": port_loss_rate,
         "loss_coverage_pct": loss_coverage_pct,
         "risk": risk,
+        "portfolio_comment": portfolio_comment,
         "ki_updated": ki_updated,
         "has_ki_data": has_ki_data,
         "ki_alerts": ki_alerts,
@@ -1739,55 +1837,62 @@ def _parse_invest_date(val):
 
 # ── 시장 트렌드 ───────────────────────────────────
 def market_trend(request):
-    """주차별 평균 수익률·KI 추이 (sub_end 기준, 최근 20주)."""
+    """월별 평균 수익률·KI 추이 (sub_end 기준, 최근 발행 12개월)."""
     from collections import defaultdict
 
-    weeks_n = 20
     qs = Product.objects.listed().filter(sub_end__isnull=False)
     buckets = defaultdict(list)
     for p in qs:
-        monday = p.sub_end - timedelta(days=p.sub_end.weekday())
-        buckets[monday].append(p)
+        month = date(p.sub_end.year, p.sub_end.month, 1)
+        buckets[month].append(p)
 
-    ordered = sorted(buckets)[-weeks_n:]
+    # 발행이 없던 달은 0으로 채우지 않고 건너뛴다. 0은 평균값으로 오해되기 때문이다.
+    ordered = sorted(buckets)[-12:]
     rows = []
-    for wk in ordered:
-        ps = buckets[wk]
+    for month in ordered:
+        ps = buckets[month]
         ys = [p.yield_rate for p in ps if p.yield_rate is not None]
         kis = [p.ki for p in ps if p.ki is not None and not p.is_no_ki]
         rows.append({
-            "week": wk,
+            "month": month,
             "count": len(ps),
             "avg_yield": round(sum(ys) / len(ys), 1) if ys else None,
             "avg_ki": round(sum(kis) / len(kis), 1) if kis else None,
         })
 
     # ── SVG 좌표 계산 ──
+    # PC 좌표를 모바일에 축소하면 글자와 선이 가운데 눌린다. 같은 12개 월값으로
+    # PC·모바일 좌표를 따로 만들고 화면 폭에 맞는 SVG만 노출한다.
     W, H = 720, 240
-    PAD_L, PAD_R, PAD_T, PAD_B = 44, 44, 20, 40
-    plot_w = W - PAD_L - PAD_R
-    plot_h = H - PAD_T - PAD_B
+    MW, MH = 320, 230
 
-    def _line(key, vmin, vmax):
+    def _line(key, width, height, pads):
         vals = [r[key] for r in rows if r[key] is not None]
         if not vals:
-            return [], vmin, vmax
-        lo = vmin if vmin is not None else min(vals)
-        hi = vmax if vmax is not None else max(vals)
+            return [], None, None
+        pad_l, pad_r, pad_t, pad_b = pads
+        plot_w = width - pad_l - pad_r
+        plot_h = height - pad_t - pad_b
+        lo, hi = min(vals), max(vals)
         span = (hi - lo) or 1
+        lo -= span * .08
+        hi += span * .08
+        span = hi - lo
         pts = []
         n = len(rows)
         for i, r in enumerate(rows):
             if r[key] is None:
                 continue
-            x = PAD_L + (plot_w * i / max(n - 1, 1))
-            y = PAD_T + plot_h * (1 - (r[key] - lo) / span)
+            x = pad_l + (plot_w * i / max(n - 1, 1))
+            y = pad_t + plot_h * (1 - (r[key] - lo) / span)
             pts.append({"x": round(x, 1), "y": round(y, 1), "v": r[key],
-                        "week": r["week"], "count": r["count"]})
+                        "month": r["month"], "count": r["count"]})
         return pts, lo, hi
 
-    yield_pts, y_lo, y_hi = _line("avg_yield", None, None)
-    ki_pts, k_lo, k_hi = _line("avg_ki", None, None)
+    yield_pts, y_lo, y_hi = _line("avg_yield", W, H, (44, 44, 28, 40))
+    ki_pts, k_lo, k_hi = _line("avg_ki", W, H, (44, 44, 28, 40))
+    yield_pts_m, _, _ = _line("avg_yield", MW, MH, (16, 16, 30, 34))
+    ki_pts_m, _, _ = _line("avg_ki", MW, MH, (16, 16, 30, 34))
 
     def _polyline(pts):
         return " ".join(f"{p['x']},{p['y']}" for p in pts)
@@ -1802,95 +1907,19 @@ def market_trend(request):
             "ki_diff": round(ki_pts[-1]["v"] - ki_pts[0]["v"], 1) if len(ki_pts) >= 2 else None,
         }
 
-    # ── 레이더 신호 성과 검증 (verify_radar가 채운 RadarVerdict 집계) ──
-    from core.models import PRINCIPAL_PROTECTED_TYPES, RadarVerdict
-    BADGE_TIERS = ("타겟 신호", "아주 강한 신호", "강한 신호")
-    # 대조군('배지 없음')에서도 원금지급형을 뺀다 — 배지가 붙을 수 없는 상품이
-    # 대조군에만 쌓이면 비교가 기울고, 화면에서 뺀 상품의 성적이 화면에 남는다.
-    # 이미 쌓인 행은 verify_radar 배치가 계속 만들지만 여기서 걸러 낸다.
-    # (2026-08-06 실측: ELB 판정확정 24건 · 대조군 적중률 83.1% → 83.8%)
-    verdicts = list(RadarVerdict.objects.select_related("product")
-                    .exclude(product__product_type__in=PRINCIPAL_PROTECTED_TYPES))
-    badges = [v for v in verdicts if v.tier in BADGE_TIERS]
-
-    radar = None
-    if verdicts:
-        evaluated = [v for v in badges if v.met is not None]
-        hit = [v for v in evaluated if v.met]
-        radar_stats = {
-            "total": len(badges),
-            "evaluated": len(evaluated),
-            "hit": len(hit),
-            "hit_rate": round(len(hit) / len(evaluated) * 100, 1) if evaluated else None,
-        }
-
-        # 주차별(최근 12주) 배지 상품 적중/미충족/대기 — 막대 높이는 상품 수 비례
-        wk_map = defaultdict(lambda: {"hit": 0, "miss": 0, "wait": 0})
-        for v in badges:
-            b = wk_map[v.week_monday]
-            if v.met is True:
-                b["hit"] += 1
-            elif v.met is False:
-                b["miss"] += 1
-            else:
-                b["wait"] += 1
-        # 전체 주차 표시 — 판정 확정이 몰린 초기(1~5월) 주차가 최근 12주 창에
-        # 잘려 전부 '대기'만 보이던 문제
-        recent_weeks = sorted(wk_map)
-        max_total = max((sum(wk_map[w].values()) for w in recent_weeks), default=0) or 1
-        BAR_MAX = 96
-        radar_weeks = []
-        for w in recent_weeks:
-            b = wk_map[w]
-            total = b["hit"] + b["miss"] + b["wait"]
-            done = b["hit"] + b["miss"]
-            radar_weeks.append({
-                "week": w, "total": total,
-                "hit": b["hit"], "miss": b["miss"], "wait": b["wait"],
-                "hit_h": round(b["hit"] / max_total * BAR_MAX),
-                "miss_h": round(b["miss"] / max_total * BAR_MAX),
-                "wait_h": round(b["wait"] / max_total * BAR_MAX),
-                "rate": round(b["hit"] / done * 100) if done else None,
-            })
-
-        # 등급별 1차 적중률 (배지 2등급 + 대조군 '없음')
-        grade_defs = [
-            ("타겟 신호", "타겟 신호 (v7)", "#1B64DA"),
-            ("아주 강한 신호", "아주 강한 신호 (v6)", "#1B64DA"),
-            ("강한 신호", "강한 신호 (v6)", "#3182F6"),
-            ("없음", "배지 없음 (대조군)", "#8B95A1"),
-        ]
-        radar_grades = []
-        for tier, label, color in grade_defs:
-            ev = [v for v in verdicts if v.tier == tier and v.met is not None]
-            ht = [v for v in ev if v.met]
-            radar_grades.append({
-                "label": label, "color": color,
-                "total": len(ev), "hit": len(ht),
-                "rate": round(len(ht) / len(ev) * 100, 1) if ev else None,
-            })
-
-        # 최근 판정 내역 10건 — 판정 확정건만 (평가 전 대기는 미래 평가일이라 제외)
-        radar_recent = sorted(
-            (v for v in badges if v.met is not None),
-            key=lambda v: v.eval_date, reverse=True)[:10]
-
-        radar = {
-            "stats": radar_stats,
-            "weeks": radar_weeks,
-            "grades": radar_grades,
-            "recent": radar_recent,
-        }
+    monday, sunday = _week_range(0)
+    regime = _market_regime(monday, sunday)
 
     return render(request, "core/trend.html", {
-        "meta_desc": ("최근 20주간 청약된 ELS의 평균 연 수익률과 낙인 배리어가 어떻게 움직였는지, "
-                      "레이더 신호의 실제 조기상환 성적과 함께 봅니다."),
+        "meta_desc": "최근 발행 12개월의 ELS 평균 연 수익률과 낙인 배리어, 현재 시장 국면을 함께 봅니다.",
         "rows": rows,
         "yield_pts": yield_pts, "yield_poly": _polyline(yield_pts),
         "ki_pts": ki_pts, "ki_poly": _polyline(ki_pts),
+        "yield_pts_m": yield_pts_m, "yield_poly_m": _polyline(yield_pts_m),
+        "ki_pts_m": ki_pts_m, "ki_poly_m": _polyline(ki_pts_m),
         "y_lo": y_lo, "y_hi": y_hi, "k_lo": k_lo, "k_hi": k_hi,
-        "W": W, "H": H, "trend": trend,
-        "radar": radar,
+        "W": W, "H": H, "MW": MW, "MH": MH, "trend": trend,
+        "regime": regime,
         "active_nav": "trend",
     })
 
@@ -1959,6 +1988,8 @@ def redemption_calendar(request):
                     # 상환이 일어난 그 회차에만 상태를 그대로 붙인다.
                     # 앞 회차는 상환되지 않은 지난 평가라 '지난'이 맞다.
                     "done_label": inv.status if row["n"] == last_n else "",
+                    "failure_label": (f"{row['n']}차 조기상환 실패"
+                                      if d < today and row["n"] != last_n else ""),
                 })
 
     cal = pycalendar.Calendar(firstweekday=0)  # 월요일 시작
@@ -3030,7 +3061,7 @@ def article_els_stepdown(request):
 def article_els_knock_in(request):
     return _article_lesson(
         request, "core/article_els_knock_in.html",
-        lesson_meta_title="낙인이 생기면 바로 손실일까요? | ELS 레이더",
+        lesson_meta_title="ELS 낙인 뜻, 발생하면 바로 손실일까요? | ELS 레이더",
         lesson_title_plain="낙인이 생기면 바로 손실일까요?",
         lesson_kicker="ELS 세 번째 수업",
         lesson_title_line1="낙인이 생기면",
@@ -3039,7 +3070,7 @@ def article_els_knock_in(request):
         lesson_read_time=5,
         lesson_image="els-knock-in-hero-v1.png",
         lesson_image_alt="낙인선 아래로 내려갔다가 만기 기준 위로 회복하는 가격선",
-        meta_desc="ELS 낙인이 발생해도 손실이 바로 확정되지 않는 이유와 낙인 뒤 만기 결과 세 가지를 그림으로 설명해요.",
+        meta_desc="ELS 낙인의 뜻과 낙인선의 역할, 낙인이 발생해도 손실이 바로 확정되지 않는 이유를 만기 조건과 함께 설명해요.",
         faq_question="낙인 45를 한 번 건드렸지만 만기 때 80까지 회복했어요. 만기상환 기준은 75라면?",
         faq_answer="정답: 일반적인 예시 조건이라면 만기상환 기준 75를 넘었으므로 원금과 약정 수익을 받는 구조예요. 낙인 발생만으로 손실이 바로 확정되지는 않습니다.",
         prev_url_name="article_els_stepdown",
@@ -3052,7 +3083,7 @@ def article_els_knock_in(request):
 def article_els_worst_of(request):
     return _article_lesson(
         request, "core/article_els_worst_of.html",
-        lesson_meta_title="기초자산이 세 개인데 왜 하나만 보나요? | ELS 레이더",
+        lesson_meta_title="ELS 최저수익률 기초자산, 왜 평균이 아닌 가장 낮은 하나를 볼까요? | ELS 레이더",
         lesson_title_plain="기초자산이 세 개인데 왜 하나만 보나요?",
         lesson_kicker="ELS 네 번째 수업",
         lesson_title_line1="기초자산이 세 개인데",
@@ -3061,7 +3092,7 @@ def article_els_worst_of(request):
         lesson_read_time=5,
         lesson_image="els-worst-of-hero-v1.png",
         lesson_image_alt="서로 다른 위치에 있는 세 기초자산이 하나의 결승선을 향하는 모습",
-        meta_desc="ELS가 여러 기초자산의 평균이 아니라 가장 많이 하락한 자산을 기준으로 상환 여부를 판단하는 이유를 설명해요.",
+        meta_desc="ELS 워스트오프 구조에서 여러 기초자산의 평균이 아니라 가장 많이 하락한 하나로 상환 여부를 판단하는 이유를 설명해요.",
         faq_question="세 자산이 104, 91, 84이고 조기상환 기준은 90이에요. 평균은 93인데 상환될까요?",
         faq_answer="정답: 조기상환되지 않아요. 가장 낮은 자산 84가 기준선 90보다 낮기 때문이에요. 이 상품에서는 평균보다 가장 낮은 하나가 중요합니다.",
         prev_url_name="article_els_knock_in",
@@ -3115,6 +3146,35 @@ def article_els_vs_elb(request):
     )
 
 
+_COURSE_LESSON_SEO = {
+    "more-assets-diversification": {
+        "title": "ELS 워스트오프 구조, 왜 평균이 아닌 가장 낮은 하나를 볼까요? | ELS 레이더",
+        "description": "ELS 기초자산이 많아도 자동으로 안전해지지 않는 이유와 워스트오프 구조의 분산 착시를 쉽게 설명해요.",
+    },
+    "recover-after-knock-in": {
+        "title": "ELS 낙인 후 회복 조건, 원금과 약정 수익을 받는 경우 | ELS 레이더",
+        "description": "ELS 낙인 발생 뒤에도 조기상환선이나 만기상환 기준을 회복하면 정상상환될 수 있는 조건을 사례로 설명해요.",
+    },
+    "maturity-profit-loss": {
+        "title": "ELS 만기 손실 계산, 기준가 100이 62라면 손익은 얼마일까요? | ELS 레이더",
+        "description": "ELS가 만기까지 갔을 때 정상상환과 원금손실 조건을 나누고, 최저 기초자산 100에서 62 예시로 손익을 계산해요.",
+    },
+}
+
+_COURSE_LESSON_RELATED = {
+    "more-assets-diversification": [
+        ("워스트오프의 기본 판정부터 다시 확인하고 싶다면 4편을 먼저 읽어보세요.", "article_els_worst_of", "4편 · 기초자산이 세 개인데 왜 하나만 보나요?"),
+    ],
+    "recover-after-knock-in": [
+        ("낙인선과 만기상환 기준의 차이가 궁금하다면 3편에서 개념을 먼저 잡아보세요.", "article_els_knock_in", "3편 · 낙인이 생기면 바로 손실일까요?"),
+    ],
+    "maturity-profit-loss": [
+        ("ELS의 전체 구조를 처음부터 훑고 싶다면 1편으로 돌아가 보세요.", "article_els_basics", "1편 · ELS가 뭐예요? 돈을 버는 방식부터 알아봐요"),
+        ("세전 수익과 보유 기간 계산은 5편에서 더 가볍게 연습할 수 있어요.", "article_els_yield", "5편 · 연 8퍼센트 ELS, 실제로 받는 돈은 얼마일까요?"),
+    ],
+}
+
+
 def article_course_lesson(request, slug):
     """승인된 30편 목록 가운데 7~30편을 같은 수업 화면으로 보여준다."""
     from .course_lessons import COURSE_LESSONS, COURSE_LESSONS_BY_SLUG
@@ -3125,16 +3185,18 @@ def article_course_lesson(request, slug):
     index = COURSE_LESSONS.index(item)
     previous = COURSE_LESSONS[index - 1] if index else None
     following = COURSE_LESSONS[index + 1] if index + 1 < len(COURSE_LESSONS) else None
+    seo = _COURSE_LESSON_SEO.get(slug, {})
     return _article_lesson(
         request, "core/article_course_lesson.html",
-        lesson_meta_title=f"{item['title']} | ELS 레이더",
+        lesson_meta_title=seo.get("title") or f"{item['title']} | ELS 레이더",
         lesson_title_plain=item["title"], lesson_kicker=f"ELS {item['number']}번째 수업",
         lesson_title_line1=item["title"], lesson_title_line2=None,
         lesson_deck=item["deck"], lesson_read_time=item["read_time"],
         lesson_image=None, lesson_image_alt="", lesson_number=item["number"],
-        meta_desc=item["deck"], lead=item["lead"], stats=item["stats"],
+        meta_desc=seo.get("description") or item["deck"], lead=item["lead"], stats=item["stats"],
         sections=item["sections"], steps=item["steps"], note=item["note"], chart=item["chart"],
         faq_question=item["faq_q"], faq_answer=item["faq_a"],
+        related_links=_COURSE_LESSON_RELATED.get(slug, []),
         prev_url_name=previous["view_name"] if previous else "article_els_vs_elb",
         prev_label=previous["title"] if previous else "ELS와 ELB, 이름은 비슷한데 위험은 달라요",
         next_url_name=following["view_name"] if following else None,
