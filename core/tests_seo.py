@@ -271,6 +271,75 @@ class ReportPageTests(TestCase):
         self.assertIn('href="/report/els-10year/"', html)
 
 
+class ArticleSeoParityTests(TestCase):
+    """1~6편도 뒤 수업과 같은 검색 구조와 내부 이동을 갖는다."""
+
+    FIRST_SIX = (
+        "/articles/els-basics/", "/articles/stepdown-numbers/",
+        "/articles/knock-in/", "/articles/worst-of/",
+        "/articles/yield-calculation/", "/articles/els-vs-elb/",
+    )
+
+    def _html(self, path):
+        response = self.client.get(path)
+        self.assertEqual(response.status_code, 200, path)
+        return response.content.decode()
+
+    def test_first_six_have_article_breadcrumb_and_faq_schema(self):
+        import json
+        import re
+
+        for path in self.FIRST_SIX:
+            blocks = re.findall(
+                r'<script type="application/ld\+json">(.*?)</script>',
+                self._html(path), re.S)
+            types = {json.loads(block)["@type"] for block in blocks}
+            self.assertEqual(types, {"Article", "BreadcrumbList", "FAQPage"}, path)
+
+    def test_first_six_have_social_tags_and_service_links(self):
+        for path in self.FIRST_SIX:
+            html = self._html(path)
+            for tag in ('property="og:image"', 'name="twitter:card"',
+                        'name="twitter:image"'):
+                self.assertIn(tag, html, f"{path} 에 {tag} 가 없다")
+        self.assertIn('href="/weekly/"', self._html("/articles/els-basics/"))
+        self.assertIn('href="/assets/"', self._html("/articles/knock-in/"))
+
+    def test_overlapping_topics_link_to_their_deeper_lesson(self):
+        links = {
+            "/articles/els-basics/": "/articles/maturity-profit-loss/",
+            "/articles/knock-in/": "/articles/recover-after-knock-in/",
+            "/articles/worst-of/": "/articles/more-assets-diversification/",
+            "/articles/yield-calculation/": "/articles/els-tax/",
+        }
+        for source, target in links.items():
+            self.assertIn(f'href="{target}"', self._html(source), source)
+
+    def test_deeper_lessons_link_back_to_the_concept(self):
+        links = {
+            "/articles/more-assets-diversification/": "/articles/worst-of/",
+            "/articles/recover-after-knock-in/": "/articles/knock-in/",
+            "/articles/maturity-profit-loss/": "/articles/els-basics/",
+        }
+        for source, target in links.items():
+            self.assertIn(f'href="{target}"', self._html(source), source)
+
+    def test_tax_and_issuer_lesson_ctas_match_the_topic(self):
+        self.assertNotIn('/report/els-10year/', self._html("/articles/els-tax/"))
+        self.assertIn('href="/weekly/"', self._html("/articles/issuer-credit-risk/"))
+
+    def test_quiz_questions_are_not_heading_level_two(self):
+        for path in self.FIRST_SIX:
+            html = self._html(path)
+            self.assertNotIn("<h2>30초 확인 문제", html, path)
+
+    def test_stepdown_88_example_uses_vertical_journey_without_arrows(self):
+        html = self._html("/articles/stepdown-numbers/")
+        self.assertIn('class="eval-journey"', html)
+        self.assertIn("기준보다 2%p 낮음", html)
+        self.assertNotIn('class="checkpoint-arrow"', html)
+
+
 class SitemapWithUserDataTests(TestCase):
     """로그인 사용자가 있어도 개인 화면은 사이트맵에 새지 않는다."""
 
