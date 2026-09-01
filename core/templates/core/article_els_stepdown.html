@@ -1,5 +1,34 @@
 {% extends "core/article_lesson_base.html" %}
 {% block lesson_body %}
+<style>
+  .eval-pair-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:28px}
+  .eval-journey-card{border:1px solid var(--lesson-line);border-radius:20px;background:#fff;padding:22px}
+  .eval-journey-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:20px}
+  .eval-journey-head b{font-size:16px;color:var(--lesson-ink)}
+  .eval-journey-head span{border-radius:999px;padding:5px 9px;font-size:11px;font-weight:800;background:#FFF4E4;color:#B86A06}
+  .eval-journey-card.pass .eval-journey-head span{background:#E8F7F1;color:var(--lesson-green)}
+  .eval-journey{display:grid;grid-template-columns:20px minmax(0,1fr);column-gap:11px}
+  .eval-journey-rail{position:relative;display:flex;justify-content:center}
+  .eval-journey-rail:not(.last):after{content:"";position:absolute;top:15px;bottom:-17px;width:2px;background:#DCE5F2}
+  .eval-journey-dot{position:relative;z-index:1;width:11px;height:11px;margin-top:4px;border:3px solid #fff;border-radius:50%;background:#91A0B2;box-shadow:0 0 0 2px #CAD4E0}
+  .eval-journey-rail.current .eval-journey-dot{background:var(--lesson-blue);box-shadow:0 0 0 2px #94B9F4}
+  .eval-journey-rail.result .eval-journey-dot{background:var(--lesson-amber);box-shadow:0 0 0 2px #FFD49A}
+  .eval-journey-card.pass .eval-journey-rail.result .eval-journey-dot{background:var(--lesson-green);box-shadow:0 0 0 2px #9FD9C5}
+  .eval-journey-step{padding-bottom:17px;min-width:0}
+  .eval-journey-step.last{padding-bottom:0}
+  .eval-journey-step small{display:block;font-size:11px;color:#8B95A1}
+  .eval-journey-value{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:2px}
+  .eval-journey-value b{font-size:15px;color:var(--lesson-ink);margin:0}
+  .eval-journey-value strong{font-size:26px;line-height:1.2;font-variant-numeric:tabular-nums}
+  .eval-journey-value strong.current{color:var(--lesson-blue)}
+  .eval-journey-gap{display:block;margin-top:3px;font-size:11px;font-weight:750;color:#B86A06}
+  .eval-journey-verdict{margin-top:4px;border-radius:12px;background:#FFF6E8;padding:11px 12px}
+  .eval-journey-verdict b{display:block;margin:0;font-size:15px;color:#A45C00}
+  .eval-journey-verdict span{display:block;margin-top:3px;font-size:11px;line-height:1.5;color:var(--lesson-muted)}
+  .eval-journey-card.pass .eval-journey-verdict{background:#E8F7F1}
+  .eval-journey-card.pass .eval-journey-verdict b{color:var(--lesson-green)}
+  @media(max-width:800px){.eval-pair-grid{grid-template-columns:1fr}.eval-journey-card{padding:20px}}
+</style>
 <p><strong>90-90-85-85-80-75.</strong> ELS 상품 화면에서 이런 숫자를 만나면 암호처럼 느껴질 수 있어요. 하지만 숫자를 한꺼번에 읽지 말고, 달력의 약속 날짜에 하나씩 붙이면 금방 단순해집니다.</p>
 <p>이 숫자들은 보통 <strong>각 조기상환 평가일에 넘어야 하는 기준선</strong>이에요. 놀이공원 입구의 키 제한선이 날짜마다 조금씩 낮아진다고 생각하면 쉬워요.</p>
 
@@ -32,15 +61,29 @@
 
 <div class="wide visual">
   <div class="visual-title">같은 88도 날짜에 따라 결과가 달라져요</div>
-  <div class="checkpoint">
-    <div class="checkpoint-side"><span>12개월 기준선</span><b>90</b></div>
-    <div class="checkpoint-arrow"><i class="fa-solid fa-chevron-right diagram-arrow" aria-hidden="true"></i><span>88은 부족해요</span></div>
-    <div class="checkpoint-side"><span>결과</span><b>계속 관찰</b></div>
-  </div>
-  <div class="checkpoint">
-    <div class="checkpoint-side"><span>18개월 기준선</span><b>85</b></div>
-    <div class="checkpoint-arrow"><i class="fa-solid fa-chevron-right diagram-arrow" aria-hidden="true"></i><span>88은 넘어요</span></div>
-    <div class="checkpoint-side pass"><span>결과</span><b>조기상환</b></div>
+  <div class="eval-pair-grid">
+    <div class="eval-journey-card">
+      <div class="eval-journey-head"><b>12개월 평가</b><span>조건 미달</span></div>
+      <div class="eval-journey">
+        <div class="eval-journey-rail"><i class="eval-journey-dot"></i></div>
+        <div class="eval-journey-step"><small>이번 회차 상환 기준</small><div class="eval-journey-value"><b>12개월 기준선</b><strong>90</strong></div></div>
+        <div class="eval-journey-rail current"><i class="eval-journey-dot"></i></div>
+        <div class="eval-journey-step"><small>현재 가장 낮은 기초자산</small><div class="eval-journey-value"><b>평가값</b><strong class="current">88</strong></div><span class="eval-journey-gap">기준보다 2%p 낮음</span></div>
+        <div class="eval-journey-rail result last"><i class="eval-journey-dot"></i></div>
+        <div class="eval-journey-step last"><small>판정</small><div class="eval-journey-verdict"><b>계속 관찰</b><span>다음 평가일에 다시 확인합니다.</span></div></div>
+      </div>
+    </div>
+    <div class="eval-journey-card pass">
+      <div class="eval-journey-head"><b>18개월 평가</b><span>조건 충족</span></div>
+      <div class="eval-journey">
+        <div class="eval-journey-rail"><i class="eval-journey-dot"></i></div>
+        <div class="eval-journey-step"><small>이번 회차 상환 기준</small><div class="eval-journey-value"><b>18개월 기준선</b><strong>85</strong></div></div>
+        <div class="eval-journey-rail current"><i class="eval-journey-dot"></i></div>
+        <div class="eval-journey-step"><small>현재 가장 낮은 기초자산</small><div class="eval-journey-value"><b>평가값</b><strong class="current">88</strong></div><span class="eval-journey-gap" style="color:var(--lesson-green)">기준보다 3%p 높음</span></div>
+        <div class="eval-journey-rail result last"><i class="eval-journey-dot"></i></div>
+        <div class="eval-journey-step last"><small>판정</small><div class="eval-journey-verdict"><b>조기상환</b><span>원금과 약정 수익을 받습니다.</span></div></div>
+      </div>
+    </div>
   </div>
 </div>
 
