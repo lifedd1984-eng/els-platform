@@ -69,6 +69,13 @@ def _note(lines, tone="info"):
     return {"type": "note", "tone": tone, "lines": [ln for ln in lines if ln]}
 
 
+def _external_blocks(res):
+    sources = res.get("sources") or []
+    if not sources:
+        return []
+    return [{"type": "sources", "title": "외부 검색 출처", "items": sources}]
+
+
 # ══════════════════════════════════════════════════════════════════
 # 차트 — 로그 눈금 라인차트. SVG 좌표를 서버가 계산해 내려준다.
 # ══════════════════════════════════════════════════════════════════
@@ -455,6 +462,9 @@ def _basis(calls, results):
         tools.append(c["name"])
         if not isinstance(r, dict) or not r.get("ok"):
             continue
+        if c["name"] == "external_search":
+            rows.append(("외부 검색", r.get("query") or "최신 공개 사실"))
+            rows.append(("검색 출처", f"{len(r.get('sources') or [])}개"))
         if r.get("meta") and meta is None:
             meta = r["meta"]
             rows.append(("대상", f"{r.get('asset')} — 티커 {meta['ticker']}"))
@@ -489,6 +499,7 @@ BUILDERS = {
     "portfolio_facts": _portfolio_blocks,
     "product_filter": _filter_blocks,
     "product_stats": _stats_blocks,
+    "external_search": _external_blocks,
 }
 
 
