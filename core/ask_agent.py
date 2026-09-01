@@ -26,6 +26,7 @@ from datetime import date
 
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.utils.html import escape
 
 from . import ask_tools
@@ -47,6 +48,7 @@ PRICING = {
 }
 CACHE_WRITE_MULT = 1.25
 CACHE_READ_MULT = 0.10
+WEB_SEARCH_COST_USD = 0.01  # $10 / 1,000회
 
 
 def _rate(model, today=None):
@@ -60,12 +62,13 @@ def _rate(model, today=None):
 def cost_usd(model, usage, today=None):
     """usage dict → USD. 캐시 쓰기/읽기 배수를 반영한다."""
     rin, rout = _rate(model, today)
-    return (
+    token_cost = (
         usage.get("input_tokens", 0) * rin
         + usage.get("cache_creation_input_tokens", 0) * rin * CACHE_WRITE_MULT
         + usage.get("cache_read_input_tokens", 0) * rin * CACHE_READ_MULT
         + usage.get("output_tokens", 0) * rout
     ) / 1e6
+    return token_cost + usage.get("web_search_requests", 0) * WEB_SEARCH_COST_USD
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -185,6 +188,21 @@ DATA_TOOLS = [
             "required": ["views"],
         },
     },
+    {
+        "name": "external_search",
+        "description": (
+            "내부 ELS·시세·포트폴리오 데이터에 없는 최신 공개 사실만 제한적으로 검색. "
+            "현재 뉴스·공시·기업 사건처럼 시점에 따라 바뀌는 정보에만 사용하며, "
+            "내부 도구로 답할 수 있는 질문에는 사용하지 않는다."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "검색할 사실 질문. 자산명과 확인할 사건·기간을 포함"},
+            },
+            "required": ["query"],
+        },
+    },
 ]
 
 ANSWER_TOOL = {
@@ -219,14 +237,14 @@ REFUSE_TOOL = {
 }
 
 RULES = (
-    "너는 ELS 레이더의 데이터 질의응답기다. 사실·통계만 답한다.\n\n"
+    "너는 ELS 레이더의 숫자 기반 분석 도우미다. 확인 가능한 사실·통계로 답한다.\n\n"
     "[절대 규칙]\n"
     "1. 숫자를 만들지 않는다. 답변 수치는 도구가 돌려준 display 값 그대로.\n"
-    "2. 도구가 안 준 것은 \"없다\"고 답한다.\n"
-    "3. 추천·매수/매도 의견·전망 금지.\n"
-    "4. 평가어 금지: 안전/위험/좋다/유리/추천/적합.\n"
-    "5. 미래 단정 금지.\n"
-    "6. 1~5에 걸리면 refuse를 호출한다.\n"
+    "2. 보유 ELS·시세·포트폴리오 도구를 우선 조합하고, 확인되지 않은 값은 확인 불가로 구분한다.\n"
+    "3. 특정 상품의 매수·매도 추천과 주관적 전망은 금지한다.\n"
+    "4. 비중·기간·배리어·손실 시나리오 등 수치 비교와 분산 기준 설명은 허용한다.\n"
+    "5. 미래를 단정하지 않고 계산 기준과 데이터 시점을 함께 쓴다.\n"
+    "6. 조회 가능한 부분은 먼저 답하고, 일부 결측만으로 전체 질문을 거절하지 않는다.\n"
 )
 
 
@@ -238,11 +256,13 @@ def system_interpret():
         f"· {ask_tools.coverage_line()}\n"
         "· KOSPI200은 지수 계열이며 결측 구간은 ETF 환산 보완값 — 쓰이면 근거에 명시된다.\n"
         "· 포트폴리오: 본인 보유 기록만.\n"
-        "· 없는 것: 뉴스·재무제표·의견·환율·금리·신용등급·세금·실시간 시세.\n\n"
+        "· 외부 검색: 내부 데이터에 없는 최신 공개 사실에만 external_search를 최대 1회 사용한다. "
+        "내부 도구로 답할 수 있는 수치에는 사용하지 않는다.\n\n"
         "[진행]\n"
         "질문에 답하는 데 필요한 도구를 **이번 한 번에 전부** 호출한다(여러 개 동시 호출 가능). "
         "자산명은 그대로 넘긴다(서버가 티커로 해석·검증한다). 기간이 없으면 전체 구간. "
-        "조회로 답할 수 없는 질문이면 refuse를 호출한다.\n"
+        "여러 도구 결과를 조합해 답하고, 내부 데이터와 제한적 외부 검색에서 "
+        "확인 가능한 사실이 하나도 없을 때만 refuse를 호출한다.\n"
     )
 
 
@@ -256,8 +276,9 @@ def system_answer():
         "· 계산을 다시 하지 않는다. 도구에 없는 수치는 쓰지 않는다.\n"
         "· 표시값을 다른 단위로 바꿔 쓰지 않는다. '+6,208.3%'를 '약 63배',\n"
         "  '연 51.4%'를 '월 4.3%'처럼 환산하면 안 된다 — 도구가 준 문자열만 쓴다.\n"
-        "· 포트폴리오 질문은 사실 나열까지만 — 정리·처분·추가매수·비중조절 같은 "
-        "행동 제안은 어떤 형태로도 쓰지 않는다.\n"
+        "· 포트폴리오 질문은 자산·발행사·청약시기별 비중과 기준 초과분을 수치로 설명할 수 있다. "
+        "다만 특정 상품의 처분·추가매수 지시는 하지 않는다.\n"
+        "· external_search 결과가 있으면 그 요약 범위 안에서만 설명하고, 출처 링크는 화면이 별도로 표시한다.\n"
         "· 결과가 ok=false면 그 reason·detail을 근거로 refuse를 호출한다.\n"
         "· numbers_used에는 text에 쓴 수치 문자열을 빠짐없이 넣는다.\n"
     )
@@ -277,9 +298,10 @@ def _call(model, system, tools, messages, max_tokens, tool_choice=None):
         # 시스템 블록 끝에 캐시 분기점. 렌더 순서가 tools → system 이라
         # 여기 하나면 도구 스키마까지 함께 캐시된다.
         "system": [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
-        "tools": tools,
         "messages": messages,
     }
+    if tools:
+        body["tools"] = tools
     # ⚠ Claude 5 계열은 thinking을 생략하면 adaptive가 켜지고 max_tokens가
     #   thinking+본문 합계 상한이 된다. 3~5문장 답변에 사고 예산을 태우면
     #   본문이 잘리므로 명시적으로 끄고 effort도 low로 둔다.
@@ -305,9 +327,135 @@ def _call(model, system, tools, messages, max_tokens, tool_choice=None):
 
 def _usage_of(resp):
     u = resp.get("usage") or {}
-    return {k: u.get(k, 0) for k in
-            ("input_tokens", "output_tokens",
-             "cache_creation_input_tokens", "cache_read_input_tokens")}
+    out = {k: u.get(k, 0) for k in
+           ("input_tokens", "output_tokens",
+            "cache_creation_input_tokens", "cache_read_input_tokens")}
+    out["web_search_requests"] = (u.get("server_tool_use") or {}).get("web_search_requests", 0)
+    return out
+
+
+def _portfolio_comment_fallback(notes, total_invested, as_of):
+    """모델 장애 때도 같은 숫자를 보여주는 정형 상세 설명."""
+    lines = [f"{as_of.year}년 {as_of.month}월 {as_of.day}일 기준 총 보유금액은 {total_invested:,}원입니다."]
+    for n in notes:
+        line = (f"{n['label']}은 {n['name']} {n['value']}%로, "
+                f"분산 점검 기준 {n['guide']}%")
+        if n["gap"]:
+            line += (f"보다 {n['gap']}%p 높습니다. 해당 노출은 {n['count']}건, "
+                     f"{n['amount']:,}원이며 기준 금액과의 차이는 {n['excess_amount']:,}원입니다.")
+        else:
+            line += f" 이내입니다. 해당 노출은 {n['count']}건, {n['amount']:,}원입니다."
+        lines.append(line)
+    lines.append("이 값은 보유금액 기준 집중도 계산이며 특정 상품의 매수·매도 의견이 아닙니다.")
+    return " ".join(lines)
+
+
+def portfolio_comment_summary(notes, total_invested, as_of):
+    """계산된 집중도 사실을 Haiku가 설명한다. 6시간 캐시, 실패 시 정형문구.
+
+    모델에는 상품번호·개별 쿠폰을 보내지 않는다. 숫자는 이미 서버가 계산한
+    표시값만 허용하고, 새로운 수치나 행동 지시가 나오면 정형문구로 되돌린다.
+    """
+    fallback = _portfolio_comment_fallback(notes, total_invested, as_of)
+    if (not notes or not getattr(settings, "PORTFOLIO_AI_ENABLED", True)
+            or not getattr(settings, "ANTHROPIC_API_KEY", "")):
+        return {"text": fallback, "generated_by": "calculation"}
+
+    facts = {
+        "as_of": as_of.isoformat(),
+        "total_invested": f"{total_invested:,}원",
+        "concentrations": [{
+            "label": n["label"], "name": n["name"],
+            "current": f"{n['value']}%", "guide": f"{n['guide']}%",
+            "gap": f"{n['gap']}%p", "count": f"{n['count']}건",
+            "amount": f"{n['amount']:,}원",
+            "amount_over_guide": f"{n['excess_amount']:,}원",
+        } for n in notes],
+    }
+    raw = ask_tools.to_json(facts)
+    key = "pf-comment:" + hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    cached = cache.get(key)
+    if cached:
+        return cached
+
+    system = (
+        "너는 ELS 포트폴리오의 집중도를 숫자로 설명한다. 제공된 JSON만 근거로 "
+        "한국어 5~7문장을 쓴다. 모든 집중도 항목의 현재 비중, 점검 기준, 초과분, "
+        "영향 건수와 금액 차이를 빠짐없이 설명한다. 숫자와 날짜는 JSON 문자열을 "
+        "그대로 사용한다. 새로운 계산, 전망, 평가, 매수·매도·축소·확대 지시는 금지한다. "
+        "마지막 문장에 계산 기준일과 특정 상품에 대한 투자 의견이 아니라는 점을 쓴다. "
+        "제목·목록·마크다운 없이 본문만 출력한다."
+    )
+    try:
+        model = getattr(settings, "ASK_MODEL_INTERPRET", "claude-haiku-4-5")
+        resp = _call(model, system, [], [{"role": "user", "content": raw}], 600)
+        text = " ".join(
+            b.get("text", "").strip() for b in resp.get("content", [])
+            if b.get("type") == "text" and b.get("text", "").strip()
+        )
+        allowed = set(_NUM_TOKEN.findall(fallback))
+        bad = [t for t in _NUM_TOKEN.findall(text) if t not in allowed]
+        guarded = any(p.search(text) for p in GUARD_PATTERNS.values())
+        if not text or bad or guarded:
+            raise ValueError("portfolio comment grounding failed")
+        result = {"text": text, "generated_by": "haiku"}
+    except Exception:
+        logger.exception("portfolio comment generation failed")
+        result = {"text": fallback, "generated_by": "calculation"}
+    cache.set(key, result, 60 * 60 * 6)
+    return result
+
+
+def _external_search(model, query):
+    """Anthropic 서버 웹검색 1회. 내부 데이터의 빈틈을 메우는 사실 확인용."""
+    q = normalize_question(query)[:240]
+    if not q:
+        return {"ok": False, "reason": "NO_QUERY", "detail": "검색어가 없습니다."}, None
+    system = (
+        "최신 공개 사실을 확인하는 검색 도우미다. 검색 결과에서 확인된 사실만 "
+        "한국어 3~5문장으로 요약한다. 수치·날짜는 검색 결과 그대로 사용하고, "
+        "ELS 매수·매도 의견이나 전망은 쓰지 않는다. 검색으로 확인되지 않으면 "
+        "확인되지 않았다고 명시한다."
+    )
+    web_tool = {
+        "type": "web_search_20250305", "name": "web_search", "max_uses": 1,
+        "allowed_callers": ["direct"],
+        "user_location": {"type": "approximate", "country": "KR", "timezone": "Asia/Seoul"},
+    }
+    try:
+        resp = _call(model, system, [web_tool], [{"role": "user", "content": q}], 800)
+    except Exception:
+        logger.exception("ask external search failed")
+        return {"ok": False, "reason": "SEARCH_ERROR",
+                "detail": "외부 검색을 사용할 수 없어 내부 데이터 범위만 확인했습니다."}, None
+
+    texts, sources = [], []
+    seen = set()
+    for block in resp.get("content", []):
+        if block.get("type") == "text" and block.get("text"):
+            texts.append(block["text"].strip())
+            for c in block.get("citations") or []:
+                url = c.get("url")
+                if url and url not in seen:
+                    seen.add(url)
+                    sources.append({"title": c.get("title") or url, "url": url})
+        elif block.get("type") == "web_search_tool_result":
+            content = block.get("content")
+            if isinstance(content, list):
+                for item in content:
+                    url = item.get("url") if isinstance(item, dict) else None
+                    if url and url not in seen:
+                        seen.add(url)
+                        sources.append({"title": item.get("title") or url, "url": url})
+    summary = " ".join(t for t in texts if t)
+    if not summary:
+        return {"ok": False, "reason": "NO_DATA",
+                "detail": "검색 결과에서 확인 가능한 사실을 찾지 못했습니다."}, resp
+    numeric = []
+    for token in dict.fromkeys(_NUM_TOKEN.findall(summary)):
+        numeric.append({"value": token, "display": token})
+    return {"ok": True, "query": q, "summary": summary,
+            "sources": sources[:5], "numeric_facts": numeric}, resp
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -324,15 +472,13 @@ GUARD_PATTERNS = {
     "FUTURE": re.compile(
         r"(오를|내릴|상승할|하락할|회복할|떨어질|반등할)\s?(것|겁니|거예|전망|가능성이 높)|"
         r"예상됩니다|예상된다|전망입니다|전망됩니다|할 것으로 보입니다|될 것입니다"),
-    # 3군 — 평가어
+    # 숫자 없이 안전·위험·유불리를 단정하면 사용자가 투자 판단으로 읽는다.
     "EVAL": re.compile(
-        r"안전(합니다|한 편|해 보|하다고)|위험(합니다|한 편|해 보|하다고)|"
-        r"괜찮(습니다|은 편)|유리(합니다|한 편)|불리(합니다|한 편)|"
-        r"적합(합니다|한)|부적합|바람직|훌륭|우수(합니다|한 편)"),
-    # 4군 — 포트폴리오 전용 행동 동사 (사실 나열 밖으로 나가는 순간)
+        r"(안전|위험|유리|불리|적합|부적합)(합니다|해요|한 편|한 수준|하다고|하므로)"),
+    # 포트폴리오는 집중도 계산까지만. 처분·추가매수 행동 지시는 막는다.
     "PORTFOLIO_ACTION": re.compile(
-        r"정리(하|해|를 고려)|처분(하|해)|갈아타|비중을?\s?(줄|늘|조절|낮|높)|"
-        r"추가\s?매수|더 담|빼(시는|는 게)|털어|재조정|리밸런싱|분산하(시|세)"),
+        r"(비중을\s*(줄이|낮추|늘리|높이)|일부를\s*(정리|매도)|"
+        r"다른\s*상품으로\s*(갈아타|교체)|추가\s*매수|매수\s*금액을\s*(줄이|늘리))"),
 }
 
 # 답변에서 뽑아낼 수치 토큰.
@@ -393,8 +539,6 @@ def check_answer(text, tool_results, has_portfolio, question=""):
         flags.append("NUMERIC_UNGROUNDED")
 
     for name, pat in GUARD_PATTERNS.items():
-        if name == "PORTFOLIO_ACTION" and not has_portfolio:
-            continue
         if pat.search(text):
             flags.append(name)
     return flags, bad
@@ -559,7 +703,7 @@ def help_answer():
             lines.append(f"{g.get('label', '')}: " + " / ".join(items))
     body = "\n".join(lines)
     return (
-        "저장된 데이터를 조회해 사실과 통계로 답합니다. "
+        "저장된 데이터를 우선 조회하고, 내부에 없는 최신 공개 사실은 제한적으로 검색해 답합니다. "
         "추천, 매수·매도 의견, 시세 전망은 제공하지 않습니다.\n\n"
         "이런 것을 물어보실 수 있습니다.\n" + body
     )
@@ -676,7 +820,13 @@ def run(user, question):
             c["input"] = inp
     results = []
     for c in calls:
-        res = ask_tools.run(c["name"], user, c.get("input") or {})
+        if c["name"] == "external_search":
+            res, web_resp = _external_search(
+                m_interp, (c.get("input") or {}).get("query") or q)
+            if web_resp:
+                _acc(m_interp, web_resp)
+        else:
+            res = ask_tools.run(c["name"], user, c.get("input") or {})
         results.append(res)
     out["tools"] = [c["name"] for c in calls]
     has_portfolio = any(c["name"] == "portfolio_facts" for c in calls)
