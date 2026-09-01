@@ -767,6 +767,54 @@ class MobileAndChartMarkTests(TestCase):
         self.assertIn("검색·통계 대상", line)
 
 
+class PortfolioCommentTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.notes = [{
+            "label": "기초자산 집중도", "name": "SK하이닉스",
+            "value": 40, "guide": 30, "gap": 10,
+            "amount": 40_000_000, "count": 4, "excess_amount": 10_000_000,
+        }]
+
+    @override_settings(ANTHROPIC_API_KEY="")
+    def test_API키가_없어도_상세_계산문구를_준다(self):
+        r = ask_agent.portfolio_comment_summary(self.notes, 100_000_000, date(2026, 9, 1))
+        self.assertEqual(r["generated_by"], "calculation")
+        self.assertIn("40%", r["text"])
+        self.assertIn("10%p", r["text"])
+        self.assertIn("10,000,000원", r["text"])
+        self.assertNotIn("줄이", r["text"])
+
+    @override_settings(ANTHROPIC_API_KEY="test-key", ASK_MODEL_INTERPRET="claude-haiku-4-5",
+                       PORTFOLIO_AI_ENABLED=True)
+    def test_Haiku가_없는_숫자를_쓰면_정형문구로_대체한다(self):
+        fake = _resp([{"type": "text", "text": "현재 비중은 99%입니다."}])
+        with mock.patch.object(ask_agent, "_call", return_value=fake):
+            r = ask_agent.portfolio_comment_summary(self.notes, 100_000_000, date(2026, 9, 1))
+        self.assertEqual(r["generated_by"], "calculation")
+        self.assertNotIn("99%", r["text"])
+
+
+class ExternalSearchTests(TestCase):
+    @override_settings(ANTHROPIC_API_KEY="test-key")
+    def test_검색결과의_출처와_숫자를_근거로_보존한다(self):
+        fake = _resp([{
+            "type": "text", "text": "공시상 매출은 12.3% 증가했습니다.",
+            "citations": [{"url": "https://example.com/filing", "title": "공시"}],
+        }])
+        with mock.patch.object(ask_agent, "_call", return_value=fake):
+            result, _ = ask_agent._external_search("claude-haiku-4-5", "최근 공시")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["sources"][0]["url"], "https://example.com/filing")
+        self.assertIn("12.3%", ask_tools.displays(result))
+
+    def test_해석프롬프트에_내부우선과_검색제한이_있다(self):
+        prompt = ask_agent.system_interpret()
+        self.assertIn("external_search", prompt)
+        self.assertIn("최대 1회", prompt)
+
+
 class SearchViewCleanupTests(TestCase):
     """자연어 조건검색 입구는 /ask/ 하나만 남긴다."""
 
