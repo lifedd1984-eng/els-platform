@@ -193,91 +193,98 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
   details.fold-card[open] .fold-chev{transform:rotate(180deg)}
 </style>
 
-{% if regime %}
-{# 통과율은 그 주 상품이 있어야 성립한다 — 상품 0건이면 rate=None으로 오고 지수 위치만 남는다 #}
-<details class="card fold-card" data-fold="regimeFold" style="padding:14px 16px;margin-bottom:14px" {% if empty_week %}open{% endif %}>
-  <summary>
-    <i class="fa-solid fa-gauge" style="color:var(--blue)"></i> 시장 국면
-    <span style="font-weight:400;font-size:12px;color:var(--text-3)">
-      {% if regime.rate is not None %}이번 주 조건 통과율 {{ regime.rate }}% ({{ regime.n_pass }}/{{ regime.n_all }}건){% else %}주요 지수의 현재 위치{% endif %}</span>
+{% if asset_moves.rows %}
+<style>
+  .asset-flow-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .asset-periods{display:flex;gap:6px}
+  .asset-periods button{border:1px solid var(--border);background:#fff;color:var(--text-2);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer}
+  .asset-periods button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  .asset-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}
+  .asset-summary div{background:var(--bg);border-radius:9px;padding:10px 12px}
+  .asset-summary small{display:block;color:var(--text-3);font-size:11px;margin-bottom:2px}
+  .asset-summary b{font-size:15px}
+  .flow-group{font-size:11px;color:var(--text-3);font-weight:800;margin:12px 0 4px;padding-top:8px;border-top:1px solid var(--border)}
+  .flow-row{display:grid;grid-template-columns:minmax(92px,150px) minmax(240px,1fr) 66px;align-items:center;gap:14px;min-height:31px}
+  .flow-name{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .flow-track{height:22px;position:relative}
+  .flow-axis{position:absolute;top:1px;bottom:1px;width:1px;background:#c8d0dc}
+  .flow-line{position:absolute;top:10px;height:2px;background:#dfe4ec;border-radius:2px}
+  .flow-dot{position:absolute;top:5px;width:12px;height:12px;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px currentColor;transform:translateX(-50%)}
+  .flow-row.up .flow-line,.flow-row.up .flow-dot{color:var(--red);background:var(--red)}
+  .flow-row.down .flow-line,.flow-row.down .flow-dot{color:var(--blue);background:var(--blue)}
+  .flow-pct{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+  .flow-row.up .flow-pct{color:var(--red)}
+  .flow-row.down .flow-pct{color:var(--blue)}
+  @media(max-width:700px){
+    .asset-flow-head{align-items:flex-start}.asset-periods{width:100%}
+    .asset-summary{grid-template-columns:repeat(2,1fr)}
+    .flow-row{grid-template-columns:82px minmax(145px,1fr) 58px;gap:8px}
+    .flow-name{font-size:12px}.flow-pct{font-size:12px}
+  }
+</style>
+<details class="card fold-card" data-fold="assetMoveFold" open style="padding:14px 16px;margin-bottom:14px" id="asset-moves">
+  <summary class="asset-flow-head">
+    <i class="fa-solid fa-chart-column" style="color:var(--blue)"></i>
+    <span>기초자산별 등락폭</span>
+    <span class="asset-periods" aria-label="등락률 기간">
+      <button type="button" class="on" data-period="1m">1개월</button>
+      <button type="button" data-period="3m">3개월</button>
+      <button type="button" data-period="6m">6개월</button>
+      <button type="button" data-period="1y">1년</button>
+    </span>
     <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
   </summary>
-  <div style="margin-top:12px;display:grid;grid-template-columns:{% if regime.rate is not None %}minmax(200px,1fr) 2fr{% else %}1fr{% endif %};gap:16px" class="rg-grid">
-    {% if regime.rate is not None %}
-    <div style="background:var(--bg);border-radius:10px;padding:14px 16px">
-      <div style="font-size:12px;color:var(--text-3);font-weight:700">조건 통과율</div>
-      <div style="font-size:30px;font-weight:800;letter-spacing:-1px;color:var(--blue-dark);line-height:1.2">
-        {{ regime.rate }}%</div>
-      <div style="height:7px;background:var(--card);border-radius:4px;overflow:hidden;margin:8px 0 6px">
-        <div style="height:100%;width:{{ regime.rate }}%;background:var(--blue);border-radius:4px"></div>
-      </div>
-      <div style="font-size:11.5px;color:var(--text-2);line-height:1.6">
-        이번 주 청약 상품 중 낙인·1차 조기상환 조건을 통과한 비율입니다.</div>
-      <div style="font-size:11px;color:var(--text-3);line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-        <b style="color:var(--text-2)">통과 조건</b><br>
-        {% for line in regime.cond %}{{ line }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</div>
-    </div>
-    {% endif %}
-    <div>
-      {% comment %}
-      4개 지수가 전부 시세 조회에 실패하면 indexes가 빈 리스트가 된다.
-      _market_regime()이 500을 내지는 않으니 화면에는 머리글만 남은 빈 표가
-      그려졌다 — 아래 종목 표처럼 가드를 둔다.
-      {% endcomment %}
-      {% if regime.indexes %}
-      <div style="font-size:12px;color:var(--text-3);font-weight:700;margin-bottom:8px">
-        주요 지수 위치 <span style="font-weight:400">— 고점에 가깝고 많이 오른 지수일수록 고점 회피 기준에 걸립니다</span></div>
-      <div style="overflow-x:auto">
-        <table>
-          <thead><tr><th>지수</th><th class="num">52주 고점 대비</th><th class="num">직전 1년 대비</th></tr></thead>
-          <tbody>
-            {% for i in regime.indexes %}
-            <tr>
-              <td style="font-weight:600">{{ i.name }}</td>
-              <td class="num" style="font-weight:700;color:{% if i.peak >= 95 %}var(--red){% elif i.peak >= 90 %}var(--orange){% else %}var(--green){% endif %}">{{ i.peak }}%</td>
-              <td class="num" style="color:{% if i.ret1y > 30 %}var(--red){% elif i.ret1y > 15 %}var(--orange){% else %}var(--text-2){% endif %}">{% if i.ret1y > 0 %}+{% endif %}{{ i.ret1y }}%</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-      {% if regime.stocks %}
-      <div style="font-size:12px;color:var(--text-3);font-weight:700;margin:14px 0 8px">
-        종목형 기초자산 <span style="font-weight:400">— 이번 주 다빈도 상품</span></div>
-      <div style="overflow-x:auto">
-        <table>
-          <thead><tr><th>기초자산</th><th class="num">이번 주</th><th class="num">52주 고점 대비</th><th class="num">직전 1년 대비</th></tr></thead>
-          <tbody>
-            {% for i in regime.stocks %}
-            <tr>
-              <td style="font-weight:600">{{ i.name }}</td>
-              <td class="num" style="color:var(--text-3)">{{ i.cnt }}건</td>
-              <td class="num" style="font-weight:700;color:{% if i.peak >= 95 %}var(--red){% elif i.peak >= 90 %}var(--orange){% else %}var(--green){% endif %}">{{ i.peak }}%</td>
-              <td class="num" style="color:{% if i.ret1y > 30 %}var(--red){% elif i.ret1y > 15 %}var(--orange){% else %}var(--text-2){% endif %}">{% if i.ret1y > 0 %}+{% endif %}{{ i.ret1y }}%</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% endif %}
-    </div>
+  <div class="asset-summary" aria-live="polite">
+    <div><small>상승 자산</small><b id="flow-up-count">-</b></div>
+    <div><small>하락 자산</small><b id="flow-down-count">-</b></div>
+    <div><small>최대 상승</small><b id="flow-max-up" style="color:var(--red)">-</b></div>
+    <div><small>최대 하락</small><b id="flow-max-down" style="color:var(--blue)">-</b></div>
   </div>
-  {% if regime.rate is not None %}
-  <p style="font-size:11.5px;color:var(--text-3);margin:12px 0 0;line-height:1.65">
-    10년 분기별 검증에서 조건 통과율과 이후 1년 주식 수익률은 같은 방향으로 움직였습니다(상관 +0.52).
-    <b>ELS 조건이 나쁜 시기는 주식도 부진했다</b>는 뜻이라, 한쪽이 어려울 때 다른 쪽이 대안이 되지는 않았습니다.
-    투자 권유가 아니라 현재 위치를 읽는 참고 지표입니다.
-  </p>
-  {% else %}
-  {# 통과율 설명(상관 +0.52)은 통과율이 있을 때만 쓴다 — 화면에 없는 수치를 해설할 수는 없다 #}
-  <p style="font-size:11.5px;color:var(--text-3);margin:12px 0 0;line-height:1.65">
-    이 주에는 청약 상품이 없어 조건 통과율을 낼 수 없습니다. 위 지수 위치는 청약 여부와 무관하게 계산됩니다.
-    투자 권유가 아니라 현재 위치를 읽는 참고 지표입니다.
-  </p>
-  {% endif %}
+  <div id="asset-flow-rows">
+    {% if asset_moves.stocks %}<div class="flow-group">종목형 · {{ asset_moves.stocks|length }}개</div>{% endif %}
+    {% for r in asset_moves.stocks %}
+    <div class="flow-row" data-1m="{{ r.r1m|default_if_none:'' }}" data-3m="{{ r.r3m|default_if_none:'' }}" data-6m="{{ r.r6m|default_if_none:'' }}" data-1y="{{ r.r1y|default_if_none:'' }}">
+      <div class="flow-name" title="{{ r.name }}">{{ r.name }}</div><div class="flow-track"><span class="flow-axis"></span><span class="flow-line"></span><span class="flow-dot"></span></div><div class="flow-pct">-</div>
+    </div>
+    {% endfor %}
+    {% if asset_moves.indexes %}<div class="flow-group">지수형 · {{ asset_moves.indexes|length }}개</div>{% endif %}
+    {% for r in asset_moves.indexes %}
+    <div class="flow-row" data-1m="{{ r.r1m|default_if_none:'' }}" data-3m="{{ r.r3m|default_if_none:'' }}" data-6m="{{ r.r6m|default_if_none:'' }}" data-1y="{{ r.r1y|default_if_none:'' }}">
+      <div class="flow-name" title="{{ r.name }}">{{ r.name }}</div><div class="flow-track"><span class="flow-axis"></span><span class="flow-line"></span><span class="flow-dot"></span></div><div class="flow-pct">-</div>
+    </div>
+    {% endfor %}
+  </div>
+  <p style="font-size:11px;color:var(--text-3);margin:12px 0 0">{{ asset_moves.window_start|date:"Y.m.d" }}~{{ asset_moves.window_end|date:"Y.m.d" }} 판매 상품에 포함된 전체 기초자산 · {{ asset_moves.updated|date:"Y.m.d" }} 종가 기준</p>
 </details>
-<style>@media (max-width:760px){ .rg-grid{ grid-template-columns:1fr !important } }</style>
+<script>
+(function(){
+  var root=document.getElementById('asset-moves'); if(!root)return;
+  function render(period){
+    var rows=[].slice.call(root.querySelectorAll('.flow-row'));
+    var values=rows.map(function(r){return parseFloat(r.dataset[period]);}).filter(Number.isFinite);
+    if(!values.length)return;
+    var lo=Math.min.apply(null,values.concat([0])), hi=Math.max.apply(null,values.concat([0]));
+    var pad=Math.max((hi-lo)*.08,1), min=lo-pad, max=hi+pad, span=max-min;
+    var zero=(0-min)/span*100, ups=[], downs=[];
+    rows.forEach(function(r){
+      var v=parseFloat(r.dataset[period]), track=r.querySelector('.flow-track'), pct=r.querySelector('.flow-pct');
+      if(!Number.isFinite(v)){r.style.display='none';return;} r.style.display='grid';
+      var pos=(v-min)/span*100, line=r.querySelector('.flow-line');
+      r.classList.toggle('up',v>=0); r.classList.toggle('down',v<0);
+      track.querySelector('.flow-axis').style.left=zero+'%';
+      line.style.left=Math.min(zero,pos)+'%'; line.style.width=Math.abs(pos-zero)+'%';
+      track.querySelector('.flow-dot').style.left=pos+'%';
+      pct.textContent=(v>0?'+':'')+v.toFixed(1)+'%'; (v>=0?ups:downs).push(v);
+    });
+    document.getElementById('flow-up-count').textContent=ups.length+'개';
+    document.getElementById('flow-down-count').textContent=downs.length+'개';
+    document.getElementById('flow-max-up').textContent=ups.length?'+'+Math.max.apply(null,ups).toFixed(1)+'%':'-';
+    document.getElementById('flow-max-down').textContent=downs.length?Math.min.apply(null,downs).toFixed(1)+'%':'-';
+  }
+  root.querySelectorAll('.asset-periods button').forEach(function(btn){btn.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();root.querySelectorAll('.asset-periods button').forEach(function(b){b.classList.remove('on')});btn.classList.add('on');render(btn.dataset.period);});});
+  render('1m');
+})();
+</script>
 {% endif %}
 
 {# ── 낙인대별 최고 수익 — 기본 펼침, 접기 상태는 localStorage에 저장 ── #}
