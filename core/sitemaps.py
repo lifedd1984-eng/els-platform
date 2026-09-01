@@ -24,7 +24,7 @@ from .models import Product
 # 수치를 갱신하면 이 값도 함께 올린다 — 검색엔진에 "내용이 바뀌었다"고
 # 알리는 유일한 신호다.
 REPORT_10YEAR_UPDATED = date(2026, 8, 13)
-ARTICLES_UPDATED = date(2026, 8, 29)
+ARTICLES_UPDATED = date(2026, 8, 30)
 
 # 상품 상세를 사이트맵에 넣는 기간 (청약마감일 기준, 일).
 # 왜 전량이 아닌가는 ProductSitemap docstring 참조. 나중에 Search Console에서
