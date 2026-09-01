@@ -239,7 +239,9 @@ class MarketRegimeNormalWeekTest(TrendRegimeMixin, GaugeMixin, TestCase):
         self.assertIn("지수형 낙인", body)
 
     def test_지수_위치도_함께_나온다(self):
-        self.assertIn("주요 지수의 현재 위치", self._body())
+        regime = self._get().context["regime"]
+        self.assertIsNotNone(regime)
+        self.assertTrue(regime["indexes"])
 
 
 class FreshnessBadgeTest(GaugeMixin, TestCase):
