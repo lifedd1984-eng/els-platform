@@ -86,6 +86,16 @@ class GaugeMixin:
         return self._get(**params).content.decode()
 
 
+class TrendRegimeMixin:
+    """시장 국면은 주간 청약이 아니라 트렌드 화면에서 검증한다."""
+
+    def _get(self, **params):
+        return self.client.get(reverse("trend"), params)
+
+    def _body(self, **params):
+        return self._get(**params).content.decode()
+
+
 class EmptyWeekGuideTest(GaugeMixin, TestCase):
     """① 상품 0건인 주 안내."""
 
@@ -166,7 +176,7 @@ class EmptyWeekGuideTest(GaugeMixin, TestCase):
         self.assertIn("이 주에 청약이 마감되는 상품이 없습니다", r.content.decode())
 
 
-class MarketRegimeEmptyWeekTest(GaugeMixin, TestCase):
+class MarketRegimeEmptyWeekTest(TrendRegimeMixin, GaugeMixin, TestCase):
     """②③ 시장 국면 — 지수 위치는 남고 통과율만 빠진다."""
 
     def test_상품이_0건이어도_지수_위치는_나온다(self):
@@ -188,9 +198,8 @@ class MarketRegimeEmptyWeekTest(GaugeMixin, TestCase):
         self.assertEqual(regime["n_all"], 0)
         body = r.content.decode()
         self.assertNotIn("이번 주 조건 통과율", body)   # 요약 줄
-        self.assertNotIn("통과 조건", body)             # 통과율 칸의 조건 목록
-        self.assertNotIn("상관 +0.52", body)            # 통과율 해설
-        self.assertIn("조건 통과율을 낼 수 없습니다", body)
+        self.assertIn("주요 지수의 현재 위치", body)
+        self.assertNotIn("0.0%", body)
 
     def test_상품이_0건이면_종목형_기초자산_표는_빠진다(self):
         """그 주 상품에서 뽑는 표라 상품이 없으면 비는 게 맞다."""
@@ -198,9 +207,9 @@ class MarketRegimeEmptyWeekTest(GaugeMixin, TestCase):
         self.assertEqual(regime["stocks"], [])
         self.assertNotIn("종목형 기초자산", self._body())
 
-    def test_빈_주에는_카드가_펼쳐진_채로_나온다(self):
-        self.assertIn('data-fold="regimeFold"', self._body())
-        self.assertRegex(self._body(), r'data-fold="regimeFold"[^>]*open')
+    def test_시장국면은_트렌드로_옮겨진다(self):
+        self.assertIn("시장 국면", self._body())
+        self.assertNotIn("시장 국면", self.client.get(reverse("weekly")).content.decode())
 
     def test_지수_시세도_없으면_카드를_접는다(self):
         """보여줄 게 하나도 없으면 예전처럼 카드를 통째로 뺀다."""
@@ -208,7 +217,7 @@ class MarketRegimeEmptyWeekTest(GaugeMixin, TestCase):
             self.assertIsNone(self._get().context["regime"])
 
 
-class MarketRegimeNormalWeekTest(GaugeMixin, TestCase):
+class MarketRegimeNormalWeekTest(TrendRegimeMixin, GaugeMixin, TestCase):
     """④ 상품이 있는 주는 예전 그대로."""
 
     def setUp(self):
@@ -225,9 +234,8 @@ class MarketRegimeNormalWeekTest(GaugeMixin, TestCase):
     def test_통과율_칸과_해설이_그대로_나온다(self):
         body = self._body()
         self.assertIn("이번 주 조건 통과율 50.0% (1/2건)", body)
-        self.assertIn("통과 조건", body)
-        self.assertIn("상관 +0.52", body)
-        self.assertNotIn("조건 통과율을 낼 수 없습니다", body)
+        self.assertIn("조건 통과율", body)
+        self.assertIn("지수형 낙인", body)
 
     def test_지수_위치도_함께_나온다(self):
         self.assertIn("주요 지수 위치", self._body())
