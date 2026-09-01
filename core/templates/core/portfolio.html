@@ -116,6 +116,44 @@
 </style>
 
 <div id="pf-analysis">
+{% if portfolio_comment %}
+<details class="card fold-card" open>
+  <summary class="card-title">
+    <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--blue)"></i> AI 현황 코멘트
+    <small style="font-weight:400;color:var(--text-3)">보유 비중을 숫자로 점검합니다</small>
+    <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
+  </summary>
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px" class="pf-comment-grid">
+    {% for n in portfolio_comment.notes %}
+    <div style="border:1px solid var(--border);border-radius:11px;padding:13px 14px">
+      <div style="font-size:11px;color:var(--text-3);font-weight:700">{{ n.label }}</div>
+      <div style="font-weight:800;margin:4px 0;overflow-wrap:anywhere">{{ n.name }}</div>
+      <div style="font-size:18px;font-weight:800;color:{% if n.gap %}var(--orange){% else %}var(--green){% endif %}">{{ n.value }}%</div>
+      <div style="font-size:12px;color:var(--text-2);line-height:1.6;margin-top:5px">
+        분산 점검 기준 {{ n.guide }}%{% if n.gap %} · 기준보다 <b>{{ n.gap }}%p</b> 높음{% else %} · 기준 이내{% endif %}
+      </div>
+      <div style="font-size:11.5px;color:var(--text-3);line-height:1.55;margin-top:7px;padding-top:7px;border-top:1px solid var(--border)">
+        영향 {{ n.count }}건 · {{ n.amount|intcomma }}원
+        {% if n.excess_amount %}<br>기준 금액과의 차이 <b style="color:var(--orange)">{{ n.excess_amount|intcomma }}원</b>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div style="margin-top:12px;padding:14px 15px;border-radius:11px;background:var(--bg);font-size:13px;line-height:1.75;color:var(--text-2)">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px;font-weight:800;color:var(--text)">
+      <i class="fa-solid fa-chart-pie" style="color:var(--blue)"></i> 집중도 상세 해설
+      <small style="margin-left:auto;font-weight:500;color:var(--text-3)">{% if portfolio_comment.generated_by == 'haiku' %}Haiku 분석{% else %}계산 요약{% endif %}</small>
+    </div>
+    {{ portfolio_comment.summary }}
+  </div>
+  <p style="font-size:11.5px;color:var(--text-3);line-height:1.65;margin:12px 0 0">
+    {{ portfolio_comment.as_of|date:"Y.m.d" }} 현재 보유 포트폴리오 기준입니다. 기초자산 30%·청약 주차 15%·발행사 25%를 분산 점검 기준으로 사용하며,
+    특정 상품의 매수·매도 의견이 아니라 신규 등록 전 과도한 중복 노출을 확인하기 위한 수치 가이드입니다.
+    <a href="{% url 'ask' %}" style="color:var(--blue-dark);font-weight:700">AI에 세부 숫자 분석 질문</a>
+  </p>
+</details>
+<style>@media(max-width:700px){.pf-comment-grid{grid-template-columns:1fr!important}}</style>
+{% endif %}
 {% if risk %}
 <details class="card fold-card">
   <summary class="card-title">
@@ -199,9 +237,9 @@
         <tr>
           <th>기초자산</th>
           <th class="num" title="이 자산이 포함된 보유 상품의 투자금 합계 (전체 대비)">내 돈의</th>
-          <th class="num" title="투자금 가중평균 — 이 자산이 평균 이만큼 더 떨어져야 낙인이 시작됩니다">평균 여유</th>
-          <th class="num" title="가장 취약한 보유 1건 기준">가장 가까운 건</th>
-          {% for d in stress.shocks %}<th class="num">-{{ d }}% 시 손실</th>{% endfor %}
+          <th class="num" title="투자금 가중평균 — 이 자산이 평균 이만큼 더 떨어져야 낙인이 시작됩니다">낙인까지 평균 여유</th>
+          <th class="num" title="가장 취약한 보유 1건 기준">낙인까지 가장 가까운 상품</th>
+          {% for d in stress.shocks %}<th class="num">기초자산 {{ d }}% 하락 시 손실</th>{% endfor %}
         </tr>
       </thead>
       <tbody>
@@ -209,10 +247,10 @@
         <tr>
           <td style="font-weight:600">{{ r.name }}</td>
           <td class="num">{{ r.pct }}%</td>
-          <td class="num" style="font-weight:700;color:{% if r.wavg < 30 %}var(--red){% elif r.wavg < 50 %}var(--orange){% else %}var(--green){% endif %}">-{{ r.wavg }}%</td>
-          <td class="num" style="color:var(--text-3)">-{{ r.nearest }}%</td>
+          <td class="num" style="font-weight:700;color:{% if r.wavg < 30 %}var(--red){% elif r.wavg < 50 %}var(--orange){% else %}var(--green){% endif %}">+{{ r.wavg }}%</td>
+          <td class="num" style="color:var(--text-3)">+{{ r.nearest }}%</td>
           {% for d in stress.shocks %}
-          <td class="num" style="{% if r.losses|dictval:d %}font-weight:700{% endif %}">{{ r.losses|dictval:d }}%</td>
+          <td class="num" style="{% if r.losses|dictval:d %}font-weight:700{% endif %}">{% if r.losses|dictval:d %}-{{ r.losses|dictval:d }}%{% else %}0%{% endif %}</td>
           {% endfor %}
         </tr>
         {% endfor %}
@@ -221,14 +259,14 @@
         <tr style="border-top:2px solid var(--border)">
           <td style="font-weight:800">합계</td><td></td><td></td><td></td>
           {% for d in stress.shocks %}
-          <td class="num" style="font-weight:800;color:{% if stress.total|dictval:d > 10 %}var(--red){% elif stress.total|dictval:d > 5 %}var(--orange){% else %}var(--text){% endif %}">{{ stress.total|dictval:d }}%</td>
+          <td class="num" style="font-weight:800;color:{% if stress.total|dictval:d > 10 %}var(--red){% elif stress.total|dictval:d > 5 %}var(--orange){% else %}var(--text){% endif %}">{% if stress.total|dictval:d %}-{{ stress.total|dictval:d }}%{% else %}0%{% endif %}</td>
           {% endfor %}
         </tr>
       </tfoot>
     </table>
   </div>
   <p style="font-size:11.5px;color:var(--text-3);margin-top:10px;line-height:1.65">
-    <b>평균 여유</b> = 보유 금액으로 가중평균한 낙인까지 거리. 같은 자산이라도 산 시기가 다르면
+    <b>낙인까지 평균 여유</b> = 보유 금액으로 가중평균한 낙인까지 거리(남은 폭은 +로 표시). 같은 자산이라도 산 시기가 다르면
     기준가가 달라 한꺼번에 낙인되지 않습니다 — 그 완충이 반영된 수치입니다.
     손실은 낙인 진입액에 회복 실패(원금의 {{ stress.loss_assumed }}% 손실)를 가정한 상한선이며,
     낙인에 들어가도 만기까지 회복하면 원금을 받습니다.
@@ -297,17 +335,18 @@
 </div>{# /pf-analysis #}
 
 <div id="pf-add">
-<div class="card">
-  <div class="card-title"><i class="fa-solid fa-plus" style="color:var(--blue)"></i> 투자 등록</div>
+<details class="card fold-card" {% if not holding_total_count %}open{% endif %}>
+  <summary class="card-title"><i class="fa-solid fa-plus" style="color:var(--blue)"></i> 투자 등록 <small style="font-weight:400;color:var(--text-3)">관심상품에서 선택</small><i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i></summary>
+  {% if not holding_total_count %}<div style="background:var(--blue-bg);color:var(--blue-dark);border-radius:9px;padding:11px 13px;margin-bottom:12px;font-size:13px">관심 메뉴에서 상품을 담은 뒤 투자금액을 등록하면 집중도와 상환 일정을 분석할 수 있습니다.</div>{% endif %}
   {# next는 fetch가 아니라 폴백(일반 폼 제출) 때 쓰인다 — 정렬·페이지를 살려 돌아온다 #}
   <form method="post" class="pf-form">{% csrf_token %}
     <input type="hidden" name="action" value="add">
     <input type="hidden" name="next" value="{{ request.get_full_path }}">
     <div class="form-row">
       <div class="form-field" style="flex:1;min-width:280px">
-        <label>상품</label>
+        <label>관심상품</label>
         <select name="product_id" required>
-          <option value="">상품 선택</option>
+          <option value="">관심상품 선택</option>
           {% for c in candidates %}
           <option value="{{ c.id }}" {% if request.GET.product == c.id|stringformat:'s' %}selected{% endif %}>
             {{ c.issuer }} {{ c.product_no }} ({{ c.yield_rate }}%) {{ c.assets_raw|asset_short|truncatechars:24 }} ~{{ c.sub_end|date:"m.d" }}
@@ -349,7 +388,7 @@
       </a>
     </div>
   </div>
-</div>
+</details>
 </div>{# /pf-add #}
 
 <!-- 일괄삭제용 숨김 폼 (테이블 밖 — 중첩폼 방지) -->
@@ -582,7 +621,7 @@
       <thead>
         <tr>
           <th>상품</th><th>기초자산</th><th class="num">투자금액</th>
-          <th>놓친 회차</th><th class="num" title="조기상환 조건선 / 평가일의 가장 부진한 자산 수준">배리어 / 가장 부진한 자산</th><th>다음 평가</th><th class="num">낙인 여유</th>
+          <th>실패 회차</th><th class="num" title="조기상환 조건선 / 평가일의 가장 부진한 자산 수준">배리어 / 가장 부진한 자산</th><th>다음 평가</th><th class="num">낙인 여유</th>
         </tr>
       </thead>
       <tbody>
@@ -596,7 +635,7 @@
           </td>
           <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ inv.product.assets_raw|asset_short }}</td>
           <td class="num">{{ inv.amount|intcomma }}</td>
-          <td>{{ v.round_no }}회차 {{ v.eval_date|date:"Y.n.j" }}</td>
+          <td><b>{{ v.round_no }}차 조기상환 실패</b><br><small style="color:var(--text-3)">{{ v.eval_date|date:"Y.n.j" }}</small></td>
           <td class="num">
             {{ v.barrier|default:"-" }}%
             / <span style="color:var(--red);font-weight:700">{{ v.worst_level|default:"-" }}%</span>
