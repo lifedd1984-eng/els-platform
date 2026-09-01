@@ -14,6 +14,7 @@
 """
 
 from datetime import date, timedelta
+from urllib.parse import urlsplit
 from xml.etree import ElementTree
 
 from django.contrib.auth import get_user_model
@@ -348,5 +349,6 @@ class SitemapWithUserDataTests(TestCase):
         User.objects.create_user(username="tester", password="pw-for-test-only")
         make_product()
         _, locs = sitemap_locs(self.client)
-        self.assertTrue(all("/portfolio" not in loc and "/watchlist" not in loc
-                            for loc in locs))
+        paths = [urlsplit(loc).path for loc in locs]
+        self.assertTrue(all(not path.startswith(("/portfolio/", "/watchlist/"))
+                            for path in paths))
