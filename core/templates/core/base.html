@@ -49,6 +49,8 @@ body {
   background: var(--bg); color: var(--text);
   font-size: 14px; line-height: 1.5;
 }
+/* 긴 한글·영문 데이터가 카드 밖으로 튀지 않도록 공통 안전망 */
+.card, .card-title, .page-title, .page-sub { overflow-wrap: anywhere; word-break: keep-all; }
 a { color: inherit; text-decoration: none; }
 
 /* ── 상단 네비 ── */
@@ -345,6 +347,7 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="26" height="26"><defs><linearGradient id="gnav" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4E86FF"/><stop offset="1" stop-color="#2D5BFF"/></linearGradient><linearGradient id="gnavt" gradientUnits="userSpaceOnUse" x1="8.64" y1="11.75" x2="23.36" y2="20.25"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity="1"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#gnav)"/><circle cx="16" cy="16" r="8.5" fill="none" stroke="#fff" stroke-width="2.2" opacity=".18"/><path d="M8.64 11.75 A8.5 8.5 0 0 1 23.36 20.25" fill="none" stroke="url(#gnavt)" stroke-width="3.2" stroke-linecap="round"/><circle cx="23.36" cy="20.25" r="4.3" fill="#fff" opacity=".28"/><circle cx="23.36" cy="20.25" r="2.5" fill="#fff"/></svg>
       <span>ELS <span style="color:var(--blue)">레이더</span></span>
     </a>
+    <a href="{% url 'article_list' %}" class="nav-link {% if active_nav == 'articles' %}active{% endif %}">아티클</a>
     <a href="{% url 'weekly' %}" class="nav-link {% if active_nav == 'weekly' or active_nav == 'search' or active_nav == 'presets' %}active{% endif %}">주간 청약</a>
     {% if user.is_authenticated %}
     <a href="{% url 'watchlist' %}" class="nav-link {% if active_nav == 'watchlist' %}active{% endif %}">관심</a>
@@ -353,10 +356,6 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
     <a href="{% url 'ask' %}" class="nav-link {% if active_nav == 'ask' %}active{% endif %}">AI 분석 질문</a>
     {% endif %}
     <a href="{% url 'trend' %}" class="nav-link {% if active_nav == 'trend' %}active{% endif %}">트렌드</a>
-    <a href="{% url 'article_list' %}" class="nav-link {% if active_nav == 'articles' %}active{% endif %}">아티클</a>
-    {% if user.is_staff %}
-    <a href="{% url 'upload' %}" class="nav-link {% if active_nav == 'upload' %}active{% endif %}">업로드</a>
-    {% endif %}
     {% if user.is_superuser %}
     <a href="{% url 'member_admin' %}" class="nav-link {% if active_nav == 'members' %}active{% endif %}">회원</a>
     {% endif %}
@@ -364,9 +363,9 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
       {% block nav_right %}{% endblock %}
       {% if user.is_authenticated %}
       <span style="font-size:12px;color:var(--text-3)">{{ user.username }}</span>
-      <a href="{% url 'password_change' %}" class="btn-icon btn" title="비밀번호 변경"><i class="fa-solid fa-key"></i></a>
+      <a href="{% url 'password_change' %}" class="btn-icon btn" title="비밀번호 변경" aria-label="비밀번호 변경"><i class="fa-solid fa-key"></i></a>
       <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}
-        <button class="btn-icon btn" title="로그아웃"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+        <button class="btn-icon btn" title="로그아웃" aria-label="로그아웃"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
       </form>
       {% else %}
       <a href="{% url 'login' %}" class="btn btn-sm">로그인</a>
@@ -386,11 +385,11 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
 
 {% if user.is_authenticated %}
 <!-- 공통 투자등록 모달 -->
-<div id="invModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px">
+<div id="invModal" role="dialog" aria-modal="true" aria-labelledby="invModalTitle" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);align-items:center;justify-content:center;padding:16px">
   <div style="background:#fff;border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 12px 40px rgba(0,0,0,.2)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-      <div style="font-size:17px;font-weight:800">투자 등록</div>
-      <button type="button" onclick="els_inv_close()" class="btn-icon btn" style="font-size:16px"><i class="fa-solid fa-xmark"></i></button>
+      <div id="invModalTitle" style="font-size:17px;font-weight:800">투자 등록</div>
+      <button type="button" onclick="els_inv_close()" class="btn-icon btn" style="font-size:16px" aria-label="투자 등록 창 닫기"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div id="invProdName" style="font-size:13px;color:var(--text-2);margin-bottom:16px">-</div>
     <form method="post" action="{% url 'portfolio' %}">{% csrf_token %}
