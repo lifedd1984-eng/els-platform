@@ -188,7 +188,7 @@ class MarketRegimeEmptyWeekTest(TrendRegimeMixin, GaugeMixin, TestCase):
         self.assertEqual(regime["indexes"][0]["ret1y"], 8.0)
         body = r.content.decode()
         self.assertIn("시장 국면", body)
-        self.assertIn("주요 지수 위치", body)
+        self.assertIn("주요 지수의 현재 위치", body)
         self.assertIn("52주 고점 대비", body)
 
     def test_상품이_0건이면_통과율은_안_나온다(self):
@@ -199,7 +199,8 @@ class MarketRegimeEmptyWeekTest(TrendRegimeMixin, GaugeMixin, TestCase):
         body = r.content.decode()
         self.assertNotIn("이번 주 조건 통과율", body)   # 요약 줄
         self.assertIn("주요 지수의 현재 위치", body)
-        self.assertNotIn("0.0%", body)
+        # 지수 값(예: 90.0%)과 혼동하지 않고 통과율 영역만 검증한다.
+        self.assertNotIn("조건 통과율 0.0%", body)
 
     def test_상품이_0건이면_종목형_기초자산_표는_빠진다(self):
         """그 주 상품에서 뽑는 표라 상품이 없으면 비는 게 맞다."""
@@ -238,7 +239,7 @@ class MarketRegimeNormalWeekTest(TrendRegimeMixin, GaugeMixin, TestCase):
         self.assertIn("지수형 낙인", body)
 
     def test_지수_위치도_함께_나온다(self):
-        self.assertIn("주요 지수 위치", self._body())
+        self.assertIn("주요 지수의 현재 위치", self._body())
 
 
 class FreshnessBadgeTest(GaugeMixin, TestCase):
