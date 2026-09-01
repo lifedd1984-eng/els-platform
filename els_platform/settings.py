@@ -404,6 +404,7 @@ SHEET_SYNC_USERNAME = os.environ.get("SHEET_SYNC_USERNAME", "admin").strip()
 # 품질이 그대로 드러난다. 모델을 바꾸면 캐시가 통째로 무효화되니 주의.
 ASK_MODEL_INTERPRET = os.environ.get("ASK_MODEL_INTERPRET", "claude-haiku-4-5")
 ASK_MODEL_ANSWER = os.environ.get("ASK_MODEL_ANSWER", "claude-sonnet-5")
+PORTFOLIO_AI_ENABLED = os.environ.get("PORTFOLIO_AI_ENABLED", "1") == "1"
 
 # 출력 상한. 해석턴은 도구 호출 하나면 되고, 설명턴은 3~5문장 + 후속질문이다.
 # ⚠ Sonnet 5는 thinking 파라미터를 생략하면 adaptive가 켜지고, max_tokens는
@@ -503,3 +504,4 @@ LOGGING = {
 if "test" in sys.argv:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
     LOGGING["loggers"]["core"]["level"] = "CRITICAL"
+    PORTFOLIO_AI_ENABLED = False
