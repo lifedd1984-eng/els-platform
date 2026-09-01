@@ -134,20 +134,22 @@ class ScreenExclusionTest(OfflineMixin, TestCase):
         self.assertNotIn("7003", body)
         self.assertNotIn("7004", body)
 
-    def test_트렌드_주차_집계(self):
+    def test_트렌드_월별_집계(self):
         rows = self.client.get(reverse("trend")).context["rows"]
-        wk = [r for r in rows if r["week"] == MONDAY]
-        self.assertEqual(len(wk), 1)
-        self.assertEqual(wk[0]["count"], 2)      # ELS + DLS
+        month = date(TODAY.year, TODAY.month, 1)
+        monthly = [r for r in rows if r["month"] == month]
+        self.assertEqual(len(monthly), 1)
+        self.assertEqual(monthly[0]["count"], 2)      # ELS + DLS
 
     def test_트렌드_평균수익률이_ELB에_눌리지_않는다(self):
         rows = self.client.get(reverse("trend")).context["rows"]
-        wk = [r for r in rows if r["week"] == MONDAY][0]
-        self.assertEqual(wk["avg_yield"], 12.0)  # ELB 6.0%가 섞이면 9.0이 된다
+        month = date(TODAY.year, TODAY.month, 1)
+        monthly = [r for r in rows if r["month"] == month][0]
+        self.assertEqual(monthly["avg_yield"], 12.0)  # ELB 6.0%가 섞이면 9.0이 된다
 
     def test_시장국면_통과율_모수에서_빠진다(self):
         # ELB는 낙인이 없어 통과에는 못 들어가면서 모수만 키운다
-        regime = self.client.get(reverse("weekly")).context["regime"]
+        regime = self.client.get(reverse("trend")).context["regime"]
         self.assertEqual(regime["n_all"], 2)
         self.assertEqual(regime["n_pass"], 2)
 
