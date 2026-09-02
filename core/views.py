@@ -437,7 +437,12 @@ def _freshness(last_import):
     """
     if not last_import:
         return None
-    days = (date.today() - last_import.imported_at.date()).days
+    # ⚠ imported_at은 auto_now_add + USE_TZ=True라 UTC aware datetime으로
+    #   저장된다. .date()를 바로 부르면 UTC 기준 날짜가 나오는데, date.today()는
+    #   이 프로세스의 TZ=Asia/Seoul 때문에 KST 기준 날짜다. 서로 다른 시간대로
+    #   비교하면 KST 00~09시(=UTC 15~24시) 구간마다 하루 오차가 난다
+    #   (2026-09-02 실측 — "오늘"이 "1일 전"으로 찍힘). localtime으로 맞춘다.
+    days = (date.today() - timezone.localtime(last_import.imported_at).date()).days
     if days > FRESHNESS_STALE_DAYS:
         state = "stale"
     elif last_import.row_count == 0:
