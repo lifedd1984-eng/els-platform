@@ -123,7 +123,7 @@
     <small style="font-weight:400;color:var(--text-3)">보유 비중을 숫자로 점검합니다</small>
     <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
   </summary>
-  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px" class="pf-comment-grid">
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px" class="pf-comment-grid">
     {% for n in portfolio_comment.notes %}
     <div style="border:1px solid var(--border);border-radius:11px;padding:13px 14px">
       <div style="font-size:11px;color:var(--text-3);font-weight:700">{{ n.label }}</div>
@@ -147,7 +147,7 @@
     {{ portfolio_comment.summary }}
   </div>
   <p style="font-size:11.5px;color:var(--text-3);line-height:1.65;margin:12px 0 0">
-    {{ portfolio_comment.as_of|date:"Y.m.d" }} 현재 보유 포트폴리오 기준입니다. 기초자산 30%·청약 주차 15%·발행사 25%를 분산 점검 기준으로 사용하며,
+    {{ portfolio_comment.as_of|date:"Y.m.d" }} 현재 보유 포트폴리오 기준입니다. 기초자산 30%·청약 주차 15%를 분산 점검 기준으로 사용하며,
     특정 상품의 매수·매도 의견이 아니라 신규 등록 전 과도한 중복 노출을 확인하기 위한 수치 가이드입니다.
     <a href="{% url 'ask' %}" style="color:var(--blue-dark);font-weight:700">AI에 세부 숫자 분석 질문</a>
   </p>

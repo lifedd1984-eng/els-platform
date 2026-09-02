@@ -29,13 +29,18 @@
         <td {% if cell.is_past %}style="background:var(--bg-2, #fafafa)"{% endif %}>
           {% if cell.day %}
           <div class="cal-day {% if cell.is_today %}today{% endif %}" {% if cell.is_past %}style="color:var(--text-3)"{% endif %}>{{ cell.day }}</div>
-          {% for ev in cell.events %}
+          {% for ev in cell.events|slice:':2' %}
           <div class="cal-event{% if ev.done_label %} done{% endif %}" {% if ev.failure_label %}style="opacity:.72"{% endif %} title="{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} {{ ev.n }}회차 / 배리어 {{ ev.barrier|default:'-' }}% / 예상 {{ ev.expected|intcomma|default:'-' }}원{% if ev.done_label %} ({{ ev.done_label }} 완료){% elif ev.failure_label %} ({{ ev.failure_label }}){% endif %}">
             {% if ev.done_label %}<span style="color:var(--text-2);font-weight:700">{{ ev.done_label }} </span>{% elif ev.failure_label %}<span style="color:var(--orange);font-weight:700">{{ ev.failure_label }} </span>{% endif %}{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} · {{ ev.n }}차
             {% if ev.barrier %}({{ ev.barrier }}%){% endif %}
             {% if ev.badge %}<span style="color:var(--orange);font-weight:700">[{{ ev.badge }}]</span>{% endif %}
           </div>
           {% endfor %}
+          {% if cell.events|length > 2 %}
+          <div class="cal-event cal-more" title="{% for ev in cell.events|slice:'2:' %}{{ ev.inv.product.issuer }} {{ ev.inv.product.product_no }} · {{ ev.n }}차{% if not forloop.last %} / {% endif %}{% endfor %}">
+            외 {{ cell.events|length|add:'-2' }}건
+          </div>
+          {% endif %}
           {% endif %}
         </td>
         {% endfor %}

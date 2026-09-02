@@ -252,6 +252,8 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
 }
 /* 상환이 끝난 회차 — 지난 평가(파랑 흐림)와 달리 회색으로 빠진다 */
 .cal-event.done { background: var(--bg); color: var(--text-3); }
+/* 하루 3건 이상일 때 앞 2건만 보이고 나머지는 이 한 줄로 축약 — 칸 높이 고정 */
+.cal-event.cal-more { background: var(--bg); color: var(--text-3); font-weight: 700; text-align: center; }
 
 /* ── 모바일 2줄 리스트 (≤800px에서 표 대신 표시) ── */
 .m-list { display: none; }

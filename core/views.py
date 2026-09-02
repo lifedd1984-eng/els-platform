@@ -1274,7 +1274,9 @@ def _portfolio_context(request):
         notes = []
         top_asset = risk["assets"][0] if risk["assets"] else None
         top_week = risk["weeks"][0] if risk["weeks"] else None
-        top_issuer = risk["issuers"][0] if risk["issuers"] else None
+        # 발행사 집중도는 자동 코멘트 카드에서 제외한다(2026-09-02 조 팀장 지시).
+        # /ask/ 자유질의에서 발행사 집중도를 직접 물으면 거기서는 그대로 답한다 — 그쪽은
+        # risk["issuers"] 원본을 별도로 쓰므로 이 카드 제외와 무관하다.
 
         def _comment_note(label, row, guide):
             limit_amount = round(total_invested * guide / 100)
@@ -1291,8 +1293,6 @@ def _portfolio_context(request):
             notes.append(_comment_note("기초자산 집중도", top_asset, 30))
         if top_week:
             notes.append(_comment_note("청약 시기 집중도", top_week, 15))
-        if top_issuer:
-            notes.append(_comment_note("발행사 집중도", top_issuer, 25))
         from . import ask_agent
         summary = ask_agent.portfolio_comment_summary(notes, total_invested, today)
         portfolio_comment = {
