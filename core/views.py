@@ -754,6 +754,10 @@ def weekly(request):
         "columns": columns,
         "monday": monday, "sunday": sunday, "offset": offset,
         "total": len(products),
+        # 모바일 요약 바의 "신호 N건" — 목록에 실제로 배지가 붙은 상품 수.
+        # p.radar는 주차·유형 단위로 한 번 계산된 풀을 조회만 하므로(모델 _radar_pool)
+        # 여기서 세도 쿼리가 늘지 않는다. 화면에서 이미 행마다 같은 값을 쓴다.
+        "signal_count": sum(1 for p in products if p.radar),
         "presets": _scope(Preset.objects.all(), request.user),
         "issuers": issuers,
         "watched_ids": watched_ids,

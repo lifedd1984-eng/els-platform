@@ -1,0 +1,67 @@
+{% load els_extras %}
+{% comment %}
+모바일 TOP5 축약본 (2026-09-04 모바일 간소화).
+PC 카드는 지표를 6~7개 보여주지만 375px에서는 잘린다. 여기서는 매수 판단에
+바로 쓰이는 네 개 — 수익률·낙인·1차 배리어·손실확률 — 만 남기고 기초자산,
+보유 중복, 마감일을 한 줄씩 붙였다. 고점대비는 상품 상세로 넘겼다.
+지수형·종목형은 PC처럼 나란히 두면 폭이 모자라 탭으로 나눈다.
+{% endcomment %}
+{% if top5_tracks %}
+<div class="card m-only" style="padding:13px 14px;margin-bottom:14px">
+  <div class="mt5-head">
+    <b>TOP5</b>
+    <span class="mt5-sub">10년 69,903건 검증 규칙 통과 · 수익률 상위</span>
+    {% if top5_tracks|length > 1 %}
+    <span class="mt5-tabs" role="tablist">
+      {% for t in top5_tracks %}
+      <button type="button" class="mt5-tab {% if forloop.first %}on{% endif %}" data-pane="mt5-pane-{{ forloop.counter }}">{{ t.tier }}</button>
+      {% endfor %}
+    </span>
+    {% endif %}
+  </div>
+
+  {% for t in top5_tracks %}
+  <div class="mt5-pane" id="mt5-pane-{{ forloop.counter }}"{% if not forloop.first %} style="display:none"{% endif %}>
+    {% for r in t.items %}
+    <div class="mt5-card" style="border-left-color:{{ t.color }}" onclick="location.href='{% url 'product_detail' r.p.id %}'">
+      <div class="mt5-r1">
+        <span class="mt5-no">{{ r.p.issuer }} {{ r.p.product_no }}</span>
+        {% if user.is_authenticated %}
+        <span style="margin-left:auto;flex:none" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=r.p.id %}</span>
+        {% endif %}
+      </div>
+      <div class="mt5-r2">
+        <span class="mt5-y">연 {{ r.p.yield_rate }}<small>%</small></span>
+        {% if r.p.radar %}<span class="badge" style="background:{{ r.p.radar.color }};color:#fff" title="레이더 신호 · 이번주 {{ r.p.asset_type }} 상위 {{ r.p.radar.srank }}위">{{ r.p.radar.tier|cut:" 신호" }}</span>{% endif %}
+      </div>
+      <div class="mt5-r3">낙인 <b>{{ r.p.ki }}</b> · 1차 <b>{{ r.p.barrier_first|default:"-" }}</b> · 손실 <b style="color:{% if r.p.loss_prob is None %}var(--text-3){% elif r.p.loss_prob > 2 %}var(--orange){% elif r.p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if r.p.loss_prob is not None %}{{ r.p.loss_prob }}%{% else %}-{% endif %}</b></div>
+      <div class="mt5-r4">{{ r.p.assets_raw|asset_short }}</div>
+      <div class="mt5-r5">
+        {% if r.overlap_pct is not None %}
+          {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700"><i class="fa-solid fa-triangle-exclamation"></i> 보유 {{ r.overlap_pct }}% 중복</span>
+          {% elif r.overlap_pct > 0 %}<span style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</span>
+          {% else %}<span style="color:var(--green)">신규 자산</span>{% endif %}
+        {% endif %}
+        <span class="mt5-due">~{{ r.p.sub_end|date:"m.d" }} 마감</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+  {% include "core/_disclaimer_inline.html" %}
+</div>
+
+<script>
+(function(){
+  // 유형 탭 — 지수형·종목형 전환. 카드 자체의 이동(onclick)과 섞이지 않게 버튼에만 건다.
+  document.querySelectorAll('.mt5-tab').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.mt5-tab').forEach(function(x){ x.classList.remove('on'); });
+      document.querySelectorAll('.mt5-pane').forEach(function(p){ p.style.display = 'none'; });
+      b.classList.add('on');
+      document.getElementById(b.dataset.pane).style.display = '';
+    });
+  });
+})();
+</script>
+{% endif %}

@@ -1,0 +1,11 @@
+{% comment %}
+전 화면 공통 "PC에서 전체화면 보기" 줄 (2026-09-04 모바일 간소화).
+pcview 쿠키를 심고 새로고침하면 base.html이 뷰포트를 1200px로 고정해
+휴대폰에서도 PC 화면 그대로 보인다. 되돌리는 줄은 그때 같은 자리에 나온다.
+쿠키는 화면 표시 취향만 담는 기능 쿠키이며 30일 뒤 스스로 사라진다.
+{% endcomment %}
+{% if request.COOKIES.pcview %}
+<a class="pclink" href="#" onclick="document.cookie='pcview=;path=/;max-age=0';location.reload();return false"><i class="fa-solid fa-mobile-screen"></i> 모바일 화면으로 돌아가기</a>
+{% else %}
+<a class="pclink m-only" href="#" onclick="document.cookie='pcview=1;path=/;max-age=2592000';location.reload();return false"><i class="fa-solid fa-desktop"></i> PC에서 전체화면 보기</a>
+{% endif %}

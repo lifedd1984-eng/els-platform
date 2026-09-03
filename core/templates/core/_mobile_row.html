@@ -2,7 +2,10 @@
 {% comment %}
 모바일 2줄 리스트의 한 행. 상품(p)만 넘기면 되고, invested_ids / watched_ids는
 상위 컨텍스트에서 상속받는다. 별표는 star=1을 넘길 때만 표시.
-윗줄: 발행사 상품번호 [신호][보유]  /  아랫줄: 기초자산 · 낙인 · 1차 · 손실
+윗줄: 발행사 상품번호 [신호][보유]  /  아랫줄: 기초자산 · 낙인 · 1차 · 손실 (3지표)
+기초자산은 길면 말줄임으로 잘리고 지표 세 개는 늘 남는다 — 매수 판단에 쓰이는 쪽이 지표다.
+고점대비와 비교 버튼은 2026-09-04 모바일 간소화에서 뺐다 — 375px에서 다섯 요소는
+말줄임으로 잘렸고, 비교는 즉시 판단에 쓰이지 않아 상품 상세로 넘겼다.
 오른쪽: 수익률 + D-day
 {% endcomment %}
 <div class="m-row" onclick="location.href='{% url 'product_detail' p.id %}'">
@@ -11,19 +14,13 @@
       {% if p.radar %}<span class="badge" style="background:{{ p.radar.color }};color:#fff;font-size:9.5px">{{ p.radar.tier|cut:" 신호" }}</span>{% endif %}
       {% if p.id in invested_ids %}<span class="badge badge-green" style="font-size:9.5px"><i class="fa-solid fa-check"></i> 보유</span>{% endif %}
     </div>
-    <div class="m-l2">{{ p.assets_raw|asset_short }} · 낙인 <b>{% if p.is_no_ki %}없음{% else %}{{ p.ki|default:"-" }}{% endif %}</b> · 1차 <b>{{ p.barrier_first|default:"-" }}</b>{% if p.peak_ratio %} · {% if p.peak_is_issue %}발행시 고점대비{% else %}고점대비{% endif %} <b style="color:{% if p.peak_level == 'low' %}var(--green){% elif p.peak_level == 'mid' %}var(--blue-dark){% else %}var(--text-2){% endif %}">{{ p.peak_ratio }}%</b>{% endif %} · 손실 <b style="color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}{{ p.loss_prob }}%{% else %}-{% endif %}</b></div>
+    <div class="m-l2"><span class="m-assets">{{ p.assets_raw|asset_short }}</span><span class="m-metrics">낙인 <b>{% if p.is_no_ki %}없음{% else %}{{ p.ki|default:"-" }}{% endif %}</b> · 1차 <b>{{ p.barrier_first|default:"-" }}</b> · 손실 <b style="color:{% if p.loss_prob is None %}var(--text-3){% elif p.loss_prob > 2 %}var(--orange){% elif p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if p.loss_prob is not None %}{{ p.loss_prob }}%{% else %}-{% endif %}</b></span></div>
   </div>
   <div class="m-right">
     <span class="m-yield">{{ p.yield_rate|default:"-" }}<small>%</small></span>
     {% if p.d_day is not None and p.d_day >= 0 %}<span class="m-dday">D-{{ p.d_day }}</span>
     {% elif p.sub_end %}<span class="m-dday done">마감</span>{% endif %}
   </div>
-  {# 비교 버튼 — 주간 목록에서만 compare_n이 붙는다(관심목록·검색에는 없어 자동으로 빠진다) #}
-  {% if p.compare_n %}
-  <span style="flex:none" onclick="event.stopPropagation()">
-    <button type="button" class="cmp-btn" onclick="els_cmp_open({{ p.id }})">비교 {{ p.compare_n }}</button>
-  </span>
-  {% endif %}
   {% if star and user.is_authenticated %}
   <span style="flex:none" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=p.id %}</span>
   {% endif %}
