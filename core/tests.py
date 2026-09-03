@@ -1209,3 +1209,55 @@ class MobileLiteTest(TestCase):
         html = self.client.get("/weekly/").content.decode()
         self.assertIn("width=1200", html)
         self.assertNotIn("width=device-width", html)
+
+class MobileLiteDetailTest(TestCase):
+    """모바일 간소화 2단계 (2026-09-04) — 상품 상세·유사상품 비교.
+
+    접기는 마크업에 open을 둔 채 좁은 화면에서만 스크립트가 뗀다. PC 화면이
+    그대로여야 한다는 제약 때문이며, 이 구조가 무너지면 두 화면 중 하나가 깨진다.
+    """
+
+    def setUp(self):
+        self.product = Product.objects.create(
+            issuer="한국투자", product_no="15832", product_code="KR6ML0009BB0",
+            assets_raw="S&P500,KOSPI200", ki=25, barrier_first=90, yield_rate=7.9,
+            period_months=6, sub_end=date.today() + timedelta(days=3))
+
+    def _html(self):
+        return self.client.get(f"/product/{self.product.id}/").content.decode()
+
+    def test_모바일_핵심_판단_카드는_신호가_없어도_나온다(self):
+        """레이더 배지가 없는 상품이 대다수다. 카드를 배지 조건 안에 넣으면
+        그 상품들은 모바일에서 수익률·마감이 통째로 사라진다."""
+        self.assertIsNone(self.product.radar)
+        html = self._html()
+        self.assertIn("card m-only", html)
+        # PC용 stat-grid는 모바일에서 빠지므로, 같은 값이 모바일 카드에 있어야 한다
+        self.assertIn("연 제시수익률", html)
+        self.assertIn('class="stat-grid pc-only"', html)
+
+    def test_접기_카드는_open으로_그려진다(self):
+        """PC와 자바스크립트가 꺼진 환경에서 내용이 감춰지면 안 된다."""
+        html = self._html()
+        self.assertIn('class="card mfold"', html)
+        # 배리어 그림·시세 차트는 데이터가 있어야 그려지므로, 늘 나오는 것만 본다
+        for opened in ('data-fold="pdInfo" open', 'data-fold="pdSim" open',
+                       'data-fold="pdDesc" open'):
+            self.assertIn(opened, html)
+        self.assertNotIn('data-fold="pdInfo">', html)  # open 없이 그려지면 PC가 접힌다
+
+    def test_상세_맨_아래_PC_링크가_있다(self):
+        self.assertIn("pclink", self._html())
+
+    def test_비교_패널의_게이지_해설만_PC_전용이다(self):
+        """게이지 세 개는 반드시 함께 나와야 한다 — 접거나 빼면 왜곡된다."""
+        from pathlib import Path
+        from django.conf import settings
+        src = (Path(settings.BASE_DIR) / "core" / "templates" / "core"
+               / "_compare_panel.html").read_text(encoding="utf-8")
+        self.assertIn('class="cmp-gnote pc-only"', src)
+        self.assertNotIn('class="cmp-gauge pc-only"', src)
+        # 표·각주는 접고, 모바일용 '같은 기초자산만' 버튼이 접힘 줄 안에 있다
+        self.assertIn('data-fold="cmpNear"', src)
+        self.assertIn('data-fold="cmpFoot"', src)
+        self.assertIn('cmp-toggle pc-only', src)

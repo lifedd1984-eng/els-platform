@@ -6,7 +6,8 @@
 {% block twitter_title %}{{ product.issuer }} {{ product.product_no }} · 낙인·수익률·손실확률 — ELS 레이더{% endblock %}
 
 {% block content %}
-<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+{# 375px에서 설명서·증권사 링크가 제목에 눌려 글자가 세로로 깨졌다 — 줄바꿈을 허용한다 #}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap">
   <a href="{% url 'weekly' %}" class="btn btn-icon"><i class="fa-solid fa-arrow-left"></i></a>
   <h1 class="page-title" style="margin:0">{{ product.issuer }} {{ product.product_no }}</h1>
   {% comment %}원금지급형은 낙인 배지보다 앞에 둔다 — ELB·DLB에서 '노낙인'은 낙인 배리어가
@@ -17,7 +18,7 @@
   {% elif product.ki %}<span class="badge badge-gray">낙인 {{ product.ki }}%</span>{% endif %}
   {% if product.asset_type %}<span class="badge {% if product.asset_type == '지수형' %}badge-blue{% else %}badge-orange{% endif %}">{{ product.asset_type }}</span>{% endif %}
   {% if product.currency == 'USD' %}<span class="badge badge-gray">USD</span>{% endif %}
-  <span style="margin-left:auto;display:flex;gap:6px">
+  <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
     {% if product.prospectus_url %}
     <a href="{{ product.prospectus_url }}" target="_blank" rel="noopener" class="btn btn-sm"
        title="KOFIA 등록 간이투자설명서 PDF 다운로드">
@@ -76,10 +77,67 @@
   {% endif %}
 </div>
 
+{% comment %}모바일 핵심 판단 카드 (2026-09-04) — 살지 말지 판단에 바로 쓰이는 값만 모은다.
+   신호 배지는 있을 때만 붙고, 나머지 값은 신호 유무와 상관없이 늘 나온다.
+   아래 stat-grid는 PC 전용이 되므로 이 카드가 빠지면 모바일에서 수익률·마감이
+   화면에서 통째로 사라진다 — 조건 안에 넣지 말 것.{% endcomment %}
+<div class="card m-only" style="padding:16px">
+  {% if product.radar %}{% with r=product.radar %}
+  <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px">
+    <span class="badge" style="background:{{ r.color }};color:#fff;font-weight:700;padding:3px 10px">{{ r.tier }}</span>
+    <span style="font-size:11.5px;color:var(--text-2)">이번주 {{ product.asset_type }} <b style="color:{{ r.color }}">상위 {{ r.srank }}위</b></span>
+  </div>
+  {% endwith %}{% endif %}
+
+  <div style="display:flex;align-items:baseline;gap:6px">
+    <span style="font-size:30px;font-weight:800;color:var(--blue-dark);line-height:1.1">{{ product.yield_rate|default:"-" }}<small style="font-size:15px">%</small></span>
+  </div>
+  <div style="font-size:11.5px;color:var(--text-3);margin-bottom:12px">
+    연 제시수익률{% if product.period_months %} · {{ product.period_months }}개월 주기{% endif %}
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+    <div>
+      <div style="font-size:10.5px;color:var(--text-3)">낙인</div>
+      <div style="font-size:14px;font-weight:800">{% if product.is_no_ki %}없음{% else %}{{ product.ki|default:"-" }}{% endif %}</div>
+    </div>
+    <div>
+      <div style="font-size:10.5px;color:var(--text-3)">1차</div>
+      <div style="font-size:14px;font-weight:800">{{ product.barrier_first|default:"-" }}</div>
+    </div>
+    <div>
+      <div style="font-size:10.5px;color:var(--text-3)">손실확률</div>
+      {% comment %}원금지급형은 낙인 배리어가 없어 이 모의실험이 늘 0.0%를 낸다.
+         그 값을 초록으로 두면 백테스트가 무손실을 확인해 준 것처럼 읽힌다 —
+         아래 수익률 모의실험 카드와 같은 이유로 숫자를 비운다.{% endcomment %}
+      {% if product.is_principal_protected %}
+      <div style="font-size:14px;font-weight:800;color:var(--text-3)">-</div>
+      {% elif sim and sim.available and sim.loss_prob_pct is not None %}
+      <div style="font-size:14px;font-weight:800;color:{% if sim.loss_prob_pct > 5 %}var(--red){% elif sim.loss_prob_pct > 0 %}var(--orange){% else %}var(--green){% endif %}">{{ sim.loss_prob_pct }}%</div>
+      {% else %}
+      <div style="font-size:14px;font-weight:800;color:var(--text-3)">-</div>
+      {% endif %}
+    </div>
+    <div>
+      <div style="font-size:10.5px;color:var(--text-3)">마감</div>
+      <div style="font-size:14px;font-weight:800">
+        {% if product.d_day is not None and product.d_day >= 0 %}D-{{ product.d_day }}
+        {% elif product.sub_end %}{{ product.sub_end|date:"n.j" }}
+        {% else %}-{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
 {% if product.radar %}
 {% with r=product.radar %}
-<div class="card" style="padding:20px">
-  <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+<details class="card mfold" data-fold="pdRadar" open style="padding:20px">
+  <summary>
+    <span class="card-title">레이더 4축 상세</span>
+    <span class="mfold-sub m-only">수익성·안전성·조기상환·방어력</span>
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
+  <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:12px">
     <!-- 레이더 차트 -->
     <svg viewBox="0 0 150 130" width="150" height="130" style="flex:0 0 auto">
       <!-- 링 -->
@@ -115,11 +173,12 @@
     </div>
   </div>
   {% include "core/_disclaimer_inline.html" %}
-</div>
+</details>
 {% endwith %}
 {% endif %}
 
-<div class="stat-grid">
+{# 이 네 값 중 수익률·마감은 위 모바일 카드가 대신한다 #}
+<div class="stat-grid pc-only">
   <div class="stat-card">
     <div class="stat-label">연수익률</div>
     <div class="stat-value" style="color:var(--blue-dark)">{{ product.yield_rate|default:"-" }}<small>%</small></div>
@@ -158,8 +217,12 @@
 <div class="detail-left">
 
 {% if svg %}
-<div class="card">
-  <div class="card-title">조기상환 배리어 구조</div>
+<details class="card mfold" data-fold="pdBarrier" open>
+  <summary>
+    <span class="card-title">조기상환 배리어 구조</span>
+    {% if product.barrier_first %}<span class="mfold-sub m-only">1차 {{ product.barrier_first }}</span>{% endif %}
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
   <svg viewBox="0 0 {{ svg.w }} {{ svg.h }}" style="width:100%;max-width:720px;display:block">
     {% if svg.ki_y %}
     <line x1="30" y1="{{ svg.ki_y }}" x2="{{ svg.w }}" y2="{{ svg.ki_y }}"
@@ -176,7 +239,7 @@
           font-size="10" fill="#8B95A1">{{ s.n }}차</text>
     {% endfor %}
   </svg>
-</div>
+</details>
 {% endif %}
 
 {% comment %}
@@ -185,15 +248,23 @@
 패널 안 토글이 서버를 다시 부르므로 data-cmp-box 자리가 필요하다.
 {% endcomment %}
 {% if compare_html %}
-<div class="card">
-  <div class="card-title">유사상품 비교</div>
-  <div data-cmp-box>{{ compare_html|safe }}</div>
-</div>
+<details class="card mfold" data-fold="pdCompare" open>
+  <summary>
+    <span class="card-title">유사상품 비교</span>
+    <span class="mfold-sub m-only">같은 조건 상품 중 내 위치</span>
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
+  <div data-cmp-box style="margin-top:12px">{{ compare_html|safe }}</div>
+</details>
 {% endif %}
 
-<div class="card">
-  <div class="card-title">상품 정보</div>
-  <table>
+<details class="card mfold" data-fold="pdInfo" open>
+  <summary>
+    <span class="card-title">상품 정보</span>
+    <span class="mfold-sub m-only">만기 {{ product.expiry_date|date:"Y.n.j"|default:"-" }}</span>
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
+  <table style="margin-top:12px">
     <tr><td style="width:140px;color:var(--text-3);font-weight:600">발행사</td><td>{{ product.issuer }}</td></tr>
     <tr><td style="color:var(--text-3);font-weight:600">상품유형/상품번호</td><td>{% if product.principal_label %}<span class="badge badge-gray" title="원금지급형 파생결합사채">{{ product.principal_label }}</span>{% else %}{{ product.product_type }}{% endif %} / <strong>{{ product.product_no }}</strong></td></tr>
     {% if my_inv %}
@@ -213,16 +284,20 @@
       {% if product.barriers_raw %}{% for b in product.barriers_raw %}{{ b }}{% if not forloop.last %} - {% endif %}{% endfor %}{% else %}-{% endif %}
     </td></tr>
   </table>
-</div>
+</details>
 
 </div>{# /detail-left #}
 <div class="detail-right">
 
-<div class="card">
-  <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
-    <span><i class="fa-solid fa-flask" style="color:var(--blue)"></i> 수익률 모의실험</span>
-    {% if sim_updated %}<span style="font-weight:400;font-size:11px;color:var(--text-3)">{{ sim_updated|date:"m/d" }} 기준 · Yahoo Finance</span>{% endif %}
-  </div>
+<details class="card mfold" data-fold="pdSim" open>
+  <summary>
+    <span class="card-title"><i class="fa-solid fa-flask" style="color:var(--blue)"></i> 수익률 모의실험</span>
+    {% if sim and sim.available %}
+    <span class="mfold-sub m-only">1년내 상환 {% if sim.early_1y_pct is not None %}{{ sim.early_1y_pct }}{% else %}{{ sim.early_redemp_pct }}{% endif %}%{% if not product.is_principal_protected %} · 손실 {{ sim.loss_prob_pct }}%{% endif %}</span>
+    {% endif %}
+    {% if sim_updated %}<span class="pc-only" style="font-weight:400;font-size:11px;color:var(--text-3);margin-left:auto">{{ sim_updated|date:"m/d" }} 기준 · Yahoo Finance</span>{% endif %}
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
 
   {% if sim and sim.available %}
   <div class="stat-grid" style="margin-bottom:16px">
@@ -328,7 +403,7 @@
     {% endif %}
   </div>
   {% endif %}
-</div>
+</details>
 
 </div>{# /detail-right #}
 </div>{# /detail-cols #}
@@ -338,14 +413,16 @@
 {% if not product.radar %}{% include "core/_disclaimer_inline.html" %}{% endif %}
 
 {% if chart %}
-<div class="card">
-  <div class="card-title">
-    <i class="fa-solid fa-chart-line" style="color:var(--blue)"></i> 기초자산 시세 추이
-    <small style="font-weight:400;color:var(--text-3)">
+<details class="card mfold" data-fold="pdChart" open>
+  <summary>
+    <span class="card-title"><i class="fa-solid fa-chart-line" style="color:var(--blue)"></i> 기초자산 시세 추이</span>
+    <small class="pc-only" style="font-weight:400;color:var(--text-3)">
       {{ chart.range_from|date:"Y.m.d" }}~{{ chart.range_to|date:"Y.m.d" }} ·
       {% if chart.based_on_issue %}발행일 기준가 = 100{% else %}미발행 — 구간 시작 = 100{% endif %}
     </small>
-  </div>
+    {% if pk and pk.now_max %}<span class="mfold-sub m-only">고점대비 {{ pk.now_max }}%</span>{% endif %}
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
   {% comment %}── 고점대비 — 발행 시점과 현재 시점을 나란히 (2026-08-05 태훈님 확정) ──
      "…에서 발행" 이라고 쓴 숫자는 반드시 발행일 값이고, 고점 발행 여부 판정도
      발행 시점 값으로 한다(v7 게이트가 보는 시점과 맞추기 위함).
@@ -425,7 +502,8 @@
       {% endfor %}
     </svg>
   </div>
-  <div style="overflow-x:auto;margin-top:8px">
+  {# 7열이라 375px에서 못 읽는다 — 모바일에서는 뺀다 #}
+  <div style="overflow-x:auto;margin-top:8px" class="pc-only">
     <table style="font-size:12px">
       <thead>
         <tr>
@@ -453,7 +531,7 @@
       {% if not chart.based_on_issue %}미발행 상품은 1년 전 종가를 기준가로 임시 표시.{% endif %}
     </div>
   </div>
-</div>
+</details>
 {% endif %}
 
 {% if ki_statuses %}
@@ -474,7 +552,14 @@
   </div>
   {% endif %}
 
-  <div style="overflow-x:auto">
+  {% comment %}경보 문구는 위험 알림이라 늘 보이게 두고, 자산별 표만 접는다.{% endcomment %}
+  <details class="mfold" data-fold="pdKi" open>
+    <summary>
+      <span style="font-size:13px;font-weight:700">자산별 상세</span>
+      <span class="mfold-sub m-only">기준가 대비 · 낙인까지</span>
+      <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+    </summary>
+  <div style="overflow-x:auto;margin-top:10px">
     <table>
       <thead><tr>
         <th>기초자산</th><th class="num">발행일 기준가</th><th class="num">현재가</th>
@@ -499,13 +584,20 @@
   <p style="font-size:11px;color:var(--text-3);margin-top:10px">
     기준가 대비 = 현재가 ÷ 발행일 기준가 × 100. 낙인까지 = 기준가 대비 % − 낙인 배리어. 시세: Yahoo Finance.
   </p>
+  </details>
 </div>
 {% endif %}
 
-<div class="card">
-  <div class="card-title">상품설명 원문</div>
-  <div style="font-size:13px;color:var(--text-2);line-height:1.7;word-break:break-all">{{ product.description }}</div>
-</div>
+<details class="card mfold" data-fold="pdDesc" open>
+  <summary>
+    <span class="card-title">상품설명 원문</span>
+    <span class="mfold-sub m-only">발행사가 낸 원문</span>
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
+  <div style="font-size:13px;color:var(--text-2);line-height:1.7;word-break:break-all;margin-top:12px">{{ product.description }}</div>
+</details>
+
+{% include "core/_pc_link.html" %}
 
 {# 비교 패널의 '같은 기초자산만' 토글이 쓰는 공용 스크립트 (모달은 이 화면에서 열리지 않는다) #}
 {% if compare_html %}{% include "core/_compare_modal.html" %}{% endif %}
