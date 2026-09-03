@@ -241,7 +241,7 @@ class ReportPageTests(TestCase):
         html = self.client.get("/report/els-10year/").content.decode()
         for figure in ("69,903", "3,220", "95.4%", "4.61%", "26.33%", "74.8%",
                        "65,366", "4,492", "71.7%", "86.6%", "10.51%", "3.62%",
-                       "2,245", "69.7%", "81.5%", "5,544", "99.57%", "71.8%"):
+                       "2,245", "69.7%", "81.5%", "5,164", "99.57%", "72.7%"):
             self.assertIn(figure, html, f"{figure} 이 리포트 화면에 없다")
 
     def test_limits_section_is_published(self):
