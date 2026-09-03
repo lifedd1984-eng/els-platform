@@ -62,6 +62,24 @@
   </div>
   {% endif %}
 </div>
+
+{% if alloc_guide %}
+<div class="alloc-guide">
+  <div class="alloc-guide-head">
+    <span class="alloc-guide-label">유형 배분</span>
+    <span class="alloc-guide-msg alloc-{{ alloc_guide.status }}">{{ alloc_guide.message }}{% if alloc_guide.status != 'ok' %} · 약 {{ alloc_guide.adjust_amount|intcomma }}원{% endif %}</span>
+  </div>
+  <div class="alloc-bar">
+    <i class="alloc-bar-s" style="width:{{ alloc_guide.stock_pct }}%"></i><i class="alloc-bar-x" style="width:{{ alloc_guide.index_pct }}%"></i>
+  </div>
+  <div class="alloc-legend">
+    <span><i class="dot" style="background:var(--orange)"></i>종목형 <b>{{ alloc_guide.stock_pct }}%</b></span>
+    <span class="alloc-target">권장 {{ alloc_guide.target }} / {{ alloc_guide.index_target }}</span>
+    <span>지수형 <b>{{ alloc_guide.index_pct }}%</b></span>
+  </div>
+</div>
+{% endif %}
+
 <p class="page-sub" style="margin-top:-8px;margin-bottom:16px">
   <i class="fa-solid fa-circle-info" style="color:var(--text-3)"></i>
   예상 세전수익은 1차 조기상환 가정 추정치입니다.
@@ -113,6 +131,21 @@
   /* 처리 중인 폼 — 버튼·입력칸을 잠가 두 번 눌리지 않게 한다 */
   form.pf-form[data-busy] button,form.pf-form[data-busy] input,
   form.pf-form[data-busy] select{opacity:.5;pointer-events:none}
+  /* 유형 배분 가이드 — 보유 현황 요약 아래 한 줄 */
+  .alloc-guide{border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:14px}
+  .alloc-guide-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .alloc-guide-label{font-size:12px;font-weight:800;color:var(--text-2)}
+  .alloc-guide-msg{font-size:12px;font-weight:700}
+  .alloc-ok{color:var(--text-3)}
+  .alloc-under{color:var(--blue-dark)}
+  .alloc-over{color:var(--orange)}
+  .alloc-bar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--border)}
+  .alloc-bar i{display:block;height:100%}
+  .alloc-bar-s{background:var(--orange)}
+  .alloc-bar-x{background:var(--blue)}
+  .alloc-legend{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--text-2);margin-top:6px}
+  .alloc-legend b{color:var(--text-1)}
+  .alloc-target{color:var(--text-3)}
 </style>
 
 <div id="pf-analysis">

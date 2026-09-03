@@ -1272,6 +1272,31 @@ def _portfolio_context(request):
     # 유형별(종목형/지수형) 보유 분해 — 건수·투자금액
     holding_by_type = portfolio_facts.holding_by_type(holding)
 
+    # ── 유형 배분 가이드 (settings로 노출·권장치 제어) ──
+    # 종목형/지수형 비중을 권장 배분과 대조한다. '기타' 유형은 분모에서 뺀다.
+    alloc_guide = None
+    if getattr(settings, "ALLOC_GUIDE_ENABLED", False):
+        stock_amt = holding_by_type["종목형"]["amount"]
+        index_amt = holding_by_type["지수형"]["amount"]
+        typed_total = stock_amt + index_amt
+        if typed_total:
+            stock_pct = round(stock_amt / typed_total * 100)
+            target = getattr(settings, "ALLOC_GUIDE_STOCK_RATIO", 70)
+            tol = getattr(settings, "ALLOC_GUIDE_TOLERANCE", 10)
+            diff = stock_pct - target            # 음수면 종목형 여지, 양수면 초과
+            if diff < -tol:
+                status, message = "under", f"종목형 {abs(diff)}%p 더 담을 여지"
+            elif diff > tol:
+                status, message = "over", f"종목형 {diff}%p 권장 초과"
+            else:
+                status, message = "ok", "권장 배분에 근접"
+            alloc_guide = {
+                "stock_pct": stock_pct, "index_pct": 100 - stock_pct,
+                "target": target, "index_target": 100 - target,
+                "diff": diff, "status": status, "message": message,
+                "adjust_amount": round(abs(diff) / 100 * typed_total),
+            }
+
     # ── 리스크 분석 ──────────────────────────────
     risk = portfolio_facts.analyze_risk(holding, total_invested)
     portfolio_comment = None
@@ -1483,6 +1508,7 @@ def _portfolio_context(request):
         "h_cols": h_cols, "d_cols": d_cols, "page_size": page_size,
         "total_invested": total_invested,
         "holding_by_type": holding_by_type,
+        "alloc_guide": alloc_guide,
         "this_month_evals": this_month_evals,
         "total_redeemed_profit": total_redeemed_profit,
         "total_expected_pretax": total_expected_pretax,

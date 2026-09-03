@@ -406,6 +406,12 @@ ASK_MODEL_INTERPRET = os.environ.get("ASK_MODEL_INTERPRET", "claude-haiku-4-5")
 ASK_MODEL_ANSWER = os.environ.get("ASK_MODEL_ANSWER", "claude-sonnet-5")
 PORTFOLIO_AI_ENABLED = os.environ.get("PORTFOLIO_AI_ENABLED", "1") == "1"
 
+# 포트폴리오 유형 배분 가이드 — 보유 현황에 종목형/지수형 비율 막대 + 권장 대비 편차.
+# 권장 종목형 70은 10년 배분 시뮬 근거(2026-09-03). 노출·수치는 환경변수로 조정.
+ALLOC_GUIDE_ENABLED = os.environ.get("ALLOC_GUIDE_ENABLED", "1") == "1"
+ALLOC_GUIDE_STOCK_RATIO = int(os.environ.get("ALLOC_GUIDE_STOCK_RATIO", "70"))
+ALLOC_GUIDE_TOLERANCE = int(os.environ.get("ALLOC_GUIDE_TOLERANCE", "10"))
+
 # 출력 상한. 해석턴은 도구 호출 하나면 되고, 설명턴은 3~5문장 + 후속질문이다.
 # ⚠ Sonnet 5는 thinking 파라미터를 생략하면 adaptive가 켜지고, max_tokens는
 #   thinking+본문 합계 상한이다. ask_agent가 thinking을 명시적으로 끈다.
