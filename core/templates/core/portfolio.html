@@ -14,10 +14,83 @@
 </div>
 
 {# fetch 처리 결과·오류 알림 자리. 일반 폼 제출 때는 base.html의 messages가 뜬다 #}
-<div id="pf-notice" class="messages" style="display:none"></div>
+{% comment %}모바일 재배치 (2026-09-04) — 조 팀장 지시 순서:
+   상환 확정 대기 → 투자 현황 → 수익 현황 → 낙인 경보 → 보유 리스트 → 나머지.
+   마크업을 복제하지 않고 좁은 화면에서만 flex 순서를 바꾼다. PC에서는 .pf-flow가
+   그냥 블록이라 order 값이 아무 일도 하지 않는다 — 화면이 예전 그대로다.{% endcomment %}
+<style>
+  @media (max-width: 800px) {
+    .pf-flow { display: flex; flex-direction: column; }
+    #pf-notice   { order: 0; }
+    #pf-pending  { order: 1; }
+    #pf-stats    { order: 2; }
+    #pf-kialert  { order: 3; }
+    #pf-holding  { order: 4; }
+    #pf-analysis { order: 5; }
+    #pf-add      { order: 6; }
+    #pf-missed   { order: 7; }
+    #pf-done     { order: 8; }
+    /* 현황 안에서도 순서를 잡는다 — 투자 현황·유형 배분·수익 현황 순 */
+    #pf-stats { display: flex; flex-direction: column; }
+    .pf-invest { order: 1; }
+    .alloc-guide { order: 2; }
+    .pf-profit { order: 3; }
+    .pf-note { order: 4; }
+    .pf-perf { order: 5; }
+  }
+</style>
 
+<div class="pf-flow">
+<div id="pf-notice" class="messages" style="display:none"></div>
 <div id="pf-stats">
-<div class="stat-grid cols-5">
+
+{% comment %}모바일 투자 현황 — PC의 stat-grid 다섯 칸 중 앞의 둘을 대신한다.
+   보유가 없어도 카드는 나온다(0건도 정보다).{% endcomment %}
+<div class="card m-only pf-invest" style="padding:14px 16px">
+  <div class="card-title" style="margin-bottom:10px"><i class="fa-solid fa-wallet" style="color:var(--blue)"></i> 투자 현황</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div>
+      <div style="font-size:11px;color:var(--text-3)">총 투자금액</div>
+      <div style="font-size:17px;font-weight:800">{{ total_invested|intcomma }}<small style="font-size:11px">원</small></div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text-3)">보유 상품</div>
+      <div style="font-size:17px;font-weight:800">{{ holding_count }}<small style="font-size:11px">건</small></div>
+    </div>
+  </div>
+  <div class="type-split" style="margin-top:8px">
+    <span><i class="dot" style="background:var(--orange)"></i>종목형 <b>{{ holding_by_type.종목형.amount|intcomma }}</b> · {{ holding_by_type.종목형.count }}건</span>
+    <span><i class="dot" style="background:var(--blue)"></i>지수형 <b>{{ holding_by_type.지수형.amount|intcomma }}</b> · {{ holding_by_type.지수형.count }}건</span>
+  </div>
+</div>
+
+{% comment %}모바일 수익 현황 — 예상 세전수익·누적 실현수익·이번 달 평가.
+   아래 "누적 상환수익" 카드의 월별 막대는 성과 회고라 접기로 내린다.{% endcomment %}
+<div class="card m-only pf-profit" style="padding:14px 16px">
+  <div class="card-title" style="margin-bottom:10px"><i class="fa-solid fa-coins" style="color:var(--blue-dark)"></i> 수익 현황</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div>
+      <div style="font-size:11px;color:var(--text-3)">예상 세전수익 <small>(1차 상환 가정)</small></div>
+      <div style="font-size:16px;font-weight:800;color:var(--green)">+{{ expected_profit_pretax|intcomma }}<small style="font-size:11px">원</small>
+        {% if expected_profit_rate is not None %}<span style="font-size:11px;color:var(--green)"> +{{ expected_profit_rate }}%</span>{% endif %}
+      </div>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text-3)">예상 손실율 <small>(금액가중)</small></div>
+      <div style="font-size:16px;font-weight:800;color:{% if port_loss_rate > 5 %}var(--red){% elif port_loss_rate > 0 %}var(--orange){% else %}var(--green){% endif %}">{% if port_loss_rate != None %}{{ port_loss_rate }}<small style="font-size:11px">%</small>{% else %}-{% endif %}</div>
+    </div>
+  </div>
+  <div class="type-split" style="margin-top:8px">
+    {% if perf %}
+    <span>누적 실현수익 <b style="color:{% if perf.profit >= 0 %}var(--green){% else %}var(--red){% endif %}">{{ perf.profit|intcomma }}원</b> · {{ perf.rate }}%{% if perf.ann_rate is not None %} · 연환산 {{ perf.ann_rate }}%{% endif %}</span>
+    {% else %}
+    <span>누적 상환수익 <b>{{ total_redeemed_profit|intcomma }}원</b></span>
+    {% endif %}
+    <span>이번 달 평가 예정 <b>{{ this_month_evals }}건</b></span>
+  </div>
+</div>
+
+<div class="stat-grid cols-5 pc-only">
   <div class="stat-card">
     <div class="stat-label">총 투자금액</div>
     <div class="stat-value">{{ total_invested|intcomma }}<small>원</small></div>
@@ -80,7 +153,7 @@
 </div>
 {% endif %}
 
-<p class="page-sub" style="margin-top:-8px;margin-bottom:16px">
+<p class="page-sub pf-note" style="margin-top:-8px;margin-bottom:16px">
   <i class="fa-solid fa-circle-info" style="color:var(--text-3)"></i>
   예상 세전수익은 1차 조기상환 가정 추정치입니다.
   예상 손실율 = Σ(투자금액 × 상품별 손실확률) ÷ 총투자금 (모의실험 기반).
@@ -88,8 +161,12 @@
 </p>
 
 {% if perf %}
-<div class="card" style="padding:10px 16px 8px">
-  <div class="card-title" style="padding:0 0 6px"><i class="fa-solid fa-chart-column" style="color:var(--blue-dark)"></i> 누적 상환수익</div>
+<details class="card mfold pf-perf" data-fold="pfPerf" open style="padding:10px 16px 8px">
+  <summary>
+    <span class="card-title" style="padding:0"><i class="fa-solid fa-chart-column" style="color:var(--blue-dark)"></i> 누적 상환수익</span>
+    <span class="mfold-sub m-only">{{ perf.profit|intcomma }}원 · 월별 추이</span>
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
   <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end">
     <div>
       <div style="font-size:12px;color:var(--text-3)">누적 실현수익 ({{ perf.count }}건)</div>
@@ -117,7 +194,7 @@
       </div>
     </div>
   </div>
-</div>
+</details>
 {% endif %}
 </div>{# /pf-stats #}
 
@@ -308,6 +385,12 @@
 </details>
 {% endif %}
 
+</div>{# /pf-analysis #}
+
+{% comment %}낙인 경보는 위험 알림이라 모바일에서 보유 리스트 바로 위에 와야 한다.
+   순서를 따로 잡으려면 분석 카드들과 같은 상자에 있으면 안 되므로 섹션을 나눴다.
+   부분 갱신 대상이라 아래 PF_SECTIONS에도 같은 id를 넣어 뒀다.{% endcomment %}
+<div id="pf-kialert">
 {% if holding_count %}
 <div class="card">
   <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -365,7 +448,7 @@
   {% endif %}
 </div>
 {% endif %}
-</div>{# /pf-analysis #}
+</div>{# /pf-kialert #}
 
 <div id="pf-add">
 <details class="card fold-card" {% if not holding_total_count %}open{% endif %}>
@@ -748,6 +831,9 @@
 </div>
 {% endif %}
 </div>{# /pf-done #}
+</div>{# /pf-flow #}
+
+{% include "core/_pc_link.html" %}
 
 {% include "core/_disclaimer_inline.html" %}
 
@@ -783,7 +869,7 @@ function els_bulk_delete() {
 // 처리 후 리다이렉트가 그 쿼리스트링을 버려서 보던 화면이 풀린다. 그래서
 // 같은 URL로 fetch를 보내고, 돌아온 화면 조각 중 내용이 달라진 것만 갈아끼운다.
 // PF_OK가 거짓이면 리스너를 아예 안 걸어서 예전처럼 폼이 그대로 제출된다.
-var PF_SECTIONS = ['pf-stats', 'pf-analysis', 'pf-add', 'pf-pending',
+var PF_SECTIONS = ['pf-stats', 'pf-analysis', 'pf-kialert', 'pf-add', 'pf-pending',
                    'pf-holding', 'pf-missed', 'pf-done'];
 var PF_OK = !!(window.fetch && window.FormData && window.DOMParser);
 

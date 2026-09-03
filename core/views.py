@@ -2027,6 +2027,29 @@ def redemption_calendar(request):
                                       if d < today and row["n"] != last_n else ""),
                 })
 
+    # ── 모바일 리스트형 (2026-09-04) ──
+    # 375px에서 7칸 월 그리드는 셀 폭이 50px로 눌려 상품명이 title 툴팁에만 남고,
+    # 아래 '이 달 평가 상세'는 11열이라 가로 스크롤을 강제한다. 모바일에서는 달력
+    # 대신 날짜순 목록으로 보여준다. weeks(칸 배열)와 같은 events에서 뽑으므로
+    # 두 화면의 건수·금액이 어긋나지 않는다.
+    this_sunday = today + timedelta(days=6 - today.weekday())
+    month_events = []
+    for day in sorted(events):
+        d = date(year, month, day)
+        if d < today:
+            group = "지남"
+        elif d <= this_sunday:
+            group = "이번 주"
+        elif d <= this_sunday + timedelta(days=7):
+            group = "다음 주"
+        else:
+            group = "이후"
+        for ev in events[day]:
+            item = dict(ev)
+            item.update({"date": d, "day": day, "group": group,
+                         "d_day": (d - today).days})
+            month_events.append(item)
+
     cal = pycalendar.Calendar(firstweekday=0)  # 월요일 시작
     weeks = []
     for week in cal.monthdayscalendar(year, month):
@@ -2105,6 +2128,7 @@ def redemption_calendar(request):
 
     return render(request, "core/calendar.html", {
         "year": year, "month": month, "weeks": weeks,
+        "month_events": month_events,
         "prev_y": prev_y, "prev_m": prev_m, "next_y": next_y, "next_m": next_m,
         "event_count": sum(len(v) for v in events.values()),
         # 이 달에 상환이 확정된 건수(상환 회차만 센다 — 한 투자는 한 번 상환된다)

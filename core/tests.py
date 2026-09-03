@@ -1261,3 +1261,52 @@ class MobileLiteDetailTest(TestCase):
         self.assertIn('data-fold="cmpNear"', src)
         self.assertIn('data-fold="cmpFoot"', src)
         self.assertIn('cmp-toggle pc-only', src)
+
+class MobileLitePortfolioCalendarTest(TestCase):
+    """모바일 간소화 2·3단계 (2026-09-04) — 포트폴리오·상환 캘린더."""
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("pfmobile", password="x")
+        self.client.force_login(self.user)
+
+    def test_포트폴리오는_마크업을_복제하지_않고_순서만_바꾼다(self):
+        """모바일 순서는 상환 대기 → 투자 현황 → 낙인 경보 → 보유 리스트다.
+        같은 카드를 PC용·모바일용으로 두 벌 그리면 숫자가 갈라진다."""
+        from pathlib import Path
+        from django.conf import settings
+        src = (Path(settings.BASE_DIR) / "core" / "templates" / "core"
+               / "portfolio.html").read_text(encoding="utf-8")
+        for rule in ("#pf-pending  { order: 1; }", "#pf-kialert  { order: 3; }",
+                     "#pf-holding  { order: 4; }"):
+            self.assertIn(rule, src)
+        # 낙인 경보는 순서를 따로 잡을 수 있게 분석 카드와 다른 섹션에 있어야 한다
+        self.assertIn('<div id="pf-kialert">', src)
+        # 부분 갱신 목록에도 새 섹션이 등록돼 있어야 조작 후 화면이 어긋나지 않는다
+        self.assertIn("'pf-kialert'", src)
+
+    def test_포트폴리오_모바일_카드가_PC_stat_grid를_대신한다(self):
+        html = self.client.get("/portfolio/").content.decode()
+        self.assertIn('class="stat-grid cols-5 pc-only"', html)
+        self.assertIn("card m-only pf-invest", html)
+        self.assertIn("card m-only pf-profit", html)
+        self.assertIn("pclink", html)
+
+    def test_캘린더_뷰가_리스트용_목록을_함께_넘긴다(self):
+        """달력 칸 배열만으로는 날짜순 목록을 만들 수 없다. 같은 events에서
+        뽑아야 두 화면의 건수·금액이 어긋나지 않는다."""
+        resp = self.client.get("/calendar/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("month_events", resp.context)
+        self.assertIsInstance(resp.context["month_events"], list)
+
+    def test_캘린더_11열_표는_모바일에서_빠진다(self):
+        from pathlib import Path
+        from django.conf import settings
+        src = (Path(settings.BASE_DIR) / "core" / "templates" / "core"
+               / "calendar.html").read_text(encoding="utf-8")
+        self.assertIn('<div class="card pc-only">', src)   # 이 달 평가 상세 표
+        self.assertIn('id="cal-list"', src)                # 모바일 리스트
+        self.assertIn("cal-view-toggle", src)              # 리스트·달력 토글
+        # 토글 버튼이 목록 안에 있으면 달력으로 바꾼 순간 버튼도 같이 사라진다
+        list_at = src.index('id="cal-list"')
+        self.assertLess(src.index("cal-view-toggle"), list_at)
