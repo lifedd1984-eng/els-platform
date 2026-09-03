@@ -292,6 +292,28 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
    .pc-only 는 모바일에서 빠지고, .m-only 는 PC에서 빠진다.
    판정은 화면 폭 하나로만 한다 — UA 스니핑을 쓰지 않으므로 좁힌 데스크톱 창도
    모바일 화면을 받는다(의도한 동작). */
+/* ── 모바일 전용 접기 카드 (.mfold, 2026-09-04) ──────────────
+   PC에서는 예전과 똑같이 제목 줄과 내용이 그대로 펼쳐진 카드로 보이고,
+   모바일에서만 접힌다. 접기를 CSS로만 하면 PC 화면까지 바뀌므로
+   마크업에는 open을 두고 좁은 화면에서 스크립트가 뗀다.
+   자바스크립트가 꺼진 모바일에서는 전부 펼쳐진 채로 보인다(지금과 같은 상태). */
+.mfold > summary { list-style: none; display: flex; align-items: baseline; gap: 8px;
+                   cursor: default; }
+.mfold > summary::-webkit-details-marker { display: none; }
+.mfold > summary > .card-title { margin-bottom: 0; }
+.mfold-sub { font-size: 12px; color: var(--text-3); font-weight: 400;
+             min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mfold-chev { margin-left: auto; flex: none; color: var(--text-3); font-size: 12px;
+              transition: transform .15s; }
+.mfold[open] > summary .mfold-chev { transform: rotate(180deg); }
+/* PC에서는 제목을 눌러도 접히지 않는다 — 예전 화면과 같아야 한다 */
+@media (min-width: 801px) { .mfold > summary { pointer-events: none; } }
+@media (max-width: 800px) {
+  .mfold > summary { cursor: pointer; padding: 2px 0; }
+  /* 접힌 상태에서는 카드 아래 여백을 줄여 목록처럼 읽히게 */
+  .mfold:not([open]) { padding-bottom: 16px; }
+}
+
 /* 화면 맨 아래 PC 유도 줄 — 전 화면 공통 문구. PC 화면으로 넘어간 뒤 되돌아오는
    줄도 같은 스타일을 쓰므로 미디어쿼리 밖에 둔다.
    .m-only 보다 반드시 먼저 와야 한다 — 나중에 오면 같은 우선순위끼리 뒤가 이겨서
@@ -596,6 +618,34 @@ document.querySelectorAll('form.watch-form').forEach(function(f) {
     }
   });
 });
+</script>
+
+{% comment %}
+모바일 전용 접기 카드(.mfold) — 좁은 화면에서만 기본 접힘으로 바꾼다.
+마크업에는 open을 두므로 PC와 자바스크립트가 꺼진 환경은 예전 그대로 펼쳐진다.
+접기 취향은 화면 폭별로 따로 기억한다(fold:이름 / fold:이름:m) — PC에서 펼쳐 둔
+것이 모바일까지 따라오면 모바일 기본 접힘이 무너진다.
+{% endcomment %}
+<script>
+(function(){
+  var narrow = window.matchMedia('(max-width:800px)').matches;
+  document.querySelectorAll('details.mfold[data-fold]').forEach(function(d){
+    var key = 'fold:' + d.dataset.fold + (narrow ? ':m' : '');
+    var saved = null;
+    try { saved = localStorage.getItem(key); } catch (e) {}
+    var autoClosed = false;
+    if (saved === 'closed') d.removeAttribute('open');
+    else if (saved === 'open') d.setAttribute('open', '');
+    else if (narrow) { d.removeAttribute('open'); autoClosed = true; }
+
+    d.addEventListener('toggle', function(){
+      // open 속성을 코드가 떼도 toggle이 한 번 뜬다. 그것까지 저장하면 화면 폭
+      // 때문에 접힌 것이 사용자의 취향으로 남는다.
+      if (autoClosed && !d.open) { autoClosed = false; return; }
+      try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch (e) {}
+    });
+  });
+})();
 </script>
 </body>
 </html>

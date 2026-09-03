@@ -26,7 +26,7 @@ from core.models import Investment, Product, RedemptionVerdict
 AJAX = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 # 화면에 나오는 순서 — 조각을 잘라내는 기준이다
-SECTIONS = ["pf-notice", "pf-stats", "pf-analysis", "pf-add", "pf-pending",
+SECTIONS = ["pf-notice", "pf-stats", "pf-analysis", "pf-kialert", "pf-add", "pf-pending",
             "pf-holding", "pf-missed", "pf-done"]
 
 

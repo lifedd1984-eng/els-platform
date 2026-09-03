@@ -65,7 +65,8 @@
       <div class="cmp-sub">{{ monday|date:"n.j" }}~{{ sunday|date:"n.j" }} 청약 · {{ product.asset_type }} · <b>{{ ki_label }} 동일</b></div>
     </div>
     {# 토글은 서버에서 다시 계산해 온다 — 모수가 바뀌면 백분위·중앙값이 전부 바뀌기 때문 #}
-    <button type="button" class="cmp-toggle" aria-pressed="{% if same_assets %}true{% else %}false{% endif %}"
+    {# 모바일에서는 제목 줄에 자리가 없어 아래 "비교 기준" 접힘 줄 안에 같은 버튼을 둔다 #}
+    <button type="button" class="cmp-toggle pc-only" aria-pressed="{% if same_assets %}true{% else %}false{% endif %}"
             onclick="els_cmp_toggle(this, {{ product.id }}, {% if same_assets %}0{% else %}1{% endif %})">
       <span class="cmp-sw {% if same_assets %}on{% endif %}"></span> 같은 기초자산만
     </button>
@@ -98,12 +99,16 @@
       <div class="cmp-gends">
         <span>최저 {{ g.lo_text }}</span><span>중앙 {{ g.mid_text }}</span><span>최고 {{ g.hi_text }}</span>
       </div>
-      <div class="cmp-gnote">{{ g.note }}</div>
+      <div class="cmp-gnote pc-only">{{ g.note }}</div>
     </div>
     {% endfor %}
 
-    <div style="font-size:12.5px;font-weight:700;margin:18px 0 6px">조건이 가장 가까운 {{ nearest|length }}건</div>
-    <div class="cmp-tblwrap">
+    <details class="mfold" data-fold="cmpNear" open style="margin:18px 0 6px">
+      <summary>
+        <span style="font-size:12.5px;font-weight:700">조건이 가장 가까운 {{ nearest|length }}건</span>
+        <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+      </summary>
+    <div class="cmp-tblwrap" style="margin-top:8px">
       <table>
         <tr><th>상품</th><th>수익률</th><th>배리어 수열</th><th>주기</th><th>배지</th></tr>
         {% for r in nearest %}
@@ -120,8 +125,26 @@
         {% endfor %}
       </table>
     </div>
+    </details>
     {% endif %}
 
+    <details class="mfold" data-fold="cmpFoot" open>
+      <summary>
+        <span style="font-size:12px;font-weight:700;color:var(--text-2)">비교 기준</span>
+        <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+      </summary>
+    {% comment %}게이지 해설은 PC에서는 각 게이지 밑에 붙고, 모바일에서는 자리가 없어
+       이 접힘 줄 안으로 모은다. 어느 게이지 이야기인지 알 수 있게 이름을 앞에 적는다.{% endcomment %}
+    <div class="m-only" style="margin-top:8px">
+      <button type="button" class="cmp-toggle" aria-pressed="{% if same_assets %}true{% else %}false{% endif %}"
+              style="margin-bottom:10px"
+              onclick="els_cmp_toggle(this, {{ product.id }}, {% if same_assets %}0{% else %}1{% endif %})">
+        <span class="cmp-sw {% if same_assets %}on{% endif %}"></span> 같은 기초자산만
+      </button>
+      {% for g in gauges %}
+      <div class="cmp-gnote" style="margin-bottom:6px"><b>{{ g.label }}</b> — {{ g.note }}</div>
+      {% endfor %}
+    </div>
     <div class="cmp-foot">
       <b>비교 기준</b> — 같은 주 청약 · 같은 자산유형({{ product.asset_type }}) · {{ ki_label }} 동일.
       조기상환 <b>주기는 제한하지 않습니다</b> — 대신 표에 실제 주기를 그대로 적습니다.
@@ -129,5 +152,6 @@
       순위는 <b>제시 조건을 줄 세운 것일 뿐</b>이며 어느 상품이 더 낫다는 판단이 아닙니다.
       실제 결과는 기초자산 가격으로 결정됩니다.
     </div>
+    </details>
   </div>
 </div>
