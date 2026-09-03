@@ -9,7 +9,8 @@
   주당 24.35개다. 배지가 흔해지면 '타겟 신호'라는 말 자체가 값을 잃는다.
 
 여기서 못 박는 것
-  ① 쿠폰 필터는 그 주차 그룹 분포의 하위 30% 값 **이상**만 통과시킨다
+  ① 쿠폰 필터는 그 주차 그룹 분포의 하위 40% 값 **이상**만 통과시킨다
+     (2026-09-03: 0.30 → 0.40 상향. 저쿠폰 상품을 더 걸러 표시 쿠폰을 높인다.)
   ② 정원은 (낙인 5단위 버킷)마다 쿠폰 상위 5개다
   ③ 버킷이 다르면 정원을 따로 받는다 — 한 주에 5개로 묶이지 않는다
   ④ 5단위 버킷 경계는 반올림이다 (43→45, 47→45, 48→50)
@@ -79,32 +80,34 @@ class KiBucketTest(TestCase):
 
 
 class YieldGateTest(PoolMixin, TestCase):
-    """③ 쿠폰 필터 — 그룹 분포 하위 30% 값 이상."""
+    """③ 쿠폰 필터 — 그룹 분포 하위 40% 값 이상."""
 
-    def test_상수는_30퍼센트다(self):
-        self.assertEqual(RADAR_V8_YLD_PCT, 0.30)
+    def test_상수는_40퍼센트다(self):
+        self.assertEqual(RADAR_V8_YLD_PCT, 0.40)
 
     def _spread(self):
         """쿠폰 10·11·12·13·14 다섯 건. 낙인은 전부 같아 낙인 컷이 안 걸린다.
 
-        쿠폰 컷 = 정렬 [10,11,12,13,14]의 int(5*0.30)=1번째 = 11.
+        쿠폰 컷 = 정렬 [10,11,12,13,14]의 int(5*0.40)=2번째 = 12.
         낙인이 전부 25라 한 버킷에 다섯 건 → 정원 5개와 딱 맞아 안 걸린다.
         """
         return {y: make(product_no=f"81{y}", ki=25, yield_rate=float(y))
                 for y in (10, 11, 12, 13, 14)}
 
-    def test_쿠폰이_하위_30퍼센트_아래면_탈락한다(self):
+    def test_쿠폰이_하위_40퍼센트_아래면_탈락한다(self):
         p = self._spread()
-        self.assertNotIn(p[10].id, self.pool())
+        pool = self.pool()
+        self.assertNotIn(p[10].id, pool)
+        self.assertNotIn(p[11].id, pool)          # 컷 12 미달
 
     def test_쿠폰이_컷과_같으면_통과한다(self):
         p = self._spread()
-        self.assertIn(p[11].id, self.pool())       # 컷 = 11, 이상 비교
+        self.assertIn(p[12].id, self.pool())      # 컷 = 12, 이상 비교
 
-    def test_상위_70퍼센트만_남는다(self):
+    def test_상위_60퍼센트만_남는다(self):
         p = self._spread()
         self.assertEqual(set(self.pool()),
-                         {p[11].id, p[12].id, p[13].id, p[14].id})
+                         {p[12].id, p[13].id, p[14].id})
 
     def test_컷의_모수는_게이트_통과자가_아니라_그룹_전체다(self):
         """낙인에서 탈락할 상품도 쿠폰 분포에는 들어간다 (백테스트와 같다)."""
@@ -112,10 +115,10 @@ class YieldGateTest(PoolMixin, TestCase):
         # 낙인 90짜리 고쿠폰 4건 — 낙인 게이트에서 죽지만 쿠폰 컷은 밀어올린다
         for i in range(4):
             make(product_no=f"82{i}", ki=90, yield_rate=30.0 + i)
-        # 쿠폰 분포가 [10,11,12,13,14,30,31,32,33] → int(9*0.3)=2 → 컷 12
+        # 쿠폰 분포가 [10,11,12,13,14,30,31,32,33] → int(9*0.4)=3 → 컷 13
         pool = self.pool()
-        self.assertNotIn(p[11].id, pool)
-        self.assertEqual(set(pool), {p[12].id, p[13].id, p[14].id})
+        self.assertNotIn(p[12].id, pool)
+        self.assertEqual(set(pool), {p[13].id, p[14].id})
 
 
 class BucketQuotaTest(PoolMixin, TestCase):
@@ -125,7 +128,7 @@ class BucketQuotaTest(PoolMixin, TestCase):
         """낙인이 같은 8건이 있어도 5건만 남는다 (v7은 8건 전부였다)."""
         ps = [make(product_no=f"83{i:02d}", ki=30, yield_rate=10.0 + i)
               for i in range(8)]
-        # 쿠폰 [10..17] → int(8*0.3)=2 → 컷 12 → 6건이 ④까지 통과 → 정원이 5건으로
+        # 쿠폰 [10..17] → int(8*0.4)=3 → 컷 13 → 5건이 ④까지 통과 → 정원과 딱 맞는다
         pool = self.pool()
         self.assertEqual(len(pool), RADAR_V8_BUCKET_TOP)
         self.assertEqual(set(pool), {p.id for p in ps[3:]})   # 쿠폰 13~17
@@ -134,7 +137,7 @@ class BucketQuotaTest(PoolMixin, TestCase):
         ps = [make(product_no=f"84{i:02d}", ki=30, yield_rate=10.0 + i)
               for i in range(8)]
         pool = self.pool()
-        self.assertNotIn(ps[2].id, pool)      # 쿠폰 12 — 컷은 넘었지만 정원에서 밀림
+        self.assertNotIn(ps[2].id, pool)      # 쿠폰 12 — 하위 40% 컷(13) 미달
         self.assertIn(ps[7].id, pool)         # 쿠폰 17 — 최상위
 
     def test_버킷이_다르면_정원을_따로_받는다(self):
@@ -175,23 +178,23 @@ class BucketQuotaTest(PoolMixin, TestCase):
     def test_정원은_고점_게이트_뒤에_적용된다(self):
         """고점에서 떨어진 상품은 정원 자리를 안 먹는다 — 다음 순위가 올라온다.
 
-        쿠폰 20~29 열 건 → 쿠폰 컷은 int(10*0.30)=3번째 = 23 → 일곱 건이 남는다.
-        고점 게이트가 1·2위(28·29)를 떨구면 다섯 건이 남아 정원에 딱 찬다.
-        고점 게이트가 정원 뒤였다면 23·24는 잘려서 세 건만 배지였을 것이다.
+        쿠폰 20~31 열두 건 → 쿠폰 컷은 int(12*0.40)=4번째 = 24 → 여덟 건이 남는다.
+        고점 게이트가 최상위 30·31을 떨구면 여섯 건이 남고, 정원 5개라 쿠폰 24가 밀린다.
+        고점 게이트가 정원 뒤였다면 24·25·26이 잘려서 세 건만 배지였을 것이다.
         """
         ps = [make(product_no=f"88{i:02d}", ki=30, yield_rate=20.0 + i)
-              for i in range(10)]
-        top = {ps[9].id, ps[8].id}
+              for i in range(12)]
+        top = {ps[11].id, ps[10].id}
 
         def gate(p, refs=None):
-            return (p.id not in top), 80        # 쿠폰 1·2위를 고점에서 떨군다
+            return (p.id not in top), 80        # 쿠폰 최상위 2건을 고점에서 떨군다
 
         with mock.patch("core.models.v7_peak_gate", side_effect=gate):
             pool = _compute_radar_pool(MONDAY, "지수형")
         self.assertEqual(len(pool), RADAR_V8_BUCKET_TOP)
         self.assertTrue(top.isdisjoint(pool))
-        self.assertEqual(set(pool), {p.id for p in ps[3:8]})
-        self.assertIn(ps[3].id, pool)          # 두 자리가 비어 여기까지 내려온다
+        self.assertEqual(set(pool), {p.id for p in ps[5:10]})   # 쿠폰 25~29
+        self.assertIn(ps[5].id, pool)          # 쿠폰 24가 밀리고 여기까지 내려온다
 
     def test_빈_생존자에는_아무_일도_없다(self):
         self.assertEqual(v8_bucket_quota([]), [])
