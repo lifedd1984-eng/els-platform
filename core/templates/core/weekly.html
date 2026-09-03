@@ -21,16 +21,33 @@
 {% block content %}
 {% load els_extras %}
 <h1 class="page-title">주간 청약</h1>
-<p class="page-sub">이번 주 청약 마감 상품 {{ total }}건</p>
+<p class="page-sub pc-only">이번 주 청약 마감 상품 {{ total }}건</p>
 
 {# 로그인 직후 도착하는 화면이라 배너를 여기 하나만 둔다 (LOGIN_REDIRECT_URL=/weekly/) #}
 {% if show_feedback_banner %}{% include "core/_feedback_banner.html" %}{% endif %}
 
+{% comment %}모바일 요약 바 (2026-09-04) — 결론(신호 N건)과 주 이동을 스크롤 없이 보여준다.
+   주 이동은 PC와 같은 세 가지(이전·다음·이번 주로). 검색·필터는 버튼으로 펼친다.
+   PC에서는 .m-only 규칙으로 통째로 빠지고 아래 week-nav가 그대로 쓰인다.{% endcomment %}
+<div class="m-sumbar m-only">
+  <div class="sb-l">
+    <div class="sb-t">신호 {{ signal_count }}건 · 청약 {{ total }}건</div>
+    <div class="sb-s">{{ monday|date:"n.j" }}~{{ sunday|date:"n.j" }} 마감{% if freshness %} · {% if freshness.days == 0 %}오늘 업데이트{% else %}{{ freshness.days }}일 전 수집{% endif %}{% endif %}</div>
+  </div>
+  <div class="sb-btns">
+    <a class="sb-btn" href="?{% qs_replace w=offset|add:'-1' %}" aria-label="이전 주"><i class="fa-solid fa-chevron-left"></i></a>
+    <a class="sb-btn" href="?{% qs_replace w=offset|add:'1' %}" aria-label="다음 주"><i class="fa-solid fa-chevron-right"></i></a>
+    {% if offset != 0 %}<a class="sb-btn" href="?{% qs_replace w=0 %}">이번 주로</a>{% endif %}
+    <button type="button" class="sb-btn" id="sbSearch" aria-label="검색"><i class="fa-solid fa-magnifying-glass"></i></button>
+    <button type="button" class="sb-btn" id="sbFilter" aria-label="필터"><i class="fa-solid fa-sliders"></i></button>
+  </div>
+</div>
+
 <div class="week-nav">
-  <a href="?{% qs_replace w=offset|add:'-1' %}" class="btn"><i class="fa-solid fa-chevron-left"></i></a>
-  <span class="week-label">{{ monday|date:"n.j" }} ~ {{ sunday|date:"n.j" }}</span>
-  <a href="?{% qs_replace w=offset|add:'1' %}" class="btn"><i class="fa-solid fa-chevron-right"></i></a>
-  {% if offset != 0 %}<a href="?{% qs_replace w=0 %}" class="btn btn-sm">이번 주로</a>{% endif %}
+  <a href="?{% qs_replace w=offset|add:'-1' %}" class="btn pc-only"><i class="fa-solid fa-chevron-left"></i></a>
+  <span class="week-label pc-only">{{ monday|date:"n.j" }} ~ {{ sunday|date:"n.j" }}</span>
+  <a href="?{% qs_replace w=offset|add:'1' %}" class="btn pc-only"><i class="fa-solid fa-chevron-right"></i></a>
+  {% if offset != 0 %}<a href="?{% qs_replace w=0 %}" class="btn btn-sm pc-only">이번 주로</a>{% endif %}
   <form action="{% url 'search' %}" method="get" class="week-search" style="margin-left:auto;display:flex;gap:6px;align-items:center">
     <span style="position:relative;display:inline-block">
       <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--text-3);font-size:12px;pointer-events:none"></i>
@@ -193,6 +210,10 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
   details.fold-card[open] .fold-chev{transform:rotate(180deg)}
 </style>
 
+{% comment %}모바일 TOP5 축약본 — "지금 뭐 사면 되나"의 직답이라 모바일에서는 맨 앞에 둔다.
+   PC는 아래 원래 자리(등락폭·낙인대별 다음)의 카드를 그대로 쓴다.{% endcomment %}
+{% include "core/_top5_mobile.html" %}
+
 {% if asset_moves.rows %}
 <style>
   .asset-flow-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
@@ -222,7 +243,7 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
     .flow-name{font-size:12px}.flow-pct{font-size:12px}
   }
 </style>
-<details class="card fold-card" data-fold="assetMoveFold" open style="padding:14px 16px;margin-bottom:14px" id="asset-moves">
+<details class="card fold-card pc-only" data-fold="assetMoveFold" open style="padding:14px 16px;margin-bottom:14px" id="asset-moves">
   <summary class="asset-flow-head">
     <i class="fa-solid fa-chart-column" style="color:var(--blue)"></i>
     <span>기초자산별 등락폭</span>
@@ -346,7 +367,7 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
 {% endif %}
 
 {% if top5_tracks %}
-<details class="card fold-card" data-fold="top5Fold" open style="padding:14px 16px;margin-bottom:14px">
+<details class="card fold-card pc-only" data-fold="top5Fold" open style="padding:14px 16px;margin-bottom:14px">
   <summary>
     <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align:-3px"><circle cx="12" cy="12" r="10" fill="none" stroke="#1B64DA" stroke-opacity=".25" stroke-width="1"/><polygon points="12,3 20,12 12,21 5,12" fill="#1B64DA" fill-opacity=".28" stroke="#1B64DA" stroke-width="1.6"/></svg> 이번주 TOP5
     <span style="font-weight:400;font-size:12px;color:var(--text-3)">10년 69,903건 검증 규칙 통과 상품 · 수익률 상위 5</span>
@@ -401,11 +422,41 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
 {% endcomment %}
 <script>
 (function(){
+  // 요약 바의 검색·필터 버튼 — 모바일에서 접혀 있는 검색줄(.week-nav)과
+  // 필터바(.filterbar)를 펼친다. PC에서는 둘 다 늘 펼쳐져 있어 버튼 자체가 없다.
+  function toggle(btnId, sel){
+    var btn = document.getElementById(btnId), box = document.querySelector(sel);
+    if (!btn || !box) return;
+    btn.addEventListener('click', function(){
+      var open = box.classList.toggle('mopen');
+      btn.classList.toggle('on', open);
+      if (open) { var input = box.querySelector('input[type=text],input[type=number],select'); if (input) input.focus(); }
+    });
+  }
+  toggle('sbSearch', '.week-nav');
+  toggle('sbFilter', '.filterbar');
+})();
+(function(){
   // 접기 상태 저장 — TOP5·낙인대별 공용 (data-fold 키로 localStorage)
+  var narrow = window.matchMedia('(max-width:800px)').matches;
   document.querySelectorAll('details.fold-card[data-fold]').forEach(function(d){
-    var key = 'fold:' + d.dataset.fold;
-    try { if (localStorage.getItem(key) === 'closed') d.removeAttribute('open'); } catch(e){}
+    // 접기 취향은 화면 폭별로 따로 기억한다. 한 열쇠로 묶으면 PC에서 펼쳐 둔 것이
+    // 모바일까지 따라와 낙인대별 기본 접힘이 무너진다(2026-09-04).
+    var key = 'fold:' + d.dataset.fold + (narrow ? ':m' : '');
+    var saved = null;
+    try { saved = localStorage.getItem(key); } catch(e){}
+    var autoClosed = false;
+    if (saved === 'closed') d.removeAttribute('open');
+    // 모바일에선 낙인대별을 기본 접힘으로 — TOP5·전체 목록이 먼저 보여야 한다.
+    // 사용자가 직접 펼친 적이 있으면(saved === 'open') 그 취향을 지킨다.
+    else if (narrow && saved === null && d.dataset.fold === 'ktFold') {
+      d.removeAttribute('open');
+      autoClosed = true;
+    }
     d.addEventListener('toggle', function(){
+      // open 속성을 코드가 떼도 toggle이 한 번 뜬다. 그것까지 저장하면 화면 폭
+      // 때문에 접힌 것이 사용자의 취향으로 남아 PC에서도 접힌다(2026-09-04 실측).
+      if (autoClosed && !d.open) { autoClosed = false; return; }
       try { localStorage.setItem(key, d.open ? 'open' : 'closed'); } catch(e){}
     });
   });
@@ -430,7 +481,7 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
       {{ products|length }}건
       <select class="m-sort" onchange="if(this.value)location.href=this.value" aria-label="정렬">
         {% for c in columns %}
-          {% if c.label == '수익률' or c.label == '낙인' or c.label == '고점대비' or c.label == '손실확률' or c.label == '마감' %}
+          {% if c.label == '수익률' or c.label == '낙인' or c.label == '손실확률' or c.label == '마감' %}
           <option value="{{ c.url }}" {% if c.active %}selected{% endif %}>{{ c.label }}{% if c.active %} {% if c.dir == 'asc' %}오름차순{% else %}내림차순{% endif %}{% endif %}</option>
           {% endif %}
         {% endfor %}
@@ -539,6 +590,8 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
    — 지난 주 조회(offset<0)나 낙인 버킷이 빈 주 — 에는 아래 상품 표에만 신호 배지와
    손실확률이 남으므로, 그때는 이 자리에서 한 번 보여준다.{% endcomment %}
 {% if not ki_top5 and not top5_tracks %}{% include "core/_disclaimer_inline.html" %}{% endif %}
+
+{% include "core/_pc_link.html" %}
 
 {# 유사상품 비교 모달 — 목록의 '비교 N' 버튼이 여는 자리 #}
 {% include "core/_compare_modal.html" %}

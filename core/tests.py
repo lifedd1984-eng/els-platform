@@ -924,7 +924,15 @@ class PeakDisplayVerdictTest(SimpleTestCase):
             for banned in ("p.peak_ratio < 90", "p.peak_ratio < 95",
                            "p.peak_ratio >= 95"):
                 self.assertNotIn(banned, src)
-            self.assertIn("p.peak_level", src)
+        # 고점대비를 보여주는 화면은 반드시 서버 판정(p.peak_level)으로 색을 가른다.
+        # 모바일 행은 2026-09-04 간소화에서 고점대비 자체를 뺐다(375px에서 다섯
+        # 요소가 잘렸다). 지표가 없으면 판정도 필요 없으므로, 다시 넣을 때
+        # 반올림값으로 가르지 않게 "둘 다 없거나 둘 다 있거나"로 묶어 지킨다.
+        weekly_src = (tpl / "weekly.html").read_text(encoding="utf-8")
+        self.assertIn("p.peak_level", weekly_src)
+        row_src = (tpl / "_mobile_row.html").read_text(encoding="utf-8")
+        if "p.peak_ratio" in row_src:
+            self.assertIn("p.peak_level", row_src)
 
 
 class RefreshRefPriceCommandTest(TestCase):
@@ -1141,3 +1149,63 @@ class SyncPricesStaleTest(SimpleTestCase):
         # 국내 3종은 자기들끼리 최신 → 뒤처짐 0일
         for t in ("005930.KS", "000660.KS", "^KS200"):
             self.assertEqual((peer_max["KR"] - eff[t]).days, 0)
+
+class MobileLiteTest(TestCase):
+    """모바일 간소화 1단계 (2026-09-04) — 주간 청약·관심 목록.
+
+    PC와 모바일이 내보내는 정보를 다르게 고른 것이므로, 다시 합쳐지지 않게
+    화면에 실제로 그려진 결과로 지킨다. 폭 판정은 CSS가 하니 여기서는
+    '모바일용 조각이 응답에 들어 있는가'와 'PC 것이 그대로 남아 있는가'를 본다.
+    """
+
+    def setUp(self):
+        self.user = get_user_model().objects.create_user("mobiletester", password="x")
+        self.product = Product.objects.create(
+            issuer="한국투자", product_no="15832", product_code="KR6ML0009AA0",
+            assets_raw="S&P500,KOSPI200", ki=25, barrier_first=90, yield_rate=7.9,
+            sub_end=date.today() + timedelta(days=3))
+
+    def test_모바일_행은_고점대비와_비교버튼을_싣지_않는다(self):
+        from pathlib import Path
+        from django.conf import settings
+        src = (Path(settings.BASE_DIR) / "core" / "templates" / "core"
+               / "_mobile_row.html").read_text(encoding="utf-8")
+        body = src.split("{% endcomment %}", 1)[1]  # 주석에는 뺀 이유가 적혀 있다
+        self.assertNotIn("peak_ratio", body)
+        self.assertNotIn("compare_n", body)
+        # 남겨야 하는 세 지표
+        for need in ("p.ki", "p.barrier_first", "p.loss_prob"):
+            self.assertIn(need, body)
+
+    def test_주간청약_모바일_요약바와_TOP5축약본이_붙는다(self):
+        html = self.client.get("/weekly/").content.decode()
+        self.assertIn("m-sumbar", html)          # 상단 요약 바
+        self.assertIn("신호", html)
+        self.assertIn("pclink", html)            # PC에서 전체화면 보기
+        # 무거운 분석 카드(기초자산 등락폭·PC용 TOP5)는 PC 전용으로 묶여 있어야
+        # 한다. 렌더 결과는 그 주의 시세·신호 데이터에 따라 통째로 빠지므로
+        # 템플릿 쪽에서 지킨다.
+        from pathlib import Path
+        from django.conf import settings
+        tpl = (Path(settings.BASE_DIR) / "core" / "templates" / "core"
+               / "weekly.html").read_text(encoding="utf-8")
+        self.assertIn('id="asset-moves"', tpl)
+        self.assertIn('fold-card pc-only', tpl)
+        self.assertIn('_top5_mobile.html', tpl)
+
+    def test_관심목록_모바일에_정렬이_있다(self):
+        from core.models import WatchItem
+        WatchItem.objects.create(user=self.user, product=self.product)
+        self.client.force_login(self.user)
+        html = self.client.get("/watchlist/").content.decode()
+        self.assertIn("m-sort", html)            # 모바일 정렬 선택
+        self.assertIn("wsort=yield", html)       # PC 표의 정렬 링크를 그대로 쓴다
+        self.assertIn("pclink", html)
+
+    def test_PC화면_보기_쿠키가_뷰포트를_바꾼다(self):
+        html = self.client.get("/weekly/").content.decode()
+        self.assertIn("width=device-width", html)
+        self.client.cookies["pcview"] = "1"
+        html = self.client.get("/weekly/").content.decode()
+        self.assertIn("width=1200", html)
+        self.assertNotIn("width=device-width", html)

@@ -2,7 +2,12 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+{% comment %}PC 전체화면 보기 (2026-09-04) — 모바일 간소화 화면 아래의 링크가
+   pcview 쿠키를 심고 새로고침하면, 뷰포트를 데스크톱 폭으로 고정해 PC 화면
+   그대로 보여준다. 네이버·다음의 "PC 버전으로 보기"와 같은 방식이고,
+   서버 코드나 CSS는 건드리지 않는다. 되돌리는 링크는 화면 맨 아래에 둔다.{% endcomment %}
+{% if request.COOKIES.pcview %}<meta name="viewport" content="width=1200">
+{% else %}<meta name="viewport" content="width=device-width, initial-scale=1">{% endif %}
 <title>{% block title %}ELS 레이더{% endblock %}</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cdefs%3E%3ClinearGradient id=%22g%22 x1=%220%22 y1=%220%22 x2=%221%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%234E86FF%22/%3E%3Cstop offset=%221%22 stop-color=%22%232D5BFF%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22gt%22 gradientUnits=%22userSpaceOnUse%22 x1=%228.64%22 y1=%2211.75%22 x2=%2223.36%22 y2=%2220.25%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%220%22/%3E%3Cstop offset=%221%22 stop-color=%22%23fff%22 stop-opacity=%221%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2232%22 height=%2232%22 rx=%229%22 fill=%22url%28%23g%29%22/%3E%3Ccircle cx=%2216%22 cy=%2216%22 r=%228.5%22 fill=%22none%22 stroke=%22%23fff%22 stroke-width=%222.2%22 opacity=%22.18%22/%3E%3Cpath d=%22M8.64 11.75 A8.5 8.5 0 0 1 23.36 20.25%22 fill=%22none%22 stroke=%22url%28%23gt%29%22 stroke-width=%223.2%22 stroke-linecap=%22round%22/%3E%3Ccircle cx=%2223.36%22 cy=%2220.25%22 r=%224.3%22 fill=%22%23fff%22 opacity=%22.28%22/%3E%3Ccircle cx=%2223.36%22 cy=%2220.25%22 r=%222.5%22 fill=%22%23fff%22/%3E%3C/svg%3E">
 <link rel="manifest" href="/manifest.json">
@@ -265,7 +270,11 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
         white-space: nowrap; overflow: hidden; }
 .m-l1 .m-no { color: var(--text-3); font-weight: 600; font-size: 12px; }
 .m-l2 { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden;
-        text-overflow: ellipsis; line-height: 1.65; }
+        text-overflow: ellipsis; line-height: 1.65; display: flex; gap: 5px; }
+/* 좁은 화면에서 줄이 넘칠 때 기초자산만 줄어들고 지표는 그대로 남는다 */
+.m-l2 .m-assets { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.m-l2 .m-metrics::before { content: "· "; }
+.m-l2 .m-metrics { flex: none; }
 .m-l2 b { color: var(--text-2); font-weight: 700; }
 .m-right { flex: none; text-align: right; display: flex; flex-direction: column; gap: 1px; }
 .m-yield { font-size: 18px; font-weight: 800; color: var(--blue-dark); font-variant-numeric: tabular-nums; }
@@ -278,9 +287,74 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
           background: var(--card); color: var(--text); padding: 5px 10px; font-size: 12px; font-weight: 700; }
 .m-row .watch-form .btn { padding: 2px 4px; min-width: 0; line-height: 1; border: none; background: none; }
 
+/* ── 모바일 간소화 (2026-09-04) ──────────────────────────────
+   PC와 모바일이 내보내는 정보를 다르게 고른다(반응형 축소가 아니라 취사선택).
+   .pc-only 는 모바일에서 빠지고, .m-only 는 PC에서 빠진다.
+   판정은 화면 폭 하나로만 한다 — UA 스니핑을 쓰지 않으므로 좁힌 데스크톱 창도
+   모바일 화면을 받는다(의도한 동작). */
+/* 화면 맨 아래 PC 유도 줄 — 전 화면 공통 문구. PC 화면으로 넘어간 뒤 되돌아오는
+   줄도 같은 스타일을 쓰므로 미디어쿼리 밖에 둔다.
+   .m-only 보다 반드시 먼저 와야 한다 — 나중에 오면 같은 우선순위끼리 뒤가 이겨서
+   PC에서도 "PC에서 전체화면 보기" 줄이 보인다(2026-09-04 실측). */
+.pclink { display: flex; align-items: center; justify-content: center; gap: 7px;
+          padding: 14px; font-size: 12.5px; font-weight: 700; color: var(--blue-dark); }
+.m-only { display: none; }
+
 @media (max-width: 800px) {
   .m-list { display: block; }
   .pc-table { display: none; }
+
+  /* ── 모바일 간소화 (2026-09-04) ── */
+  .pc-only { display: none !important; }
+  .m-only { display: block; }
+
+  /* 상단 요약 바 — 결론(신호 N건)과 주 이동·검색·필터를 스크롤 없이 */
+  /* 폭이 모자라면 버튼 줄이 아래로 내려간다 — 360px에서 "이번 주로"까지 붙으면
+     한 줄에 다 못 들어가 정작 중요한 "신호 N건"이 잘렸다(2026-09-04 실측). */
+  .m-sumbar { position: sticky; top: 0; z-index: 30; margin: 0 0 12px;
+              background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+              padding: 9px 11px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .m-sumbar .sb-l { flex: 1 1 160px; min-width: 0; }
+  .m-sumbar .sb-t { font-size: 13.5px; font-weight: 800;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-sumbar .sb-s { font-size: 11px; color: var(--text-3);
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m-sumbar .sb-btns { flex: none; display: flex; gap: 4px; margin-left: auto; }
+  .m-sumbar .sb-btn { border: 1px solid var(--border); background: var(--card); color: var(--text-2);
+                      border-radius: 8px; height: 30px; min-width: 30px; padding: 0 8px;
+                      font-size: 12px; font-weight: 700; cursor: pointer; }
+  .m-sumbar .sb-btn.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  /* 검색·필터는 요약 바 버튼으로 펼친다 (기본은 접힘) */
+  .week-nav { display: none; }
+  .week-nav.mopen { display: flex; }
+  .filterbar { display: none; }
+  .filterbar.mopen { display: flex; }
+
+  /* 모바일 TOP5 — 카드 지표를 4개(수익률·낙인·1차·손실)로 줄인 축약본 */
+  .mt5-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 9px; }
+  .mt5-head b { font-size: 14.5px; }
+  .mt5-head .mt5-sub { font-size: 11px; color: var(--text-3); }
+  .mt5-tabs { display: flex; gap: 5px; margin-left: auto; }
+  .mt5-tab { border: 1px solid var(--border); background: var(--card); color: var(--text-2);
+             border-radius: 999px; padding: 4px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
+  .mt5-tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .mt5-card { border: 1px solid var(--border); border-left: 3px solid var(--blue);
+              border-radius: 8px; padding: 9px 11px; margin-bottom: 7px; cursor: pointer; }
+  .mt5-card:last-child { margin-bottom: 0; }
+  .mt5-r1 { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-2); }
+  .mt5-r1 .mt5-no { font-weight: 700; white-space: nowrap; overflow: hidden;
+                    text-overflow: ellipsis; min-width: 0; }
+  .mt5-r2 { display: flex; align-items: baseline; gap: 6px; margin-top: 1px; }
+  .mt5-r2 .mt5-y { font-size: 19px; font-weight: 800; color: var(--blue-dark);
+                   font-variant-numeric: tabular-nums; }
+  .mt5-r2 .mt5-y small { font-size: 11px; }
+  .mt5-r3 { font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
+  .mt5-r4 { font-size: 11.5px; color: var(--text-3); white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis; }
+  .mt5-r5 { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 3px; }
+  .mt5-r5 .mt5-due { margin-left: auto; color: var(--text-3); font-weight: 700; }
+
 
   .stat-grid, .stat-grid.cols-5 { grid-template-columns: repeat(2, 1fr); }
   .container { padding: 14px; }
@@ -327,6 +401,7 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   .chk-dropdown > summary { display: block; text-align: left; }
   .chk-panel { width: calc(100vw - 60px); max-width: 280px; }
 
+  .m-sumbar { padding: 8px 10px; }
   .week-nav { flex-wrap: wrap; gap: 8px; }
   .week-label { font-size: 14px; }
 
