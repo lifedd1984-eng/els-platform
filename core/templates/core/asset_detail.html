@@ -9,12 +9,23 @@
 <h1 class="page-title">{{ name }} ELS</h1>
 <p class="page-sub">{{ name }}를 기초자산으로 하는 국내 발행 ELS를 매주 자동으로 모아 정리합니다.</p>
 
-<div class="chips">
+<div class="chips pc-only">
   <a class="chip on">{{ name }}</a>
   {% for s, n in others %}
   <a class="chip" href="{% url 'asset_detail' s %}">{{ n }}</a>
   {% endfor %}
 </div>
+
+{% comment %}모바일 결론 한 줄 (2026-09-04) — 통계 네 칸을 따로 읽지 않아도
+   "그래서 조건이 어떤가"가 바로 읽히게 한다. 값은 아래 stat-grid와 같다.{% endcomment %}
+{% if count %}
+<div class="card m-only" style="padding:13px 15px;margin-top:14px">
+  <div style="font-size:13px;line-height:1.75">
+    최근 {{ window_days }}일 <b>{{ count }}건</b> 발행{% if ki_lo %} · 낙인 <b>{{ ki_lo }}~{{ ki_hi }}</b>{% endif %}{% if yield_lo %} · 연 <b>{{ yield_lo }}~{{ yield_hi }}%</b>{% endif %}
+  </div>
+  <div style="font-size:11.5px;color:var(--text-3);margin-top:4px">발행 증권사 {{ issuer_count }}곳</div>
+</div>
+{% endif %}
 
 {% if count == 0 %}
 <div class="card" style="margin-top:16px">
@@ -22,7 +33,7 @@
 </div>
 {% else %}
 
-<div class="stat-grid" style="margin-top:16px">
+<div class="stat-grid pc-only" style="margin-top:16px">
   <div class="stat-card">
     <div class="stat-label">최근 {{ window_days }}일 발행</div>
     <div class="stat-value">{{ count }}<small>건</small></div>
@@ -41,8 +52,13 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-title">발행사 구성 <span style="font-weight:400;font-size:12px;color:var(--text-3)">(최근 {{ window_days }}일)</span></div>
+<details class="card mfold" data-fold="assetIssuer" open>
+  <summary>
+    <span class="card-title" style="margin-bottom:0">발행사 구성</span>
+    <span class="mfold-sub m-only">{{ issuer_count }}곳</span>
+    <span class="pc-only" style="font-weight:400;font-size:12px;color:var(--text-3)">(최근 {{ window_days }}일)</span>
+    <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+  </summary>
   <div class="issuerbar">
     {% for row in top_issuers %}
     <div class="irow">
@@ -52,7 +68,7 @@
     </div>
     {% endfor %}
   </div>
-</div>
+</details>
 
 <div class="card">
   <div class="card-title">최근 발행 상품</div>
@@ -77,6 +93,20 @@
   <a href="{% url 'signup' %}" class="btn btn-primary">무료로 시작하기</a>
 </div>
 
+<details class="card mfold m-only" data-fold="assetOthers" open>
+  <summary>
+    <span class="card-title" style="margin-bottom:0">다른 기초자산</span>
+    <span class="mfold-sub">{{ others|length }}개</span>
+    <i class="fa-solid fa-chevron-down mfold-chev"></i>
+  </summary>
+  <div class="chips" style="margin-top:10px">
+    {% for s, n in others %}
+    <a class="chip" href="{% url 'asset_detail' s %}">{{ n }}</a>
+    {% endfor %}
+  </div>
+</details>
+
+{% include "core/_pc_link.html" %}
 {% endif %}
 
 <style>
@@ -88,6 +118,10 @@
 .chip.on{background:var(--blue-bg);color:var(--blue-dark);border-color:var(--blue)}
 .chip:hover{border-color:var(--blue)}
 .issuerbar{display:flex;flex-direction:column;gap:8px}
+@media(max-width:800px){
+  /* 이름 칸이 96px로 고정돼 막대가 눌렸다 — 좁은 화면에서는 이름을 줄인다 */
+  .irow .iname{width:74px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
 .irow{display:flex;align-items:center;gap:10px;font-size:12.5px}
 .iname{width:96px;flex:none;color:var(--text-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .itrack{flex:1;height:10px;background:var(--bg);border-radius:5px;overflow:hidden}

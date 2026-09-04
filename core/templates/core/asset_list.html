@@ -7,22 +7,47 @@
 <h1 class="page-title">기초자산별 ELS</h1>
 <p class="page-sub">종목·지수별로 최근 발행된 ELS 조건을 로그인 없이 볼 수 있습니다</p>
 
-<div class="asset-grid">
-  {% for slug, ticker, name in assets %}
-  <a class="asset-card" href="{% url 'asset_detail' slug %}">
-    <span class="name">{{ name }}</span>
-    <i class="fa-solid fa-arrow-right"></i>
-  </a>
-  {% endfor %}
+{% comment %}2026-09-04 — 예전에는 자산 이름과 화살표만 있어서 어디에 상품이 많이
+   나오는지 눌러 봐야 알 수 있었다. 상세 화면이 이미 계산하던 값(최근 발행 건수·
+   낙인 범위·쿠폰 범위)을 줄로 끌어올리고, 서비스가 쓰는 지수형·종목형으로 나눴다.
+   건수 많은 순이라 순서에도 뜻이 생긴다.{% endcomment %}
+{% for g in groups %}
+<div class="asset-group">
+  <div class="asset-group-t">{{ g.label }}</div>
+  <div class="asset-grid">
+    {% for a in g.items %}
+    <a class="asset-card" href="{% url 'asset_detail' a.slug %}">
+      <span class="a-l">
+        <span class="name">{{ a.name }}</span>
+        <span class="a-sub">
+          {% if a.count %}최근 {{ window_days }}일 <b>{{ a.count }}건</b>{% if a.ki_lo is not None %} · 낙인 {{ a.ki_lo }}{% if a.ki_hi != a.ki_lo %}~{{ a.ki_hi }}{% endif %}{% endif %}{% if a.yield_lo is not None %} · 연 {{ a.yield_lo }}{% if a.yield_hi != a.yield_lo %}~{{ a.yield_hi }}{% endif %}%{% endif %}
+          {% else %}최근 {{ window_days }}일 발행 없음{% endif %}
+        </span>
+      </span>
+      <i class="fa-solid fa-arrow-right"></i>
+    </a>
+    {% endfor %}
+  </div>
 </div>
+{% endfor %}
+
+{% include "core/_pc_link.html" %}
 
 <style>
-.asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
+.asset-group{margin-bottom:20px}
+.asset-group-t{font-size:12.5px;font-weight:800;color:var(--text-3);margin-bottom:8px}
+.asset-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .asset-card{display:flex;align-items:center;justify-content:space-between;gap:10px;
   background:var(--card);border:1px solid var(--border);border-radius:12px;
-  padding:16px 18px;text-decoration:none;color:var(--text);font-weight:700;font-size:14.5px}
-.asset-card i{color:var(--text-3);font-size:12px}
+  padding:14px 16px;text-decoration:none;color:var(--text)}
+.asset-card .a-l{min-width:0}
+.asset-card .name{display:block;font-weight:700;font-size:14.5px}
+.asset-card .a-sub{display:block;font-size:11.5px;color:var(--text-3);margin-top:3px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.asset-card .a-sub b{color:var(--text-2);font-weight:700}
+.asset-card i{color:var(--text-3);font-size:12px;flex:none}
 .asset-card:hover{border-color:var(--blue)}
 .asset-card:hover i{color:var(--blue-dark)}
+@media(max-width:800px){.asset-grid{grid-template-columns:1fr;gap:8px}}
 </style>
 {% endblock %}

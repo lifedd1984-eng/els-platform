@@ -41,6 +41,10 @@ TOP_ASSETS = [
 _TICKER_BY_SLUG = {slug: ticker for slug, ticker, _ in TOP_ASSETS}
 _NAME_BY_SLUG = {slug: name for slug, _, name in TOP_ASSETS}
 
+# 목록을 지수형·종목형으로 나눌 때 쓴다. TOP_ASSETS 튜플에 넣지 않은 것은
+# 그 모양(slug, ticker, name)을 뷰·템플릿이 이미 풀어 쓰고 있어서다.
+INDEX_SLUGS = {"kospi200", "sp500", "eurostoxx50", "nikkei225", "hscei"}
+
 
 def _product_tickers(product):
     """상품의 기초자산들을 정규화 티커 집합으로 바꾼다.
@@ -88,3 +92,47 @@ def asset_context(slug):
         "recent": sorted(rows, key=lambda p: p.sub_end, reverse=True)[:8],
         "others": [(s, name) for s, _, name in TOP_ASSETS if s != slug],
     }
+
+
+def asset_summaries():
+    """목록 화면용 요약 — 자산마다 최근 발행 건수·낙인 범위·쿠폰 범위.
+
+    asset_context()를 자산 열 개에 대해 부르면 같은 90일 조회를 열 번 돌린다.
+    여기서는 한 번만 훑고 자산별로 나눈다.
+
+    반환: [{"label": "지수형", "items": [...]}, {"label": "종목형", ...}]
+    각 항목은 건수 많은 순. 건수가 0인 자산도 남긴다 — 목록에서 사라지면
+    링크가 끊긴 것처럼 보이고, "요즘 안 나온다"도 정보다.
+    """
+    from core.models import Product
+
+    cutoff = date.today() - timedelta(days=WINDOW_DAYS)
+    by_ticker = {ticker: [] for _, ticker, _ in TOP_ASSETS}
+    for p in Product.objects.listed().filter(sub_end__gte=cutoff):
+        tickers = _product_tickers(p)
+        for ticker in by_ticker:
+            if ticker in tickers:
+                by_ticker[ticker].append(p)
+
+    items = []
+    for slug, ticker, name in TOP_ASSETS:
+        rows = by_ticker[ticker]
+        kis = sorted({p.ki for p in rows if p.ki is not None})
+        yields = [p.yield_rate for p in rows if p.yield_rate is not None]
+        items.append({
+            "slug": slug, "name": name, "count": len(rows),
+            "ki_lo": kis[0] if kis else None,
+            "ki_hi": kis[-1] if kis else None,
+            "yield_lo": min(yields) if yields else None,
+            "yield_hi": max(yields) if yields else None,
+            "is_index": slug in INDEX_SLUGS,
+        })
+
+    def _pick(is_index):
+        return sorted((i for i in items if i["is_index"] is is_index),
+                      key=lambda i: i["count"], reverse=True)
+
+    return [
+        {"label": "지수형", "items": _pick(True)},
+        {"label": "종목형", "items": _pick(False)},
+    ]

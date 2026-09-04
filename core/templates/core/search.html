@@ -14,12 +14,49 @@
   </form>
 </div>
 
+{% if user.is_authenticated %}
+<div class="card" style="padding:12px 16px;border-left:3px solid var(--blue)">
+  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <div style="flex:1;min-width:200px">
+      <div style="font-weight:700;font-size:13.5px">
+        <i class="fa-solid fa-magnifying-glass-chart" style="color:var(--blue)"></i>
+        말로 조건을 쓰는 검색은 AI 분석 질문에서 합니다
+      </div>
+      <div style="font-size:12px;color:var(--text-3);margin-top:2px">예: 낙인 40 이하 지수형 중 수익률 높은 3개</div>
+    </div>
+    <a href="{% url 'ask' %}" class="btn btn-primary btn-sm">AI 분석 질문 <i class="fa-solid fa-arrow-right"></i></a>
+  </div>
+</div>
+{% endif %}
+
 {% if q %}
   {% if results %}
   <div class="card" style="padding:8px 16px">
-    <div class="card-title" style="padding:10px 4px 4px">"{{ q }}" 검색결과 {{ results|length }}건{% if results|length == 200 %} <small style="color:var(--text-3)">(최근 200건만 표시)</small>{% endif %}</div>
+    <div class="card-title" style="padding:10px 4px 4px">"{{ q }}" 검색결과 {{ results|length }}건{% if results|length == 200 %} <small style="color:var(--text-3)">(최근 200건만 표시)</small>{% endif %}
+      <span style="font-weight:400;font-size:12px;color:var(--text-3)"> · 청약중 {{ open_results|length }}건 · 마감 {{ past_results|length }}건</span>
+    </div>
+    {% comment %}청약 중인 것과 지난 이력을 갈라 놓는다. 예전에는 한 줄기로 섞여
+       200건을 훑어야 지금 살 수 있는 상품이 남았는지 알 수 있었다.{% endcomment %}
     <div class="m-list">
-      {% for p in results %}{% include "core/_mobile_row.html" with star=1 %}{% endfor %}
+      <div class="m-bar">
+        청약중 {{ open_results|length }}건
+        <select class="m-sort" onchange="if(this.value)location.href=this.value" aria-label="정렬">
+          {% for c in sorts %}<option value="{{ c.url }}" {% if c.active %}selected{% endif %}>{{ c.label }}</option>{% endfor %}
+        </select>
+      </div>
+      {% for p in open_results %}{% include "core/_mobile_row.html" with star=1 %}{% endfor %}
+      {% if not open_results %}
+      <div style="padding:14px 12px;font-size:12.5px;color:var(--text-3)">지금 청약할 수 있는 상품은 없습니다. 지난 이력만 있습니다.</div>
+      {% endif %}
+      {% if past_results %}
+      <details class="mfold" data-fold="searchPast" open>
+        <summary>
+          <span style="font-size:12.5px;font-weight:700">마감된 이력 {{ past_results|length }}건</span>
+          <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+        </summary>
+        {% for p in past_results %}{% include "core/_mobile_row.html" with star=1 %}{% endfor %}
+      </details>
+      {% endif %}
     </div>
     <div style="overflow-x:auto" class="pc-table">
       <table>
@@ -79,20 +116,6 @@
 말로 조건을 쓰는 "AI 조건 검색" 블록은 /ask/ 의 AI 분석 질문으로 옮겼다.
 여기 남는 것은 발행사·상품번호·기초자산·상품명 텍스트 검색뿐이다 — 성격이 다르다.
 {% endcomment %}
-{% if user.is_authenticated %}
-<div class="card" style="padding:14px 16px;border-left:3px solid var(--blue)">
-  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-    <div style="flex:1;min-width:220px">
-      <div style="font-weight:700;font-size:14px;margin-bottom:3px">
-        <i class="fa-solid fa-magnifying-glass-chart" style="color:var(--blue)"></i>
-        말로 조건을 쓰는 검색은 AI 분석 질문에서 합니다
-      </div>
-      <div style="font-size:12px;color:var(--text-3)">예: 낙인 40 이하 지수형 중 수익률 높은 3개</div>
-    </div>
-    <a href="{% url 'ask' %}" class="btn btn-primary">AI 분석 질문 <i class="fa-solid fa-arrow-right"></i></a>
-  </div>
-</div>
-{% endif %}
-
 {% include "core/_disclaimer_inline.html" %}
+{% include "core/_pc_link.html" %}
 {% endblock %}
