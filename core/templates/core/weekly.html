@@ -319,6 +319,19 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
   /* 카드 안 별표 — 기본 btn 여백이 카드를 밀어내지 않게 축소 */
   .kt-card .watch-form .btn,.t5-card .watch-form .btn{padding:2px 4px;min-width:0;line-height:1;border:none;background:none}
   .kt-card .watch-form .btn i{font-size:12px}
+  /* 모바일 축약 줄 — 낙인 구간별 1위 */
+  .ktm-pane{margin-top:8px}
+  .ktm-row{display:flex;align-items:baseline;gap:7px;padding:8px 2px;
+           border-bottom:1px solid var(--border);cursor:pointer}
+  .ktm-row:last-child{border-bottom:none}
+  .ktm-ki{flex:none;font-size:11px;font-weight:800;color:var(--text-2);
+          background:var(--bg);border-radius:5px;padding:2px 6px}
+  .ktm-name{min-width:0;font-size:12.5px;font-weight:700;
+            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ktm-cnt{flex:none;font-size:10.5px;color:var(--text-3)}
+  .ktm-y{flex:none;margin-left:auto;font-size:15px;font-weight:800;color:var(--blue-dark);
+         font-variant-numeric:tabular-nums}
+  .ktm-y small{font-size:10px}
 </style>
 <details class="card fold-card" id="ktFold" data-fold="ktFold" open style="padding:14px 16px;margin-bottom:14px">
   <summary>
@@ -331,8 +344,26 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
     <span style="font-weight:400;font-size:12px;color:var(--text-3)">이 주 청약 상품 · 낙인 값별 수익률 상위 5</span>
     <i class="fa-solid fa-chevron-down fold-chev" style="margin-left:auto"></i>
   </summary>
+  {% comment %}모바일 축약 (2026-09-04 조 팀장 지시) — PC는 낙인 구간마다 카드 5장을
+     가로로 늘어놓지만 375px에서는 그대로 40장이 된다. 모바일에서는 구간마다 1위만
+     한 줄로 보여 준다. 나머지는 아래 전체 목록에서 정렬로 찾는 것이 빠르다.{% endcomment %}
   {% for g in ki_top5 %}
-  <div id="kt-pane-{{ forloop.counter }}" class="kt-pane" style="margin-top:10px;{% if not forloop.first %}display:none{% endif %}">
+  <div id="ktm-pane-{{ forloop.counter }}" class="ktm-pane m-only" {% if not forloop.first %}style="display:none"{% endif %}>
+    {% for c in g.cols %}
+      {% for p in c.top|slice:":1" %}
+      <div class="ktm-row" onclick="location.href='{% url 'product_detail' p.id %}'">
+        <span class="ktm-ki">낙인 {{ c.ki }}</span>
+        <span class="ktm-name">{{ p.issuer }} {{ p.product_no }}</span>
+        <span class="ktm-cnt">{{ c.count }}건 중 1위</span>
+        <span class="ktm-y">{{ p.yield_rate }}<small>%</small></span>
+      </div>
+      {% endfor %}
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  {% for g in ki_top5 %}
+  <div id="kt-pane-{{ forloop.counter }}" class="kt-pane pc-only" style="margin-top:10px;{% if not forloop.first %}display:none{% endif %}">
     <div class="kt-strip">
       {% for c in g.cols %}
       <div class="kt-col">
@@ -466,9 +497,12 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
       e.preventDefault();
       e.stopPropagation();
       document.querySelectorAll('.kt-tabbtn').forEach(function(x){ x.classList.remove('kt-on'); });
-      document.querySelectorAll('.kt-pane').forEach(function(p){ p.style.display = 'none'; });
+      document.querySelectorAll('.kt-pane, .ktm-pane').forEach(function(p){ p.style.display = 'none'; });
       b.classList.add('kt-on');
       document.getElementById(b.dataset.pane).style.display = '';
+      // 모바일 축약 칸도 같은 유형으로 맞춘다
+      var m = document.getElementById(b.dataset.pane.replace('kt-pane-', 'ktm-pane-'));
+      if (m) m.style.display = '';
     });
   });
 })();
@@ -487,7 +521,19 @@ summary 기본 삼각형으로 나오고 화살표도 안 돌았다. 첫 카드�
         {% endfor %}
       </select>
     </div>
-    {% for p in products %}{% include "core/_mobile_row.html" with star=1 %}{% endfor %}
+    {% comment %}모바일은 15개만 먼저 보여 준다 — 200건이 한 번에 깔리면 스크롤이
+       끝나지 않는다(2026-09-04 조 팀장 지시). 나머지는 더보기로 편다.{% endcomment %}
+    {% for p in products %}
+      {% if forloop.counter == 16 %}
+      <details class="mfold" data-fold="weeklyMore" open>
+        <summary>
+          <span style="font-size:12.5px;font-weight:700">나머지 {{ products|length|add:"-15" }}건 더보기</span>
+          <i class="fa-solid fa-chevron-down mfold-chev m-only"></i>
+        </summary>
+      {% endif %}
+      {% include "core/_mobile_row.html" with star=1 %}
+      {% if forloop.last and forloop.counter > 15 %}</details>{% endif %}
+    {% endfor %}
   </div>
 
   <div class="card pc-table" style="padding:8px 16px">

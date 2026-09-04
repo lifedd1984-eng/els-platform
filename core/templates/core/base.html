@@ -361,21 +361,29 @@ label { font-size: 12px; color: var(--text-2); font-weight: 600; }
   .mt5-tab { border: 1px solid var(--border); background: var(--card); color: var(--text-2);
              border-radius: 999px; padding: 4px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer; }
   .mt5-tab.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  /* 카드는 세 줄로 — 다섯 줄짜리는 한 장이 화면을 반 넘게 먹었다(2026-09-04) */
   .mt5-card { border: 1px solid var(--border); border-left: 3px solid var(--blue);
-              border-radius: 8px; padding: 9px 11px; margin-bottom: 7px; cursor: pointer; }
+              border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; cursor: pointer; }
   .mt5-card:last-child { margin-bottom: 0; }
-  .mt5-r1 { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-2); }
-  .mt5-r1 .mt5-no { font-weight: 700; white-space: nowrap; overflow: hidden;
-                    text-overflow: ellipsis; min-width: 0; }
-  .mt5-r2 { display: flex; align-items: baseline; gap: 6px; margin-top: 1px; }
-  .mt5-r2 .mt5-y { font-size: 19px; font-weight: 800; color: var(--blue-dark);
-                   font-variant-numeric: tabular-nums; }
-  .mt5-r2 .mt5-y small { font-size: 11px; }
-  .mt5-r3 { font-size: 11.5px; color: var(--text-2); margin-top: 2px; }
-  .mt5-r4 { font-size: 11.5px; color: var(--text-3); white-space: nowrap;
-            overflow: hidden; text-overflow: ellipsis; }
-  .mt5-r5 { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 3px; }
-  .mt5-r5 .mt5-due { margin-left: auto; color: var(--text-3); font-weight: 700; }
+  .mt5-top { display: flex; align-items: center; gap: 5px; }
+  .mt5-top .mt5-no { font-size: 13px; font-weight: 700; min-width: 0;
+                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mt5-top .mt5-star { flex: none; margin-left: auto; }
+  .mt5-top .mt5-y { flex: none; margin-left: auto; font-size: 18px; font-weight: 800;
+                    color: var(--blue-dark); font-variant-numeric: tabular-nums; }
+  .mt5-top .mt5-star + .mt5-y { margin-left: 4px; }
+  .mt5-mid { display: flex; align-items: baseline; gap: 6px; font-size: 11.5px;
+             color: var(--text-2); margin-top: 1px; }
+  .mt5-mid b { font-weight: 700; }
+  .mt5-mid .mt5-due { margin-left: auto; flex: none; color: var(--text-3); font-weight: 700; }
+  .mt5-bot { display: flex; align-items: baseline; gap: 6px; font-size: 11px;
+             color: var(--text-3); margin-top: 1px; }
+  .mt5-bot .mt5-assets { min-width: 0; overflow: hidden;
+                         text-overflow: ellipsis; white-space: nowrap; }
+  .mt5-bot .mt5-ov { flex: none; margin-left: auto; }
+  .mt5-card .watch-form .btn { padding: 0 2px; min-width: 0; line-height: 1;
+                               border: none; background: none; }
+  .mt5-card .watch-form .btn i { font-size: 12px; }
 
 
   .stat-grid, .stat-grid.cols-5 { grid-template-columns: repeat(2, 1fr); }
