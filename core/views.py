@@ -1962,9 +1962,13 @@ def market_trend(request):
 # ── 기초자산별 공개 페이지 (로그인 불필요, 검색 유입용) ──────────────
 def asset_list(request):
     """기초자산 허브 목록 — 상위 10개 카드."""
+    from core.asset_pages import WINDOW_DAYS, asset_summaries
     return render(request, "core/asset_list.html", {
         "meta_desc": "삼성전자·SK하이닉스·KOSPI200 등 기초자산별로 최근 발행된 ELS 조건을 모아봅니다.",
         "assets": TOP_ASSETS,
+        # 눌러 봐야만 알 수 있던 값(발행 건수·낙인·쿠폰)을 목록 줄로 끌어올린다
+        "groups": asset_summaries(),
+        "window_days": WINDOW_DAYS,
     })
 
 
@@ -2465,12 +2469,40 @@ def product_search(request):
             ).order_by("-sub_end")[:200]
         )
 
+    # ── 정렬 ── 기본은 마감 가까운 순. 주간 청약의 정렬 선택과 같은 갈래를 쓴다.
+    _today = date.today()
+    SEARCH_SORTS = {
+        "sub_end": ("마감", lambda p: p.sub_end or date.min, False),
+        "yield": ("수익률", lambda p: p.yield_rate if p.yield_rate is not None else -1, True),
+        "ki": ("낙인", lambda p: p.ki if p.ki is not None else 999, False),
+        "loss": ("손실확률", lambda p: p.loss_prob if p.loss_prob is not None else 999, False),
+    }
+    sort_key = request.GET.get("sort", "sub_end")
+    if sort_key not in SEARCH_SORTS:
+        sort_key = "sub_end"
+    _label, _keyfn, _rev = SEARCH_SORTS[sort_key]
+
+    open_results, past_results = [], []
+    for p in results:
+        (open_results if p.sub_end and p.sub_end >= _today else past_results).append(p)
+    open_results.sort(key=_keyfn, reverse=_rev)
+    past_results.sort(key=lambda p: p.sub_end or date.min, reverse=True)
+
+    from urllib.parse import urlencode
+    sorts = [{"key": k, "label": v[0], "active": k == sort_key,
+              "url": "?" + urlencode({"q": q, "sort": k})}
+             for k, v in SEARCH_SORTS.items()]
+
     invested_ids = set()
     if request.user.is_authenticated:
         invested_ids = set(Investment.objects.filter(
             user=request.user, status="보유중").values_list("product_id", flat=True))
     return render(request, "core/search.html", {
         "q": q, "results": results, "invested_ids": invested_ids,
+        # 지금 청약할 수 있는 것과 지난 이력을 갈라 준다 — 한 줄기로 섞여 나오면
+        # 200건을 훑어야 살 수 있는 상품이 남았는지 알 수 있었다(2026-09-04).
+        "open_results": open_results, "past_results": past_results,
+        "sorts": sorts, "sort": sort_key,
         "active_nav": "search",
     })
 

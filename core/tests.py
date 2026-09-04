@@ -1347,3 +1347,43 @@ class MobileLiteExtraScreensTest(TestCase):
         # 기본 규칙이 미디어쿼리보다 뒤에 오면 순서상 이겨서 버튼이 안 보인다
         self.assertLess(src.index(".ex-more-toggle { display: none;"),
                         src.index("@media (max-width: 800px)"))
+
+
+class MobileLiteAssetSearchTest(TestCase):
+    """모바일 간소화 5단계 (2026-09-04) — 기초자산·검색·아티클 목록."""
+
+    def test_기초자산_목록이_숫자를_함께_보여준다(self):
+        """예전에는 이름과 화살표뿐이라 눌러 봐야 조건을 알 수 있었다."""
+        resp = self.client.get("/assets/")
+        self.assertEqual(resp.status_code, 200)
+        groups = resp.context["groups"]
+        self.assertEqual([g["label"] for g in groups], ["지수형", "종목형"])
+        keys = groups[0]["items"][0].keys()
+        for k in ("count", "ki_lo", "ki_hi", "yield_lo", "yield_hi"):
+            self.assertIn(k, keys)
+
+    def test_자산_요약은_한_번만_훑는다(self):
+        """자산 열 개마다 asset_context를 부르면 같은 90일 조회를 열 번 돌린다."""
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+        with CaptureQueriesContext(connection) as ctx:
+            self.client.get("/assets/")
+        self.assertLessEqual(len(ctx.captured_queries), 6, "목록에서 쿼리가 늘었다")
+
+    def test_검색은_청약중과_지난_이력을_가른다(self):
+        resp = self.client.get("/search/?q=삼성")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("open_results", resp.context)
+        self.assertIn("past_results", resp.context)
+        html = resp.content.decode()
+        self.assertIn("m-sort", html)          # 정렬 선택
+        self.assertIn("pclink", html)
+
+    def test_아티클_목록은_모바일에서_설명을_접는다(self):
+        from pathlib import Path
+        from django.conf import settings
+        src = (Path(settings.BASE_DIR) / "core" / "templates" / "core"
+               / "article_list.html").read_text(encoding="utf-8")
+        self.assertIn(".course-copy p{display:none}", src)
+        # 큰 그림이 제목보다 먼저 오면 첫 화면이 그림으로 시작한다
+        self.assertNotIn(".learn-hero-media{order:-1}", src)
