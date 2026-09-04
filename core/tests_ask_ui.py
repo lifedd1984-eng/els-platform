@@ -180,7 +180,7 @@ class AskTemplateRenderTests(SimpleTestCase):
         self.assertIn("<table>", h)
         self.assertIn("<tfoot>", h)
         self.assertIn("고점 회복 2025-09-12.", h)                     # note 블록
-        self.assertIn('<details class="basis" open>', h)              # 계산 근거
+        self.assertIn('<details class="basis mfold" data-fold="askBasis" open>', h)              # 계산 근거
         self.assertIn("조정종가 — 배당·분할 소급 반영", h)
         self.assertIn(ASK_DISCLAIMERS["market"], h)                   # 면책
         self.assertIn("이어서 물어볼 만한 것", h)                     # 후속 질문

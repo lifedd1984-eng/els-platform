@@ -1310,3 +1310,40 @@ class MobileLitePortfolioCalendarTest(TestCase):
         # 토글 버튼이 목록 안에 있으면 달력으로 바꾼 순간 버튼도 같이 사라진다
         list_at = src.index('id="cal-list"')
         self.assertLess(src.index("cal-view-toggle"), list_at)
+
+
+class MobileLiteExtraScreensTest(TestCase):
+    """모바일 간소화 4단계 (2026-09-04) — AI 분석 질문·시장 트렌드·10년 성적표."""
+
+    def _src(self, name):
+        from pathlib import Path
+        from django.conf import settings
+        return (Path(settings.BASE_DIR) / "core" / "templates" / "core"
+                / name).read_text(encoding="utf-8")
+
+    def test_트렌드_결론이_맨_위로_오고_지수표가_리스트로_바뀐다(self):
+        src = self._src("trend.html")
+        self.assertIn("card m-only", src)              # 통과율·12개월 변화
+        self.assertIn('class="stat-grid pc-only"', src)
+        self.assertIn('data-fold="trendKi"', src)      # 낙인 차트는 접기
+        self.assertIn("pclink", self.client.get("/trend/").content.decode())
+
+    def test_10년_성적표는_첫칸을_붙박이로_두고_목차를_접는다(self):
+        """여덟 열 표를 옆으로 밀 때 연도 칸이 나가면 어느 줄인지 알 수 없다."""
+        src = self._src("report_els_10year.html")
+        self.assertIn(".rp-table th:first-child, .rp-table td:first-child", src)
+        self.assertIn("position: sticky", src)
+        self.assertIn(".rp-toc ol { display: none; }", src)
+        html = self.client.get("/report/els-10year/").content.decode()
+        self.assertIn("card m-only", html)
+        self.assertIn("pclink", html)
+
+    def test_AI_질문_차트가_모바일에서_가로로_밀리지_않는다(self):
+        src = self._src("ask.html")
+        self.assertIn(".chart-wrap svg { min-width: 0; width: 100%; }", src)
+        self.assertNotIn("min-width: 640px", src)
+        # 예시 질문은 첫 묶음만 펴 둔다
+        self.assertIn("ex-group.ex-more { display: none; }", src)
+        # 기본 규칙이 미디어쿼리보다 뒤에 오면 순서상 이겨서 버튼이 안 보인다
+        self.assertLess(src.index(".ex-more-toggle { display: none;"),
+                        src.index("@media (max-width: 800px)"))
