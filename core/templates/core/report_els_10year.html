@@ -69,6 +69,18 @@
   .rp h2 { font-size:19.5px; margin-top:40px; }
   .rp p, .rp li { font-size:15px; }
   .rp-table th, .rp-table td { padding:9px 11px; font-size:12.5px; }
+  /* 여덟 열짜리 표를 옆으로 밀면 첫 칸(연도·구분)이 화면 밖으로 나가 어느 줄을
+     보는지 알 수 없었다. 첫 칸을 붙박이로 둔다(2026-09-04). */
+  .rp-table th:first-child, .rp-table td:first-child {
+    position: sticky; left: 0; z-index: 1; background: var(--card);
+    box-shadow: 1px 0 0 var(--border);
+  }
+  .rp-table tr.hl td:first-child { background: var(--blue-bg); }
+  .rp-table tr.sum td:first-child { background: var(--bg); }
+  /* 목차는 여덟 줄이라 첫 화면을 다 먹는다 — 접어 둔다 */
+  .rp-toc ol { display: none; }
+  .rp-toc.mopen ol { display: block; }
+  .rp-toc-t { cursor: pointer; display: flex; align-items: center; gap: 6px; }
 }
 </style>
 
@@ -86,8 +98,30 @@
     <span>집계 기준일 <b>{{ updated|date:"Y년 n월 j일" }}</b></span>
   </div>
 
-  <div class="rp-toc">
-    <div class="rp-toc-t">목차</div>
+  {% comment %}모바일 결론 카드 (2026-09-04) — 이 리포트의 답은 정상상환율과
+     "손실이 2021년 한 해에 몰려 있다"는 사실이다. 본문 표에 있는 값을 그대로 쓴다.{% endcomment %}
+  <div class="card m-only" style="padding:14px 16px;margin:18px 0">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+      <div>
+        <div style="font-size:10.5px;color:var(--text-3)">정상상환율</div>
+        <div style="font-size:18px;font-weight:800;color:var(--blue-dark)">95.4%</div>
+      </div>
+      <div>
+        <div style="font-size:10.5px;color:var(--text-3)">원금손실</div>
+        <div style="font-size:18px;font-weight:800">3,220<small style="font-size:11px">건</small></div>
+      </div>
+      <div>
+        <div style="font-size:10.5px;color:var(--text-3)">상환 완료</div>
+        <div style="font-size:18px;font-weight:800">69,858<small style="font-size:11px">건</small></div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text-2);margin-top:10px;line-height:1.6">
+      손실의 <b>74.8%가 2021년 발행분</b> 한 해에 몰려 있습니다.
+    </div>
+  </div>
+
+  <div class="rp-toc" id="rp-toc">
+    <div class="rp-toc-t" id="rp-toc-t">목차 <i class="fa-solid fa-chevron-down m-only" style="font-size:10px;color:var(--text-3)"></i></div>
     <ol>
       <li><a href="#s1">한 장 요약</a></li>
       <li><a href="#s2">10년 전체 성적</a></li>
@@ -461,6 +495,14 @@
 
 </article>
 
+<script>
+(function(){
+  // 목차는 여덟 줄이라 모바일 첫 화면을 다 먹는다 — 제목을 눌러 펴게 한다.
+  var t = document.getElementById('rp-toc-t'), box = document.getElementById('rp-toc');
+  if (t && box) t.addEventListener('click', function(){ box.classList.toggle('mopen'); });
+})();
+</script>
+
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -483,6 +525,8 @@
   ]
 }
 </script>
+{% include "core/_pc_link.html" %}
+
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
