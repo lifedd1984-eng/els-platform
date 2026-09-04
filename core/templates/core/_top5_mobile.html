@@ -9,7 +9,7 @@ PC 카드는 지표를 6~7개 보여주지만 375px에서는 잘린다. 여기�
 {% if top5_tracks %}
 <div class="card m-only" style="padding:13px 14px;margin-bottom:14px">
   <div class="mt5-head">
-    <b>TOP5</b>
+    <b><i class="fa-solid fa-ranking-star" style="color:var(--blue);margin-right:5px"></i>TOP5</b>
     <span class="mt5-sub">10년 69,903건 검증 규칙 통과 · 수익률 상위</span>
     {% if top5_tracks|length > 1 %}
     <span class="mt5-tabs" role="tablist">
@@ -24,26 +24,17 @@ PC 카드는 지표를 6~7개 보여주지만 375px에서는 잘린다. 여기�
   <div class="mt5-pane" id="mt5-pane-{{ forloop.counter }}"{% if not forloop.first %} style="display:none"{% endif %}>
     {% for r in t.items %}
     <div class="mt5-card" style="border-left-color:{{ t.color }}" onclick="location.href='{% url 'product_detail' r.p.id %}'">
-      <div class="mt5-r1">
+      {# 세 줄로 압축 — 카드 하나가 화면을 반 넘게 먹지 않게 (2026-09-04 조 팀장 지시) #}
+      <div class="mt5-top">
+        {% if r.p.radar %}<span class="badge" style="background:{{ r.p.radar.color }};color:#fff;flex:none" title="레이더 신호 · 이번주 {{ r.p.asset_type }} 상위 {{ r.p.radar.srank }}위">{{ r.p.radar.tier|cut:" 신호" }}</span>{% endif %}
         <span class="mt5-no">{{ r.p.issuer }} {{ r.p.product_no }}</span>
         {% if user.is_authenticated %}
-        <span style="margin-left:auto;flex:none" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=r.p.id %}</span>
+        <span class="mt5-star" onclick="event.stopPropagation()">{% include "core/_star.html" with pid=r.p.id %}</span>
         {% endif %}
+        <span class="mt5-y">{{ r.p.yield_rate }}<small>%</small></span>
       </div>
-      <div class="mt5-r2">
-        <span class="mt5-y">연 {{ r.p.yield_rate }}<small>%</small></span>
-        {% if r.p.radar %}<span class="badge" style="background:{{ r.p.radar.color }};color:#fff" title="레이더 신호 · 이번주 {{ r.p.asset_type }} 상위 {{ r.p.radar.srank }}위">{{ r.p.radar.tier|cut:" 신호" }}</span>{% endif %}
-      </div>
-      <div class="mt5-r3">낙인 <b>{{ r.p.ki }}</b> · 1차 <b>{{ r.p.barrier_first|default:"-" }}</b> · 손실 <b style="color:{% if r.p.loss_prob is None %}var(--text-3){% elif r.p.loss_prob > 2 %}var(--orange){% elif r.p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if r.p.loss_prob is not None %}{{ r.p.loss_prob }}%{% else %}-{% endif %}</b></div>
-      <div class="mt5-r4">{{ r.p.assets_raw|asset_short }}</div>
-      <div class="mt5-r5">
-        {% if r.overlap_pct is not None %}
-          {% if r.overlap_pct >= 30 %}<span style="color:var(--red);font-weight:700"><i class="fa-solid fa-triangle-exclamation"></i> 보유 {{ r.overlap_pct }}% 중복</span>
-          {% elif r.overlap_pct > 0 %}<span style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</span>
-          {% else %}<span style="color:var(--green)">신규 자산</span>{% endif %}
-        {% endif %}
-        <span class="mt5-due">~{{ r.p.sub_end|date:"m.d" }} 마감</span>
-      </div>
+      <div class="mt5-mid">낙인 <b>{{ r.p.ki }}</b> · 1차 <b>{{ r.p.barrier_first|default:"-" }}</b> · 손실 <b style="color:{% if r.p.loss_prob is None %}var(--text-3){% elif r.p.loss_prob > 2 %}var(--orange){% elif r.p.loss_prob > 0 %}var(--text-2){% else %}var(--green){% endif %}">{% if r.p.loss_prob is not None %}{{ r.p.loss_prob }}%{% else %}-{% endif %}</b><span class="mt5-due">~{{ r.p.sub_end|date:"m.d" }} 마감</span></div>
+      <div class="mt5-bot"><span class="mt5-assets">{{ r.p.assets_raw|asset_short }}</span>{% if r.overlap_pct is not None %}<span class="mt5-ov">{% if r.overlap_pct >= 30 %}<b style="color:var(--red)">보유 {{ r.overlap_pct }}% 중복</b>{% elif r.overlap_pct > 0 %}<b style="color:var(--orange)">보유 {{ r.overlap_pct }}% 중복</b>{% else %}<b style="color:var(--green)">신규 자산</b>{% endif %}</span>{% endif %}</div>
     </div>
     {% endfor %}
   </div>
