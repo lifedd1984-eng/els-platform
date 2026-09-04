@@ -10,7 +10,9 @@ import shutil
 
 from django.core.management.base import BaseCommand
 
-DISK_WARN_PCT = 80      # 루트 디스크 사용률(%) 이상이면 경보
+DISK_WARN_PCT = 90      # 루트 디스크 사용률(%) 이상이면 경보
+# 2026-09-04: 80 → 90. 82% 언저리에서 며칠째 매일 울려 경보가 무뎌졌다.
+#   여유가 1.4GB대라 아직 급하지 않다 — 90%(여유 ~0.7GB)를 실제 조치선으로 본다.
 MEM_WARN_MB = 200       # 가용 메모리(MB) 미만이면 경보
 
 
